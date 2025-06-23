@@ -1,4 +1,5 @@
 import { LogOut } from "lucide-react";
+import { Link } from "react-router";
 import { Button } from "~/components/ui/button";
 
 export default function Navbar() {
@@ -26,12 +27,14 @@ export default function Navbar() {
 
         {/* Logout button */}
         <Button
-          variant="ghost"
+          variant="link"
           size="sm"
-          className="text-white hover:bg-gray-800 flex items-center gap-2"
+          className="text-white flex items-center gap-2"
+          asChild
         >
-          <LogOut className="w-4 h-4" />
-          <span>log out</span>
+          <Link to="/logout">
+            <LogOut className="w-4 h-4" />
+          </Link>
         </Button>
       </div>
     </header>
