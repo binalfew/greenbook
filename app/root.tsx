@@ -1,4 +1,5 @@
 import {
+  data,
   isRouteErrorResponse,
   Links,
   Meta,
@@ -10,6 +11,8 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import Navbar from "./components/navbar";
+import { getUserEmail } from "./lib/auth.server";
+import { getUserByEmail } from "./lib/db.server";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -23,6 +26,30 @@ export const links: Route.LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
   },
 ];
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const userEmail = await getUserEmail(request);
+
+  if (!userEmail) {
+    return data({ user: undefined });
+  }
+
+  const user = await getUserByEmail(userEmail);
+
+  if (!user) {
+    return data({ user: undefined });
+  }
+
+  const formattedUser = {
+    id: user.id,
+    email: user.email,
+    username: user.name,
+    name: user.name,
+    role: user.role,
+  };
+
+  return data({ user: formattedUser });
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -42,10 +69,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function App() {
+export default function App({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
   return (
     <div className="bg-background min-h-screen">
-      <Navbar />
+      <Navbar user={user} />
       <main className="container mx-auto px-1 py-8">
         <Outlet />
       </main>
