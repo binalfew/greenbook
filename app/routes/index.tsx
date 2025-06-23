@@ -30,15 +30,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   if (!loaderData.user) {
     return (
       <div className="container mx-auto py-20 flex flex-col items-center text-center">
-        <div className="mb-8">
-          <span className="text-5xl font-bold text-green-700">Greenbook</span>
-        </div>
-        <h1 className="text-3xl font-bold mb-4">Welcome to Greenbook</h1>
+        <h1 className="text-3xl font-bold mb-4" style={{ color: "#40734b" }}>
+          Welcome to Greenbook
+        </h1>
         <p className="text-lg text-gray-600 mb-8">
-          Discover your Microsoft profile and connect with your organization.
+          Discover your colleagues and connect with your organization.
         </p>
         <Form action="/auth/microsoft" method="POST">
-          <Button type="submit" className="px-8 py-3 text-lg cursor-pointer">
+          <Button
+            type="submit"
+            className="px-8 py-3 text-lg cursor-pointer"
+            style={{ backgroundColor: "#40734b" }}
+          >
             Login with Microsoft
           </Button>
         </Form>
