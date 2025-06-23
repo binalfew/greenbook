@@ -1,5 +1,5 @@
-import type { Route } from "./+types/home";
 import { Welcome } from "../welcome/welcome";
+import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -8,7 +8,7 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export function loader({ context }: Route.LoaderArgs) {
+export async function loader({ context }: Route.LoaderArgs) {
   return { message: context.VALUE_FROM_EXPRESS };
 }
 

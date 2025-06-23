@@ -1,3 +1,4 @@
+.env
 .DS_Store
 /node_modules/
 *.tsbuildinfo
@@ -5,3 +6,5 @@
 # React Router
 /.react-router/
 /build/
+
+/generated/prisma
