@@ -1,5 +1,10 @@
 import { data, redirect } from "react-router";
-import { authenticator, userIdKey, type ProviderUser } from "~/lib/auth.server";
+import {
+  accessTokenKey,
+  authenticator,
+  userIdKey,
+  type ProviderUser,
+} from "~/lib/auth.server";
 import prisma from "~/lib/prisma";
 import { authSessionStorage } from "~/lib/session.server";
 import type { Route } from "./+types/auth.$provider.callback";
@@ -46,6 +51,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   );
 
   session.set(userIdKey, providerUser.email);
+  session.set(accessTokenKey, providerUser.accessToken);
 
   return redirect("/", {
     headers: {

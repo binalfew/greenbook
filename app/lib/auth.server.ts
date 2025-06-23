@@ -9,6 +9,7 @@ export const getSessionExpirationDate = () =>
   new Date(Date.now() + SESSION_EXPIRATION_TIME);
 
 export const userIdKey = "userId";
+export const accessTokenKey = "accessToken";
 
 export type ProviderUser = {
   id: string;
@@ -16,6 +17,7 @@ export type ProviderUser = {
   username: string;
   name?: string;
   imageUrl?: string;
+  accessToken?: string;
 };
 
 export const authenticator = new Authenticator<ProviderUser>();
@@ -26,7 +28,7 @@ let microsoftStrategy = new MicrosoftStrategy(
     clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
     tenantId: process.env.MICROSOFT_TENANT_ID,
     redirectURI: process.env.MICROSOFT_REDIRECT_URI,
-    scopes: ["openid", "profile", "email"],
+    scopes: ["openid", "profile", "email", "User.Read"], // User.Read.All
     prompt: "login",
   },
   async ({ tokens }) => {
@@ -42,6 +44,7 @@ let microsoftStrategy = new MicrosoftStrategy(
       email,
       username: profile.displayName,
       name: profile.name.givenName,
+      accessToken,
     };
   }
 );
@@ -55,6 +58,14 @@ export async function getUserEmail(request: Request) {
   const userId = cookieSession.get(userIdKey);
 
   return userId ?? null;
+}
+
+export async function getAccessToken(request: Request) {
+  const cookieSession = await authSessionStorage.getSession(
+    request.headers.get("cookie")
+  );
+  const accessToken = cookieSession.get(accessTokenKey);
+  return accessToken ?? null;
 }
 
 export async function requireUser(request: Request) {
