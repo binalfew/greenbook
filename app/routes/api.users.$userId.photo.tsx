@@ -1,7 +1,12 @@
 import { requireUser } from "~/lib/auth.server";
-import { getUserPhotoUrl } from "~/lib/graph.server";
+import {
+  getStaffById,
+  getStaffByMicrosoftId,
+  getUserPhoto,
+} from "~/lib/staff.server";
+import type { Route } from "./+types/api.users.$userId.photo";
 
-export async function loader({ request, params }: any) {
+export async function loader({ request, params }: Route.LoaderArgs) {
   await requireUser(request);
   const userId = params.userId;
 
@@ -10,24 +15,34 @@ export async function loader({ request, params }: any) {
   }
 
   try {
-    const photoUrl = await getUserPhotoUrl(userId);
+    // First try to find by database ID
+    let staff = await getStaffById(userId);
 
-    if (!photoUrl) {
+    // If not found by ID, try to find by Microsoft ID
+    if (!staff) {
+      staff = await getStaffByMicrosoftId(userId);
+    }
+
+    if (!staff) {
+      return new Response("User not found", { status: 404 });
+    }
+
+    // Get photo from database
+    const photo = await getUserPhoto(staff.id);
+
+    if (!photo) {
       return new Response("Photo not found", { status: 404 });
     }
 
-    // Extract the base64 data from the data URL
-    const base64Data = photoUrl.split(",")[1];
-    const buffer = Buffer.from(base64Data, "base64");
-
-    return new Response(buffer, {
+    // Return the photo data
+    return new Response(photo.photoData, {
       headers: {
-        "Content-Type": "image/jpeg",
+        "Content-Type": photo.contentType,
         "Cache-Control": "public, max-age=3600", // Cache for 1 hour
       },
     });
   } catch (error) {
-    console.error("Error fetching user photo:", error);
-    return new Response("Failed to fetch photo", { status: 500 });
+    console.error("Error loading user photo:", error);
+    return new Response("Failed to load photo", { status: 500 });
   }
 }

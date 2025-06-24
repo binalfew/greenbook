@@ -15,13 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { getValidAccessToken, requireUser } from "~/lib/auth.server";
+import { requireUser } from "~/lib/auth.server";
 import {
   getFilterOptions,
-  getMyProfile,
-  getUsers,
-  searchUsers,
-} from "~/lib/graph.server";
+  getStaffByEmail,
+  getStaffList,
+} from "~/lib/staff.server";
 import type { Route } from "./+types/index";
 
 export function meta({}: Route.MetaArgs) {
@@ -34,21 +33,19 @@ export function meta({}: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   try {
     const user = await requireUser(request);
-    const accessToken = await getValidAccessToken(request);
 
+    // Get current user's profile from database
     let userProfile = null;
-    if (accessToken) {
-      try {
-        userProfile = await getMyProfile(accessToken);
-      } catch (error) {
-        console.error("Failed to fetch user profile:", error);
-        // Continue without profile - user can still use the app
-      }
+    try {
+      userProfile = await getStaffByEmail(user.email);
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error);
+      // Continue without profile - user can still use the app
     }
 
     const url = new URL(request.url);
     const searchTerm = url.searchParams.get("search");
-    const pageToken = url.searchParams.get("pageToken") || undefined;
+    const page = parseInt(url.searchParams.get("page") || "1");
     const department = url.searchParams.get("department");
     const jobTitle = url.searchParams.get("jobTitle");
     const officeLocation = url.searchParams.get("officeLocation");
@@ -70,18 +67,24 @@ export async function loader({ request }: Route.LoaderArgs) {
         officeLocation && officeLocation !== "all" ? officeLocation : undefined,
     };
 
-    let result;
-    if (searchTerm) {
-      result = await searchUsers(searchTerm, pageToken, filters);
-    } else {
-      result = await getUsers(pageToken, filters);
-    }
+    // Calculate pagination
+    const take = 50;
+    const skip = (page - 1) * take;
+
+    const result = await getStaffList({
+      skip,
+      take,
+      search: searchTerm || undefined,
+      ...filters,
+    });
 
     return data({
       user,
       userProfile,
-      users: result.users,
-      nextLink: result.nextLink,
+      users: result.staff,
+      total: result.total,
+      currentPage: page,
+      totalPages: Math.ceil(result.total / take),
       searchTerm,
       filters,
       filterOptions,
@@ -91,7 +94,9 @@ export async function loader({ request }: Route.LoaderArgs) {
       user: null,
       userProfile: null,
       users: [],
-      nextLink: undefined,
+      total: 0,
+      currentPage: 1,
+      totalPages: 1,
       searchTerm: null,
       filters: {},
       filterOptions: { departments: [], jobTitles: [], officeLocations: [] },
@@ -126,151 +131,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     user,
     userProfile,
     users,
-    nextLink,
+    total,
+    currentPage,
+    totalPages,
     searchTerm,
     filters,
     filterOptions,
   } = loaderData;
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto">
       <div className="grid gap-6">
-        {/* Current User Profile */}
-        {userProfile && (
-          <Card>
-            <CardHeader>
-              <CardTitle>My Profile</CardTitle>
-              <CardDescription>Your profile information</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-6">
-                {/* Profile Photo */}
-                <div className="flex-shrink-0">
-                  <img
-                    src={`/api/users/${userProfile.id}/photo`}
-                    alt={`${userProfile.displayName}'s profile photo`}
-                    className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
-                    onError={(e) => {
-                      // Hide the image and show fallback on error
-                      e.currentTarget.style.display = "none";
-                      e.currentTarget.nextElementSibling?.classList.remove(
-                        "hidden"
-                      );
-                    }}
-                  />
-                  <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200 hidden">
-                    <span className="text-gray-500 font-semibold text-2xl">
-                      {userProfile.displayName?.charAt(0)?.toUpperCase() || "?"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Profile Details */}
-                <div className="flex-1">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h3 className="font-semibold text-lg">
-                        {userProfile.displayName}
-                      </h3>
-                      <p className="text-gray-600">
-                        {userProfile.mail || userProfile.userPrincipalName}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    {userProfile.jobTitle && (
-                      <div>
-                        <span className="font-medium text-gray-500">
-                          Job Title:
-                        </span>{" "}
-                        {userProfile.jobTitle}
-                      </div>
-                    )}
-                    {userProfile.department && (
-                      <div>
-                        <span className="font-medium text-gray-500">
-                          Department:
-                        </span>{" "}
-                        {userProfile.department}
-                      </div>
-                    )}
-                    {userProfile.officeLocation && (
-                      <div>
-                        <span className="font-medium text-gray-500">
-                          Office Location:
-                        </span>{" "}
-                        {userProfile.officeLocation}
-                      </div>
-                    )}
-                    {userProfile.employeeId && (
-                      <div>
-                        <span className="font-medium text-gray-500">
-                          Employee ID:
-                        </span>{" "}
-                        {userProfile.employeeId}
-                      </div>
-                    )}
-                    {userProfile.businessPhones &&
-                      userProfile.businessPhones.length > 0 && (
-                        <div>
-                          <span className="font-medium text-gray-500">
-                            Phone:
-                          </span>{" "}
-                          {userProfile.businessPhones[0]}
-                        </div>
-                      )}
-                    {userProfile.mobilePhone && (
-                      <div>
-                        <span className="font-medium text-gray-500">
-                          Mobile:
-                        </span>{" "}
-                        {userProfile.mobilePhone}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <Button asChild variant="outline" size="sm">
-                      <Link to="/profile">View Full Profile</Link>
-                    </Button>
-                    <Button asChild variant="outline" size="sm">
-                      <Link to="/token-status">Check Token Status</Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Welcome Section (if no profile available) */}
-        {!userProfile && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Welcome to Greenbook</CardTitle>
-              <CardDescription>
-                Discover your colleagues and connect with your organization
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-4">
-                <Button asChild className="cursor-pointer">
-                  <Link to="/profile">View My Profile</Link>
-                </Button>
-                <Button asChild variant="outline" className="cursor-pointer">
-                  <Link to="/token-status">Check Token Status</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Users Directory */}
         <Card>
           <CardHeader>
@@ -434,7 +305,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                                   {userProfile.displayName}
                                 </h3>
                                 <p className="text-gray-600 truncate">
-                                  {userProfile.mail ||
+                                  {userProfile.email ||
                                     userProfile.userPrincipalName}
                                 </p>
                                 <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
@@ -504,8 +375,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               )}
             </div>
 
-            {nextLink && (
-              <div className="flex justify-end mt-6">
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-6 gap-2">
                 <Form method="get">
                   {searchTerm && (
                     <input type="hidden" name="search" value={searchTerm} />
@@ -532,8 +403,60 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                         value={filters.officeLocation}
                       />
                     )}
-                  <input type="hidden" name="pageToken" value={nextLink} />
-                  <Button type="submit" className="cursor-pointer">
+                  <input
+                    type="hidden"
+                    name="page"
+                    value={Math.max(1, currentPage - 1)}
+                  />
+                  <Button
+                    type="submit"
+                    className="cursor-pointer"
+                    disabled={currentPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                </Form>
+
+                <span className="flex items-center px-4 text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <Form method="get">
+                  {searchTerm && (
+                    <input type="hidden" name="search" value={searchTerm} />
+                  )}
+                  {filters.department && filters.department !== "all" && (
+                    <input
+                      type="hidden"
+                      name="department"
+                      value={filters.department}
+                    />
+                  )}
+                  {filters.jobTitle && filters.jobTitle !== "all" && (
+                    <input
+                      type="hidden"
+                      name="jobTitle"
+                      value={filters.jobTitle}
+                    />
+                  )}
+                  {filters.officeLocation &&
+                    filters.officeLocation !== "all" && (
+                      <input
+                        type="hidden"
+                        name="officeLocation"
+                        value={filters.officeLocation}
+                      />
+                    )}
+                  <input
+                    type="hidden"
+                    name="page"
+                    value={Math.min(totalPages, currentPage + 1)}
+                  />
+                  <Button
+                    type="submit"
+                    className="cursor-pointer"
+                    disabled={currentPage >= totalPages}
+                  >
                     Next
                   </Button>
                 </Form>

@@ -8,19 +8,47 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { requireUser } from "~/lib/auth.server";
+import type { MicrosoftProfile } from "~/lib/graph.server";
 import {
-  getUserOrgHierarchy,
-  getUserPhotoUrl,
-  getUserProfile,
-} from "~/lib/graph.server";
+  getStaffById,
+  getStaffByMicrosoftId,
+  getStaffHierarchy,
+  type StaffWithPhoto,
+} from "~/lib/staff.server";
 import type { Route } from "./+types/$userId";
+
+// Convert StaffWithPhoto to MicrosoftProfile for compatibility with existing components
+function staffToMicrosoftProfile(staff: StaffWithPhoto): MicrosoftProfile {
+  return {
+    id: staff.microsoftId,
+    displayName: staff.displayName,
+    givenName: staff.givenName || undefined,
+    surname: staff.surname || undefined,
+    userPrincipalName: staff.userPrincipalName,
+    mail: staff.email,
+    jobTitle: staff.jobTitle || undefined,
+    department: staff.department || undefined,
+    officeLocation: staff.officeLocation || undefined,
+    mobilePhone: staff.mobilePhone || undefined,
+    businessPhones: staff.businessPhones,
+    preferredLanguage: staff.preferredLanguage || undefined,
+    employeeId: staff.employeeId || undefined,
+    employeeType: staff.employeeType || undefined,
+    employeeHireDate: staff.employeeHireDate?.toISOString() || undefined,
+    usageLocation: staff.usageLocation || undefined,
+    accountEnabled: staff.accountEnabled,
+    createdDateTime: staff.createdDateTime?.toISOString() || undefined,
+    lastPasswordChangeDateTime:
+      staff.lastPasswordChangeDateTime?.toISOString() || undefined,
+  };
+}
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "User Details - Greenbook" },
     {
       name: "description",
-      content: "User profile details from Microsoft Graph",
+      content: "User profile details from the organization",
     },
   ];
 }
@@ -31,33 +59,37 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (!userId) throw redirect("/users");
 
   try {
-    const [user, photoUrl, orgHierarchy] = await Promise.all([
-      getUserProfile(userId),
-      getUserPhotoUrl(userId),
-      getUserOrgHierarchy(userId),
-    ]);
+    // First try to find by database ID
+    let staff = await getStaffById(userId);
+
+    // If not found by ID, try to find by Microsoft ID
+    if (!staff) {
+      staff = await getStaffByMicrosoftId(userId);
+    }
+
+    if (!staff) {
+      return data({
+        user: null,
+        manager: null,
+        directReports: [],
+        error: "User not found in database",
+      });
+    }
+
+    const orgHierarchy = await getStaffHierarchy(staff.id);
 
     return data({
-      user: { ...user, photoUrl },
+      user: staff,
       manager: orgHierarchy.manager,
       directReports: orgHierarchy.directReports,
     });
   } catch (error: any) {
-    // Check if the error is due to an expired token
-    if (
-      error.statusCode === 401 ||
-      error.code === "InvalidAuthenticationToken"
-    ) {
-      // Token is expired, redirect directly to Microsoft auth
-      console.log("Token is expired, redirecting to Microsoft auth");
-      throw redirect("/auth/microsoft");
-    }
-
+    console.error("Error loading user details:", error);
     return data({
       user: null,
       manager: null,
       directReports: [],
-      error: "Failed to load user details from Microsoft Graph",
+      error: "Failed to load user details from database",
     });
   }
 }
@@ -69,66 +101,42 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
   const directReports = hasError ? [] : loaderData.directReports || [];
   const error = hasError ? String(loaderData.error) : null;
 
-  if (error) {
+  if (error || !user) {
     return (
       <div className="container mx-auto py-8">
         <Card>
-          <CardHeader>
-            <CardTitle>User Details</CardTitle>
-            <CardDescription>Error loading user details</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-red-600">{error}</p>
+          <CardContent className="p-6">
+            <p className="text-red-600 text-center">
+              {error || "User not found"}
+            </p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!user) {
-    return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>User Details</CardTitle>
-            <CardDescription>Loading user details...</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>Loading user profile information...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Convert to MicrosoftProfile for OrgChart compatibility
+  const userProfile = staffToMicrosoftProfile(user);
+  const managerProfile = manager ? staffToMicrosoftProfile(manager) : null;
+  const directReportsProfiles = directReports.map(staffToMicrosoftProfile);
 
   return (
     <div className="container mx-auto py-8">
       <div className="grid gap-6">
-        {/* User Profile Card */}
+        {/* User Profile */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-4">
-              {/* Profile Photo */}
-              <div className="flex-shrink-0">
-                {user.photoUrl ? (
-                  <img
-                    src={user.photoUrl}
-                    alt={`${user.displayName}'s profile photo`}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
-                    <span className="text-gray-500 font-semibold text-2xl">
-                      {user.displayName?.charAt(0)?.toUpperCase() || "?"}
-                    </span>
-                  </div>
-                )}
+            <CardTitle className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
+                <span className="text-gray-600 font-semibold text-2xl">
+                  {user.displayName?.charAt(0)?.toUpperCase() || "?"}
+                </span>
               </div>
               <div>
-                <CardTitle>{user.displayName}</CardTitle>
-                <CardDescription>User profile details</CardDescription>
+                <h1 className="text-2xl font-bold">{user.displayName}</h1>
+                <p className="text-gray-600">{user.jobTitle}</p>
               </div>
-            </div>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -137,7 +145,7 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
                   Email
                 </h3>
                 <p className="mt-1 text-lg">
-                  {user.mail || user.userPrincipalName}
+                  {user.email || user.userPrincipalName}
                 </p>
               </div>
               {user.jobTitle && (
@@ -216,6 +224,23 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
           </CardContent>
         </Card>
 
+        {/* Organizational Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Organizational Chart</CardTitle>
+            <CardDescription>
+              Visual representation of reporting relationships
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OrgChart
+              currentUser={userProfile}
+              manager={managerProfile}
+              directReports={directReportsProfiles}
+            />
+          </CardContent>
+        </Card>
+
         {/* Organizational Hierarchy */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Manager */}
@@ -255,7 +280,7 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
                       <p className="text-sm text-gray-600">
                         {manager.jobTitle}
                       </p>
-                      <p className="text-sm text-gray-500">{manager.mail}</p>
+                      <p className="text-sm text-gray-500">{manager.email}</p>
                     </div>
                   </div>
                 </Link>
@@ -326,38 +351,6 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
             </CardContent>
           </Card>
         </div>
-
-        {/* Organizational Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
-              </svg>
-              Organizational Chart
-            </CardTitle>
-            <CardDescription>
-              Visual representation of reporting relationships
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <OrgChart
-              currentUser={user}
-              manager={manager}
-              directReports={directReports}
-            />
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

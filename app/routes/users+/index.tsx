@@ -10,13 +10,13 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { requireUser } from "~/lib/auth.server";
-import { getFilterOptions, getUsers, searchUsers } from "~/lib/graph.server";
+import { getFilterOptions, getStaffList } from "~/lib/staff.server";
 import type { Route } from "./+types/index";
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Users - Greenbook" },
-    { name: "description", content: "Browse African Union users" },
+    { name: "description", content: "Browse users from the organization" },
   ];
 }
 
@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireUser(request);
   const url = new URL(request.url);
   const searchTerm = url.searchParams.get("search");
-  const pageToken = url.searchParams.get("pageToken") || undefined;
+  const page = parseInt(url.searchParams.get("page") || "1");
   const department = url.searchParams.get("department");
   const jobTitle = url.searchParams.get("jobTitle");
   const officeLocation = url.searchParams.get("officeLocation");
@@ -47,39 +47,39 @@ export async function loader({ request }: Route.LoaderArgs) {
         officeLocation && officeLocation !== "all" ? officeLocation : undefined,
     };
 
-    let result;
-    if (searchTerm) {
-      result = await searchUsers(searchTerm, pageToken, filters);
-    } else {
-      result = await getUsers(pageToken, filters);
-    }
+    // Calculate pagination
+    const take = 50;
+    const skip = (page - 1) * take;
+
+    const result = await getStaffList({
+      skip,
+      take,
+      search: searchTerm || undefined,
+      ...filters,
+    });
 
     return data({
-      users: result.users,
-      nextLink: result.nextLink,
+      users: result.staff,
+      total: result.total,
+      currentPage: page,
+      totalPages: Math.ceil(result.total / take),
       user,
       searchTerm,
       filters,
       filterOptions,
     });
   } catch (error: any) {
-    // Check if the error is due to an expired token
-    if (
-      error.statusCode === 401 ||
-      error.code === "InvalidAuthenticationToken"
-    ) {
-      // Token is expired, redirect directly to Microsoft auth
-      throw redirect("/auth/microsoft");
-    }
-
+    console.error("Error loading users:", error);
     return data({
       users: [],
-      nextLink: undefined,
+      total: 0,
+      currentPage: 1,
+      totalPages: 1,
       user,
       searchTerm,
       filters: {},
       filterOptions: { departments: [], jobTitles: [], officeLocations: [] },
-      error: "Failed to load users from Microsoft Graph",
+      error: "Failed to load users from database",
     });
   }
 }
@@ -87,7 +87,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Users({ loaderData }: Route.ComponentProps) {
   const hasError = "error" in loaderData;
   const users = hasError ? [] : loaderData.users ?? [];
-  const nextLink = loaderData.nextLink;
+  const total = loaderData.total;
+  const currentPage = loaderData.currentPage;
+  const totalPages = loaderData.totalPages;
   const searchTerm = loaderData.searchTerm;
   const filters = (loaderData.filters || {}) as {
     department?: string;
@@ -263,7 +265,7 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                                   {userProfile.displayName}
                                 </h3>
                                 <p className="text-gray-600 truncate">
-                                  {userProfile.mail ||
+                                  {userProfile.email ||
                                     userProfile.userPrincipalName}
                                 </p>
                                 <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
@@ -333,8 +335,8 @@ export default function Users({ loaderData }: Route.ComponentProps) {
               )}
             </div>
 
-            {nextLink && (
-              <div className="flex justify-end mt-6">
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-6">
                 <Form method="get">
                   {searchTerm && (
                     <input type="hidden" name="search" value={searchTerm} />
@@ -361,7 +363,10 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                         value={filters.officeLocation}
                       />
                     )}
-                  <input type="hidden" name="pageToken" value={nextLink} />
+                  <input type="hidden" name="page" value={currentPage} />
+                  <Button type="submit" className="cursor-pointer">
+                    Previous
+                  </Button>
                   <Button type="submit" className="cursor-pointer">
                     Next
                   </Button>

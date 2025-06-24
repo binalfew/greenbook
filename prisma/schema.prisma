@@ -35,28 +35,63 @@ model JobTitle {
 }
 
 model Staff {
-  id             String     @id @default(uuid())
-  fullName       String
-  email          String     @unique
+  id                         String    @id @default(uuid())
+  microsoftId                String    @unique // Microsoft Graph user ID
+  displayName                String
+  givenName                  String?
+  surname                    String?
+  userPrincipalName          String    @unique
+  email                      String    @unique
+  jobTitle                   String?
+  department                 String?
+  officeLocation             String?
+  mobilePhone                String?
+  businessPhones             String[] // Array of phone numbers
+  preferredLanguage          String?
+  employeeId                 String?
+  employeeType               String?
+  employeeHireDate           DateTime?
+  usageLocation              String?
+  accountEnabled             Boolean   @default(true)
+  createdDateTime            DateTime?
+  lastPasswordChangeDateTime DateTime?
+  userType                   String?
+
+  // Organizational hierarchy
+  managerId     String?
+  manager       Staff?  @relation("Manager", fields: [managerId], references: [id])
+  directReports Staff[] @relation("Manager")
+
+  // Photo
+  userPhoto UserPhoto?
+
+  // Legacy fields (keeping for backward compatibility)
   phone          String?
   photoUrl       String?
-  jobTitleId     String
-  jobTitle       JobTitle   @relation(fields: [jobTitleId], references: [id])
-  departmentId   String
-  department     Department @relation(fields: [departmentId], references: [id])
-  reportsToId    String?
-  reportsTo      Staff?     @relation("Manager", fields: [reportsToId], references: [id])
-  subordinates   Staff[]    @relation("Manager")
-  employmentType String
+  jobTitleId     String?
+  jobTitleRef    JobTitle?   @relation(fields: [jobTitleId], references: [id])
+  departmentId   String?
+  departmentRef  Department? @relation(fields: [departmentId], references: [id])
+  employmentType String?
   expertise      String[]
   biography      String?
-  officeLocation String?
   bioEn          String?
   bioFr          String?
   bioAr          String?
   bioPt          String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+
+  // Metadata
+  lastSyncAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([microsoftId])
+  @@index([email])
+  @@index([userPrincipalName])
+  @@index([department])
+  @@index([jobTitle])
+  @@index([officeLocation])
+  @@index([managerId])
 }
 
 enum UserStatus {
@@ -114,4 +149,28 @@ model Permission {
   roles       Role[]
 
   @@unique([action, entity, access])
+}
+
+model UserPhoto {
+  id          String   @id @default(uuid())
+  staffId     String   @unique
+  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  photoData   String // Base64 encoded photo data
+  contentType String   @default("image/jpeg")
+  lastSyncAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SyncLog {
+  id               String    @id @default(uuid())
+  syncType         String // 'users', 'hierarchy', 'photos', 'full_sync'
+  status           String // 'running', 'success', 'error', 'partial', 'cancelled'
+  message          String?
+  recordsProcessed Int       @default(0)
+  recordsFailed    Int       @default(0)
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  masterSyncLogId  String? // Reference to master sync log for full syncs
 }
