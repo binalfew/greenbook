@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { getAccessToken, requireUser } from "~/lib/auth.server";
+import { getValidAccessToken, requireUser } from "~/lib/auth.server";
 import { getMyProfile } from "~/lib/graph.server";
 import type { Route } from "./+types/profile";
 
@@ -19,28 +19,16 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireUser(request);
-  const accessToken = await getAccessToken(request);
-  if (!accessToken) throw redirect("/auth/microsoft");
+  const accessToken = await getValidAccessToken(request);
 
-  try {
-    const profile = await getMyProfile(accessToken);
-    return data({ profile, user });
-  } catch (error: any) {
-    // Check if the error is due to an expired token
-    if (
-      error.statusCode === 401 ||
-      error.code === "InvalidAuthenticationToken"
-    ) {
-      // Token is expired, redirect directly to Microsoft auth
-      throw redirect("/auth/microsoft");
-    }
-
-    return data({
-      profile: null,
-      user,
-      error: "Failed to load profile from Microsoft Graph",
-    });
+  if (!accessToken) {
+    // Token is expired and couldn't be refreshed - redirect to re-authenticate
+    throw redirect("/auth/microsoft");
   }
+
+  // Token is valid - make the API call
+  const profile = await getMyProfile(accessToken);
+  return data({ profile, user });
 }
 
 export default function Profile({ loaderData }: Route.ComponentProps) {

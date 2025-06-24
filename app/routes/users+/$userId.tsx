@@ -49,6 +49,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       error.code === "InvalidAuthenticationToken"
     ) {
       // Token is expired, redirect directly to Microsoft auth
+      console.log("Token is expired, redirecting to Microsoft auth");
       throw redirect("/auth/microsoft");
     }
 

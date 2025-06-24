@@ -1,12 +1,13 @@
 import { data, redirect } from "react-router";
 import {
-  accessTokenKey,
   authenticator,
+  sessionIdKey,
   userIdKey,
   type ProviderUser,
 } from "~/lib/auth.server";
 import prisma from "~/lib/prisma";
-import { authSessionStorage } from "~/lib/session.server";
+import { authSessionStorage, createDBSession } from "~/lib/session.server";
+import { generateId } from "~/lib/utils";
 import type { Route } from "./+types/auth.$provider.callback";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -46,12 +47,25 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     });
   }
 
+  // Create a unique session ID
+  const sessionId = generateId();
+
+  // Store tokens in database
+  await createDBSession(sessionId, providerUser.email, {
+    accessToken: providerUser.accessToken,
+    refreshToken: providerUser.refreshToken,
+    expiresAt: providerUser.expiresAt
+      ? new Date(providerUser.expiresAt)
+      : undefined,
+  });
+
+  // Store minimal data in cookie session
   let session = await authSessionStorage.getSession(
     request.headers.get("cookie")
   );
 
   session.set(userIdKey, providerUser.email);
-  session.set(accessTokenKey, providerUser.accessToken);
+  session.set(sessionIdKey, sessionId);
 
   return redirect("/", {
     headers: {

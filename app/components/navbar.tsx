@@ -28,18 +28,6 @@ export default function Navbar({ user }: { user: User | undefined }) {
       <div className="flex items-center gap-4">
         {user ? (
           <>
-            <Link
-              to="/profile"
-              className="text-white flex items-center gap-2 cursor-pointer font-medium hover:underline"
-            >
-              Profile
-            </Link>
-            <Link
-              to="/users"
-              className="text-white flex items-center gap-2 cursor-pointer font-medium hover:underline"
-            >
-              Users
-            </Link>
             <Form action="/logout" method="POST">
               <div className="flex h-5 items-center space-x-4 text-sm">
                 <div>Welcome, {user.name || user.username || user.email}</div>

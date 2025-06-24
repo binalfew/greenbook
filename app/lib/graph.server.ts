@@ -79,7 +79,7 @@ export async function getMyProfile(
       ])
       .get();
     return user;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching my profile:", error);
     throw new Error("Failed to fetch profile from Microsoft Graph");
   }
