@@ -6,7 +6,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Separator } from "~/components/ui/separator";
 import { getAccessToken, requireUser } from "~/lib/auth.server";
 import { getMyProfile } from "~/lib/graph.server";
 import type { Route } from "./+types/profile";
@@ -177,57 +176,6 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
                   <p className="mt-1 text-lg">{profile.usageLocation}</p>
                 </div>
               )}
-            </div>
-            <Separator />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {profile.createdDateTime && (
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                    Account Created
-                  </h3>
-                  <p className="mt-1 text-lg">
-                    {new Date(profile.createdDateTime).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              {profile.lastPasswordChangeDateTime && (
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                    Last Password Change
-                  </h3>
-                  <p className="mt-1 text-lg">
-                    {new Date(
-                      profile.lastPasswordChangeDateTime
-                    ).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              {profile.employeeHireDate && (
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                    Hire Date
-                  </h3>
-                  <p className="mt-1 text-lg">
-                    {new Date(profile.employeeHireDate).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              <div>
-                <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                  Account Status
-                </h3>
-                <p className="mt-1 text-lg">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      profile.accountEnabled
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {profile.accountEnabled ? "Active" : "Disabled"}
-                  </span>
-                </p>
-              </div>
             </div>
           </CardContent>
         </Card>

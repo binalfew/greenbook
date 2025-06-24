@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Separator } from "~/components/ui/separator";
 import { requireUser } from "~/lib/auth.server";
 import {
   getUserOrgHierarchy,
@@ -212,57 +211,6 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
                   <p className="mt-1 text-lg">{user.usageLocation}</p>
                 </div>
               )}
-            </div>
-            <Separator />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {user.createdDateTime && (
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                    Account Created
-                  </h3>
-                  <p className="mt-1 text-lg">
-                    {new Date(user.createdDateTime).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              {user.lastPasswordChangeDateTime && (
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                    Last Password Change
-                  </h3>
-                  <p className="mt-1 text-lg">
-                    {new Date(
-                      user.lastPasswordChangeDateTime
-                    ).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              {user.employeeHireDate && (
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                    Hire Date
-                  </h3>
-                  <p className="mt-1 text-lg">
-                    {new Date(user.employeeHireDate).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              <div>
-                <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-                  Account Status
-                </h3>
-                <p className="mt-1 text-lg">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
-                      user.accountEnabled
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {user.accountEnabled ? "Active" : "Disabled"}
-                  </span>
-                </p>
-              </div>
             </div>
           </CardContent>
         </Card>
