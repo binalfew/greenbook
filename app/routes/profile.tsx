@@ -21,11 +21,21 @@ export function meta({}: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireUser(request);
   const accessToken = await getAccessToken(request);
-  if (!accessToken) throw redirect("/login");
+  if (!accessToken) throw redirect("/auth/microsoft");
+
   try {
     const profile = await getMyProfile(accessToken);
     return data({ profile, user });
-  } catch (error) {
+  } catch (error: any) {
+    // Check if the error is due to an expired token
+    if (
+      error.statusCode === 401 ||
+      error.code === "InvalidAuthenticationToken"
+    ) {
+      // Token is expired, redirect directly to Microsoft auth
+      throw redirect("/auth/microsoft");
+    }
+
     return data({
       profile: null,
       user,

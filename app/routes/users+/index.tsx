@@ -1,15 +1,22 @@
-import { data, Form, Link } from "react-router";
+import { data, Form, Link, redirect } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { requireUser } from "~/lib/auth.server";
-import { getUsers, searchUsers } from "~/lib/graph.server";
+import { getFilterOptions, getUsers, searchUsers } from "~/lib/graph.server";
 import type { Route } from "./+types/index";
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Users - Greenbook" },
-    { name: "description", content: "Browse users" },
+    { name: "description", content: "Browse African Union users" },
   ];
 }
 
@@ -18,26 +25,60 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const searchTerm = url.searchParams.get("search");
   const pageToken = url.searchParams.get("pageToken") || undefined;
+  const department = url.searchParams.get("department");
+  const jobTitle = url.searchParams.get("jobTitle");
+  const officeLocation = url.searchParams.get("officeLocation");
+  const clear = url.searchParams.get("clear");
+
+  // If clear is set, redirect to the base users page
+  if (clear === "true") {
+    return redirect("/users");
+  }
 
   try {
+    // Get filter options
+    const filterOptions = await getFilterOptions();
+
+    // Prepare filters - convert "all" values to undefined
+    const filters = {
+      department: department && department !== "all" ? department : undefined,
+      jobTitle: jobTitle && jobTitle !== "all" ? jobTitle : undefined,
+      officeLocation:
+        officeLocation && officeLocation !== "all" ? officeLocation : undefined,
+    };
+
     let result;
     if (searchTerm) {
-      result = await searchUsers(searchTerm, pageToken);
+      result = await searchUsers(searchTerm, pageToken, filters);
     } else {
-      result = await getUsers(pageToken);
+      result = await getUsers(pageToken, filters);
     }
+
     return data({
       users: result.users,
       nextLink: result.nextLink,
       user,
       searchTerm,
+      filters,
+      filterOptions,
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Check if the error is due to an expired token
+    if (
+      error.statusCode === 401 ||
+      error.code === "InvalidAuthenticationToken"
+    ) {
+      // Token is expired, redirect directly to Microsoft auth
+      throw redirect("/auth/microsoft");
+    }
+
     return data({
       users: [],
       nextLink: undefined,
       user,
       searchTerm,
+      filters: {},
+      filterOptions: { departments: [], jobTitles: [], officeLocations: [] },
       error: "Failed to load users from Microsoft Graph",
     });
   }
@@ -48,48 +89,136 @@ export default function Users({ loaderData }: Route.ComponentProps) {
   const users = hasError ? [] : loaderData.users ?? [];
   const nextLink = loaderData.nextLink;
   const searchTerm = loaderData.searchTerm;
+  const filters = (loaderData.filters || {}) as {
+    department?: string;
+    jobTitle?: string;
+    officeLocation?: string;
+  };
+  const filterOptions = loaderData.filterOptions || {
+    departments: [],
+    jobTitles: [],
+    officeLocations: [],
+  };
   const error = hasError ? String(loaderData.error) : null;
 
   return (
     <div className="container mx-auto py-8">
       <div className="grid gap-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle>Users Directory</CardTitle>
           </CardHeader>
           <CardContent>
-            <Form method="get" className="flex gap-2 mb-6">
-              <Input
-                type="text"
-                name="search"
-                placeholder="Search users by name or email..."
-                defaultValue={searchTerm || ""}
-              />
-              <Button type="submit">Search</Button>
-              {searchTerm && (
-                <Button type="submit" variant="outline" name="search" value="">
-                  Clear
-                </Button>
-              )}
+            <Form method="get" className="space-y-4 mb-6">
+              {/* Search and Filters Row */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Left side - Search and filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
+                  <Input
+                    type="text"
+                    name="search"
+                    placeholder="Search African Union users by name or email..."
+                    defaultValue={searchTerm || ""}
+                  />
+
+                  <Select
+                    name="department"
+                    defaultValue={filters.department || "all"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Departments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {filterOptions.departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select
+                    name="jobTitle"
+                    defaultValue={filters.jobTitle || "all"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Job Titles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Job Titles</SelectItem>
+                      {filterOptions.jobTitles.map((title) => (
+                        <SelectItem key={title} value={title}>
+                          {title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select
+                    name="officeLocation"
+                    defaultValue={filters.officeLocation || "all"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Offices" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Offices</SelectItem>
+                      {filterOptions.officeLocations.map((location) => (
+                        <SelectItem key={location} value={location}>
+                          {location}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Right side - Action buttons */}
+                <div className="flex gap-2 lg:flex-shrink-0">
+                  {/* cursor-pointer */}
+                  <Button type="submit" className="cursor-pointer">
+                    Search
+                  </Button>
+                </div>
+              </div>
             </Form>
+
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-600">{error}</p>
               </div>
             )}
-            {searchTerm && (
+
+            {(searchTerm ||
+              (filters.department && filters.department !== "all") ||
+              (filters.jobTitle && filters.jobTitle !== "all") ||
+              (filters.officeLocation && filters.officeLocation !== "all")) && (
               <div className="mb-4">
                 <p className="text-sm text-gray-600">
-                  Search results for "{searchTerm}": {users.length} users found
+                  {searchTerm && `Search results for "${searchTerm}"`}
+                  {filters.department &&
+                    filters.department !== "all" &&
+                    ` • Department: ${filters.department}`}
+                  {filters.jobTitle &&
+                    filters.jobTitle !== "all" &&
+                    ` • Job Title: ${filters.jobTitle}`}
+                  {filters.officeLocation &&
+                    filters.officeLocation !== "all" &&
+                    ` • Office: ${filters.officeLocation}`}
+                  {` • ${users.length} users found`}
                 </p>
               </div>
             )}
+
             <div className="grid gap-4">
               {users.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-500">
-                    {searchTerm
-                      ? "No users found matching your search."
+                    {searchTerm ||
+                    (filters.department && filters.department !== "all") ||
+                    (filters.jobTitle && filters.jobTitle !== "all") ||
+                    (filters.officeLocation && filters.officeLocation !== "all")
+                      ? "No users found matching your criteria."
                       : "No users available."}
                   </p>
                 </div>
@@ -102,71 +231,99 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                   >
                     <Card className="hover:shadow-md transition-shadow">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg">
-                              {userProfile.displayName}
-                            </h3>
-                            <p className="text-gray-600">
-                              {userProfile.mail ||
-                                userProfile.userPrincipalName}
-                            </p>
-                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                              {userProfile.jobTitle && (
-                                <div>
-                                  <span className="font-medium text-gray-500">
-                                    Job Title:
-                                  </span>{" "}
-                                  {userProfile.jobTitle}
-                                </div>
-                              )}
-                              {userProfile.department && (
-                                <div>
-                                  <span className="font-medium text-gray-500">
-                                    Department:
-                                  </span>{" "}
-                                  {userProfile.department}
-                                </div>
-                              )}
-                              {userProfile.officeLocation && (
-                                <div>
-                                  <span className="font-medium text-gray-500">
-                                    Office:
-                                  </span>{" "}
-                                  {userProfile.officeLocation}
-                                </div>
-                              )}
-                              {userProfile.employeeId && (
-                                <div>
-                                  <span className="font-medium text-gray-500">
-                                    Employee ID:
-                                  </span>{" "}
-                                  {userProfile.employeeId}
-                                </div>
-                              )}
+                        <div className="flex items-start gap-4">
+                          {/* Profile Photo */}
+                          <div className="flex-shrink-0">
+                            <img
+                              src={`/api/users/${userProfile.id}/photo`}
+                              alt={`${userProfile.displayName}'s profile photo`}
+                              className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+                              onError={(e) => {
+                                // Hide the image and show fallback on error
+                                e.currentTarget.style.display = "none";
+                                e.currentTarget.nextElementSibling?.classList.remove(
+                                  "hidden"
+                                );
+                              }}
+                            />
+                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200 hidden">
+                              <span className="text-gray-500 font-semibold text-lg">
+                                {userProfile.displayName
+                                  ?.charAt(0)
+                                  ?.toUpperCase() || "?"}
+                              </span>
                             </div>
-                            {userProfile.businessPhones &&
-                              userProfile.businessPhones.length > 0 && (
-                                <div className="mt-2 text-sm">
-                                  <span className="font-medium text-gray-500">
-                                    Phone:
-                                  </span>{" "}
-                                  {userProfile.businessPhones[0]}
-                                </div>
-                              )}
                           </div>
-                          <div className="ml-4 text-right">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                userProfile.accountEnabled
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {userProfile.accountEnabled
-                                ? "Active"
-                                : "Disabled"}
-                            </span>
+
+                          {/* User Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-lg truncate">
+                                  {userProfile.displayName}
+                                </h3>
+                                <p className="text-gray-600 truncate">
+                                  {userProfile.mail ||
+                                    userProfile.userPrincipalName}
+                                </p>
+                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                  {userProfile.jobTitle && (
+                                    <div>
+                                      <span className="font-medium text-gray-500">
+                                        Job Title:
+                                      </span>{" "}
+                                      {userProfile.jobTitle}
+                                    </div>
+                                  )}
+                                  {userProfile.department && (
+                                    <div>
+                                      <span className="font-medium text-gray-500">
+                                        Department:
+                                      </span>{" "}
+                                      {userProfile.department}
+                                    </div>
+                                  )}
+                                  {userProfile.officeLocation && (
+                                    <div>
+                                      <span className="font-medium text-gray-500">
+                                        Office:
+                                      </span>{" "}
+                                      {userProfile.officeLocation}
+                                    </div>
+                                  )}
+                                  {userProfile.employeeId && (
+                                    <div>
+                                      <span className="font-medium text-gray-500">
+                                        Employee ID:
+                                      </span>{" "}
+                                      {userProfile.employeeId}
+                                    </div>
+                                  )}
+                                </div>
+                                {userProfile.businessPhones &&
+                                  userProfile.businessPhones.length > 0 && (
+                                    <div className="mt-2 text-sm">
+                                      <span className="font-medium text-gray-500">
+                                        Phone:
+                                      </span>{" "}
+                                      {userProfile.businessPhones[0]}
+                                    </div>
+                                  )}
+                              </div>
+                              <div className="ml-4 text-right">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    userProfile.accountEnabled
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {userProfile.accountEnabled
+                                    ? "Active"
+                                    : "Disabled"}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -175,14 +332,37 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                 ))
               )}
             </div>
+
             {nextLink && (
               <div className="flex justify-end mt-6">
                 <Form method="get">
                   {searchTerm && (
                     <input type="hidden" name="search" value={searchTerm} />
                   )}
+                  {filters.department && filters.department !== "all" && (
+                    <input
+                      type="hidden"
+                      name="department"
+                      value={filters.department}
+                    />
+                  )}
+                  {filters.jobTitle && filters.jobTitle !== "all" && (
+                    <input
+                      type="hidden"
+                      name="jobTitle"
+                      value={filters.jobTitle}
+                    />
+                  )}
+                  {filters.officeLocation &&
+                    filters.officeLocation !== "all" && (
+                      <input
+                        type="hidden"
+                        name="officeLocation"
+                        value={filters.officeLocation}
+                      />
+                    )}
                   <input type="hidden" name="pageToken" value={nextLink} />
-                  <Button type="submit" variant="outline">
+                  <Button type="submit" className="cursor-pointer">
                     Next
                   </Button>
                 </Form>
