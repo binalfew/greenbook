@@ -85,35 +85,47 @@ export async function getMyProfile(
 }
 
 // Get all users in the organization (application)
-export async function getUsers(): Promise<MicrosoftProfile[]> {
+export async function getUsers(
+  nextLink?: string
+): Promise<{ users: MicrosoftProfile[]; nextLink?: string }> {
   const graphClient = getGraphClientWithAppToken();
   try {
-    const response = await graphClient
-      .api("/users")
-      .select([
-        "id",
-        "displayName",
-        "givenName",
-        "surname",
-        "userPrincipalName",
-        "mail",
-        "jobTitle",
-        "department",
-        "officeLocation",
-        "mobilePhone",
-        "businessPhones",
-        "preferredLanguage",
-        "employeeId",
-        "employeeType",
-        "employeeHireDate",
-        "usageLocation",
-        "accountEnabled",
-        "createdDateTime",
-        "lastPasswordChangeDateTime",
-      ])
-      .top(100)
-      .get();
-    return response.value;
+    let response;
+    if (nextLink) {
+      // Use the full nextLink URL directly
+      response = await graphClient.api(nextLink).get();
+    } else {
+      response = await graphClient
+        .api("/users")
+        .filter("accountEnabled eq true and userType eq 'Member'")
+        .select([
+          "id",
+          "displayName",
+          "givenName",
+          "surname",
+          "userPrincipalName",
+          "mail",
+          "jobTitle",
+          "department",
+          "officeLocation",
+          "mobilePhone",
+          "businessPhones",
+          "preferredLanguage",
+          "employeeId",
+          "employeeType",
+          "employeeHireDate",
+          "usageLocation",
+          "accountEnabled",
+          "createdDateTime",
+          "lastPasswordChangeDateTime",
+          "userType",
+        ])
+        .get();
+    }
+    return {
+      users: response.value,
+      nextLink: response["@odata.nextLink"],
+    };
   } catch (error) {
     console.error("Error fetching users:", error);
     throw new Error("Failed to fetch users from Microsoft Graph");
@@ -122,15 +134,68 @@ export async function getUsers(): Promise<MicrosoftProfile[]> {
 
 // Search users in the organization (application)
 export async function searchUsers(
-  searchTerm: string
-): Promise<MicrosoftProfile[]> {
+  searchTerm: string,
+  nextLink?: string
+): Promise<{ users: MicrosoftProfile[]; nextLink?: string }> {
   const graphClient = getGraphClientWithAppToken();
   try {
-    const response = await graphClient
-      .api("/users")
-      .filter(
-        `startswith(displayName,'${searchTerm}') or startswith(givenName,'${searchTerm}') or startswith(surname,'${searchTerm}') or startswith(mail,'${searchTerm}')`
-      )
+    let response;
+    if (nextLink) {
+      // Use the full nextLink URL directly
+      response = await graphClient.api(nextLink).get();
+    } else {
+      response = await graphClient
+        .api("/users")
+        .filter(
+          "accountEnabled eq true and userType eq 'Member' and (" +
+            `startswith(displayName,'${searchTerm}') or ` +
+            `startswith(givenName,'${searchTerm}') or ` +
+            `startswith(surname,'${searchTerm}') or ` +
+            `startswith(mail,'${searchTerm}')` +
+            ")"
+        )
+        .select([
+          "id",
+          "displayName",
+          "givenName",
+          "surname",
+          "userPrincipalName",
+          "mail",
+          "jobTitle",
+          "department",
+          "officeLocation",
+          "mobilePhone",
+          "businessPhones",
+          "preferredLanguage",
+          "employeeId",
+          "employeeType",
+          "employeeHireDate",
+          "usageLocation",
+          "accountEnabled",
+          "createdDateTime",
+          "lastPasswordChangeDateTime",
+          "userType",
+        ])
+        .get();
+    }
+    return {
+      users: response.value,
+      nextLink: response["@odata.nextLink"],
+    };
+  } catch (error) {
+    console.error("Error searching users:", error);
+    throw new Error("Failed to search users in Microsoft Graph");
+  }
+}
+
+// Get user profile by userId from Microsoft Graph, using the application client
+export async function getUserProfile(
+  userId: string
+): Promise<MicrosoftProfile> {
+  const graphClient = getGraphClientWithAppToken();
+  try {
+    const user = await graphClient
+      .api(`/users/${userId}`)
       .select([
         "id",
         "displayName",
@@ -152,11 +217,10 @@ export async function searchUsers(
         "createdDateTime",
         "lastPasswordChangeDateTime",
       ])
-      .top(50)
       .get();
-    return response.value;
+    return user;
   } catch (error) {
-    console.error("Error searching users:", error);
-    throw new Error("Failed to search users in Microsoft Graph");
+    console.error("Error fetching user profile:", error);
+    throw new Error("Failed to fetch user profile from Microsoft Graph");
   }
 }
