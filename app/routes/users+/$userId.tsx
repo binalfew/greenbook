@@ -13,12 +13,12 @@ import {
   getStaffById,
   getStaffByMicrosoftId,
   getStaffHierarchy,
-  type StaffWithPhoto,
+  type StaffWithHierarchy,
 } from "~/lib/staff.server";
 import type { Route } from "./+types/$userId";
 
-// Convert StaffWithPhoto to MicrosoftProfile for compatibility with existing components
-function staffToMicrosoftProfile(staff: StaffWithPhoto): MicrosoftProfile {
+// Convert StaffWithHierarchy to MicrosoftProfile for compatibility with existing components
+function staffToMicrosoftProfile(staff: StaffWithHierarchy): MicrosoftProfile {
   return {
     id: staff.microsoftId,
     displayName: staff.displayName,

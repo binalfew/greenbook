@@ -1,13 +1,13 @@
 import {
   getUserManager,
-  getUserPhotoUrl,
   getUsers,
   type MicrosoftProfile,
 } from "./graph.server";
 import {
   getStaffByMicrosoftId,
-  storeUserPhoto,
+  linkStaffToReferenceData,
   syncHierarchyFromGraph,
+  syncReferenceData,
   syncStaffFromGraph,
 } from "./staff.server";
 
@@ -61,184 +61,227 @@ async function checkCancellation(syncId: string): Promise<void> {
   }
 }
 
-// Sync all users from Microsoft Graph to database
-export async function syncAllUsers(): Promise<{
-  usersSync: any;
-  hierarchySync: any;
-  photosSync: any;
+// Types for selective sync
+export interface SyncOptions {
+  users?: boolean;
+  referenceData?: boolean;
+  hierarchy?: boolean;
+  linkReferences?: boolean; // This is typically needed when syncing users or reference data
+}
+
+// Selective sync function
+export async function selectiveSync(
+  options: SyncOptions = {},
+  scheduleId?: string
+): Promise<{
+  usersSync?: any;
+  referenceDataSync?: any;
+  linkReferencesSync?: any;
+  hierarchySync?: any;
 }> {
-  console.log("🚀 Starting full user synchronization...");
+  console.log("🎯 Starting selective synchronization...");
   console.log("=".repeat(50));
+  console.log("Selected sync options:", options);
+  if (scheduleId) {
+    console.log(`📅 Scheduled sync triggered by schedule: ${scheduleId}`);
+  }
 
   // Create master sync log
   const prisma = (await import("./prisma")).default;
   const masterSyncLog = await prisma.syncLog.create({
     data: {
-      syncType: "full_sync",
+      syncType: "selective_sync",
       status: "running",
       startedAt: new Date(),
+      scheduleId: scheduleId || null,
     },
   });
 
   console.log(`🆔 Sync ID set to: ${masterSyncLog.id}`);
 
+  const results: any = {};
+  let allUsers: MicrosoftProfile[] = [];
+
   try {
-    // Step 1: Sync all users
-    console.log("📋 Step 1: Fetching users from Microsoft Graph...");
-    const allUsers: MicrosoftProfile[] = [];
-    let nextLink: string | undefined;
-    let pageCount = 0;
+    // Step 1: Fetch users if needed for any sync type
+    if (options.users || options.hierarchy || options.referenceData) {
+      console.log("📋 Step 1: Fetching users from Microsoft Graph...");
+      let nextLink: string | undefined;
+      let pageCount = 0;
 
-    do {
+      do {
+        await checkCancellation(masterSyncLog.id);
+        pageCount++;
+        console.log(`   Fetching page ${pageCount}...`);
+        const result = await getUsers(nextLink);
+        await checkCancellation(masterSyncLog.id);
+        allUsers.push(...result.users);
+        nextLink = result.nextLink;
+        console.log(
+          `   Got ${result.users.length} users (total: ${allUsers.length})`
+        );
+      } while (nextLink);
+
       await checkCancellation(masterSyncLog.id);
-      pageCount++;
-      console.log(`   Fetching page ${pageCount}...`);
-      const result = await getUsers(nextLink);
-      await checkCancellation(masterSyncLog.id); // Check after API call
-      allUsers.push(...result.users);
-      nextLink = result.nextLink;
-      console.log(
-        `   Got ${result.users.length} users (total: ${allUsers.length})`
+      console.log(`✅ Found ${allUsers.length} total users`);
+    }
+
+    // Step 2: Sync users if selected
+    if (options.users) {
+      console.log("📝 Step 2: Syncing user data to database...");
+      results.usersSync = await syncStaffFromGraph(
+        allUsers,
+        masterSyncLog.id,
+        () => checkCancellation(masterSyncLog.id)
       );
-    } while (nextLink);
-
-    await checkCancellation(masterSyncLog.id);
-    console.log(`✅ Found ${allUsers.length} total users to sync`);
-    console.log("📝 Step 2: Syncing user data to database...");
-
-    const usersSync = await syncStaffFromGraph(allUsers, masterSyncLog.id, () =>
-      checkCancellation(masterSyncLog.id)
-    );
-    await checkCancellation(masterSyncLog.id);
-    console.log(
-      `✅ User sync completed: ${usersSync.recordsProcessed} processed, ${usersSync.recordsFailed} failed`
-    );
-
-    // Step 2: Sync organizational hierarchy
-    console.log("🏢 Step 3: Building organizational hierarchy...");
-    const hierarchyData: Array<{ staffId: string; managerId: string | null }> =
-      [];
-
-    for (let i = 0; i < allUsers.length; i++) {
       await checkCancellation(masterSyncLog.id);
-      const user = allUsers[i];
-      if (i % 5 === 0) {
-        // Check more frequently
-        console.log(
-          `   Processing hierarchy for user ${i + 1}/${allUsers.length}...`
-        );
-      }
-
-      try {
-        const manager = await getUserManager(user.id);
-        await checkCancellation(masterSyncLog.id); // Check after API call
-        hierarchyData.push({
-          staffId: user.id,
-          managerId: manager?.id || null,
-        });
-      } catch (error) {
-        console.error(`   ❌ Failed to get manager for ${user.id}:`, error);
-        hierarchyData.push({
-          staffId: user.id,
-          managerId: null,
-        });
-      }
+      console.log(
+        `✅ User sync completed: ${results.usersSync.recordsProcessed} processed, ${results.usersSync.recordsFailed} failed`
+      );
     }
 
-    await checkCancellation(masterSyncLog.id);
-    console.log(
-      `✅ Hierarchy data collected for ${hierarchyData.length} users`
-    );
-    const hierarchySync = await syncHierarchyFromGraph(
-      hierarchyData,
-      masterSyncLog.id,
-      () => checkCancellation(masterSyncLog.id)
-    );
-    await checkCancellation(masterSyncLog.id);
-    console.log(
-      `✅ Hierarchy sync completed: ${hierarchySync.recordsProcessed} processed, ${hierarchySync.recordsFailed} failed`
-    );
-
-    // Step 3: Sync user photos (optional, can be done separately)
-    console.log("📸 Step 4: Syncing user photos...");
-    const photosSync = { processed: 0, failed: 0 };
-
-    for (let i = 0; i < allUsers.length; i++) {
+    // Step 3: Sync reference data if selected
+    if (options.referenceData) {
+      console.log(
+        "📋 Step 3: Syncing reference data (departments, job titles)..."
+      );
+      results.referenceDataSync = await syncReferenceData(
+        allUsers,
+        masterSyncLog.id,
+        () => checkCancellation(masterSyncLog.id)
+      );
       await checkCancellation(masterSyncLog.id);
-      const user = allUsers[i];
-      if (i % 5 === 0) {
-        // Check more frequently
-        console.log(
-          `   Processing photos for user ${i + 1}/${allUsers.length}...`
-        );
-      }
+      console.log(
+        `✅ Reference data sync completed: ${results.referenceDataSync.recordsProcessed} processed, ${results.referenceDataSync.recordsFailed} failed`
+      );
+    }
 
-      try {
-        const photoData = await getUserPhotoUrl(user.id);
-        await checkCancellation(masterSyncLog.id); // Check after API call
-        if (photoData) {
-          const staff = await getStaffByMicrosoftId(user.id);
-          await checkCancellation(masterSyncLog.id); // Check after DB call
-          if (staff) {
-            await storeUserPhoto(staff.id, photoData);
-            await checkCancellation(masterSyncLog.id); // Check after photo storage
-            photosSync.processed++;
-          }
+    // Step 4: Link staff to reference data if needed
+    if (options.linkReferences && (options.users || options.referenceData)) {
+      console.log("🔗 Step 4: Linking staff to reference data...");
+      results.linkReferencesSync = await linkStaffToReferenceData(
+        allUsers,
+        masterSyncLog.id,
+        () => checkCancellation(masterSyncLog.id)
+      );
+      await checkCancellation(masterSyncLog.id);
+      console.log(
+        `✅ Staff-reference linking completed: ${results.linkReferencesSync.recordsProcessed} processed, ${results.linkReferencesSync.recordsFailed} failed`
+      );
+    }
+
+    // Step 5: Sync hierarchy if selected
+    if (options.hierarchy) {
+      console.log("🏢 Step 5: Building organizational hierarchy...");
+      const hierarchyData: Array<{
+        staffId: string;
+        managerId: string | null;
+      }> = [];
+
+      for (let i = 0; i < allUsers.length; i++) {
+        await checkCancellation(masterSyncLog.id);
+        const user = allUsers[i];
+        if (i % 5 === 0) {
+          console.log(
+            `   Processing hierarchy for user ${i + 1}/${allUsers.length}...`
+          );
         }
-      } catch (error) {
-        console.error(`   ❌ Failed to sync photo for ${user.id}:`, error);
-        photosSync.failed++;
+
+        try {
+          const manager = await getUserManager(user.id);
+          await checkCancellation(masterSyncLog.id);
+
+          if (manager) {
+            const managerStaff = await getStaffByMicrosoftId(manager.id);
+            if (managerStaff) {
+              hierarchyData.push({
+                staffId: user.id,
+                managerId: managerStaff.id,
+              });
+            }
+          } else {
+            hierarchyData.push({
+              staffId: user.id,
+              managerId: null,
+            });
+          }
+        } catch (error) {
+          console.error(`   ❌ Failed to get manager for ${user.id}:`, error);
+          hierarchyData.push({
+            staffId: user.id,
+            managerId: null,
+          });
+        }
       }
+
+      await checkCancellation(masterSyncLog.id);
+      results.hierarchySync = await syncHierarchyFromGraph(
+        hierarchyData,
+        masterSyncLog.id,
+        () => checkCancellation(masterSyncLog.id)
+      );
+      await checkCancellation(masterSyncLog.id);
+      console.log(
+        `✅ Hierarchy sync completed: ${results.hierarchySync.recordsProcessed} processed, ${results.hierarchySync.recordsFailed} failed`
+      );
     }
 
-    await checkCancellation(masterSyncLog.id);
-    console.log(
-      `✅ Photo sync completed: ${photosSync.processed} processed, ${photosSync.failed} failed`
-    );
     console.log("=".repeat(50));
-    console.log("🎉 Full user synchronization completed!");
+    console.log("🎉 Selective synchronization completed!");
     console.log(`📊 Summary:`);
-    console.log(
-      `   Users: ${usersSync.recordsProcessed} processed, ${usersSync.recordsFailed} failed`
-    );
-    console.log(
-      `   Hierarchy: ${hierarchySync.recordsProcessed} processed, ${hierarchySync.recordsFailed} failed`
-    );
-    console.log(
-      `   Photos: ${photosSync.processed} processed, ${photosSync.failed} failed`
-    );
 
-    // Update master sync log as successful
+    let totalProcessed = 0;
+    let totalFailed = 0;
+
+    if (results.usersSync) {
+      console.log(
+        `   Users: ${results.usersSync.recordsProcessed} processed, ${results.usersSync.recordsFailed} failed`
+      );
+      totalProcessed += results.usersSync.recordsProcessed;
+      totalFailed += results.usersSync.recordsFailed;
+    }
+    if (results.referenceDataSync) {
+      console.log(
+        `   Reference Data: ${results.referenceDataSync.recordsProcessed} processed, ${results.referenceDataSync.recordsFailed} failed`
+      );
+      totalProcessed += results.referenceDataSync.recordsProcessed;
+      totalFailed += results.referenceDataSync.recordsFailed;
+    }
+    if (results.linkReferencesSync) {
+      console.log(
+        `   Staff-Reference Links: ${results.linkReferencesSync.recordsProcessed} processed, ${results.linkReferencesSync.recordsFailed} failed`
+      );
+      totalProcessed += results.linkReferencesSync.recordsProcessed;
+      totalFailed += results.linkReferencesSync.recordsFailed;
+    }
+    if (results.hierarchySync) {
+      console.log(
+        `   Hierarchy: ${results.hierarchySync.recordsProcessed} processed, ${results.hierarchySync.recordsFailed} failed`
+      );
+      totalProcessed += results.hierarchySync.recordsProcessed;
+      totalFailed += results.hierarchySync.recordsFailed;
+    }
+
+    // Update master sync log to success
     await prisma.syncLog.update({
       where: { id: masterSyncLog.id },
       data: {
         status: "success",
-        recordsProcessed:
-          usersSync.recordsProcessed +
-          hierarchySync.recordsProcessed +
-          photosSync.processed,
-        recordsFailed:
-          usersSync.recordsFailed +
-          hierarchySync.recordsFailed +
-          photosSync.failed,
+        recordsProcessed: totalProcessed,
+        recordsFailed: totalFailed,
         completedAt: new Date(),
       },
     });
 
-    return { usersSync, hierarchySync, photosSync };
+    return results;
   } catch (error) {
-    console.error("❌ Full sync failed:", error);
+    console.error("❌ Selective sync failed:", error);
 
-    // Update master sync log as failed or cancelled
-    const status =
-      error instanceof Error && error.message === "Sync was cancelled"
-        ? "cancelled"
-        : "error";
-
+    // Update master sync log to error
     await prisma.syncLog.update({
       where: { id: masterSyncLog.id },
       data: {
-        status,
+        status: "error",
         message: error instanceof Error ? error.message : "Unknown error",
         completedAt: new Date(),
       },
@@ -248,65 +291,99 @@ export async function syncAllUsers(): Promise<{
   }
 }
 
+// Keep the existing syncAllUsers function for backward compatibility
+export async function syncAllUsers(): Promise<{
+  usersSync: any;
+  referenceDataSync: any;
+  linkReferencesSync: any;
+  hierarchySync: any;
+}> {
+  const result = await selectiveSync({
+    users: true,
+    referenceData: true,
+    linkReferences: true,
+    hierarchy: true,
+  });
+
+  return {
+    usersSync: result.usersSync!,
+    referenceDataSync: result.referenceDataSync!,
+    linkReferencesSync: result.linkReferencesSync!,
+    hierarchySync: result.hierarchySync!,
+  };
+}
+
 // Incremental sync - only sync users that have been updated recently
-export async function incrementalSync(): Promise<{
+export async function incrementalSync(
+  options: SyncOptions = {},
+  scheduleId?: string
+): Promise<{
   usersSync: any;
   hierarchySync: any;
-  photosSync: any;
 }> {
-  console.log("Starting incremental synchronization...");
+  console.log("🔄 Starting incremental synchronization...");
+  if (scheduleId) {
+    console.log(
+      `📅 Scheduled incremental sync triggered by schedule: ${scheduleId}`
+    );
+  }
 
   // For incremental sync, we could implement logic to:
   // 1. Check last sync timestamp
   // 2. Only sync users modified since last sync
   // 3. Update hierarchy for changed users only
 
-  // For now, we'll do a full sync but this can be optimized later
-  return syncAllUsers();
+  // For now, we'll do a selective sync with the provided options
+  const result = await selectiveSync(
+    {
+      users: true,
+      hierarchy: true,
+      ...options,
+    },
+    scheduleId
+  );
+
+  return {
+    usersSync: result.usersSync!,
+    hierarchySync: result.hierarchySync!,
+  };
 }
 
 // Sync specific user
 export async function syncUser(userId: string): Promise<{
   userSync: any;
   hierarchySync: any;
-  photoSync: any;
 }> {
-  console.log(`Syncing user ${userId}...`);
+  console.log(`👤 Starting sync for user: ${userId}`);
 
-  // Get user profile from Graph API
+  // Get user profile from Microsoft Graph
   const { getUserProfile } = await import("./graph.server");
-  const user = await getUserProfile(userId);
+  const userProfile = await getUserProfile(userId);
 
   // Sync user data
-  const userSync = await syncStaffFromGraph([user]);
+  const userSync = await syncStaffFromGraph([userProfile]);
 
-  // Sync hierarchy
-  const manager = await getUserManager(userId);
-  const hierarchySync = await syncHierarchyFromGraph([
-    {
-      staffId: userId,
-      managerId: manager?.id || null,
-    },
-  ]);
-
-  // Sync photo
-  let photoSync = { processed: 0, failed: 0 };
+  // Sync hierarchy for this user
+  let hierarchySync = { recordsProcessed: 0, recordsFailed: 0 };
   try {
-    const photoData = await getUserPhotoUrl(userId);
-    if (photoData) {
-      const staff = await getStaffByMicrosoftId(userId);
-      if (staff) {
-        await storeUserPhoto(staff.id, photoData);
-        photoSync.processed = 1;
-      }
+    const { getUserManager } = await import("./graph.server");
+    const manager = await getUserManager(userId);
+
+    if (manager) {
+      const hierarchyData = [
+        {
+          staffId: userId,
+          managerId: manager.id,
+        },
+      ];
+      hierarchySync = await syncHierarchyFromGraph(hierarchyData);
     }
   } catch (error) {
-    console.error(`Failed to sync photo for ${userId}:`, error);
-    photoSync.failed = 1;
+    console.error(`❌ Failed to sync hierarchy for user ${userId}:`, error);
+    hierarchySync.recordsFailed = 1;
   }
 
-  console.log(`User ${userId} sync completed`);
-  return { userSync, hierarchySync, photoSync };
+  return { userSync, hierarchySync };
 }
 
 // Get sync status
@@ -324,15 +401,19 @@ export async function getSyncStatus() {
     take: 20,
   });
 
-  const totalStaff = await prisma.staff.count();
-  const staffWithPhotos = await prisma.staff.count({
-    where: { userPhoto: { isNot: null } },
-  });
+  const [totalStaff, totalDepartments, totalJobTitles, totalOffices] =
+    await Promise.all([
+      prisma.staff.count(),
+      prisma.department.count(),
+      prisma.jobTitle.count(),
+      prisma.office.count(),
+    ]);
 
   return {
     recentSyncs,
     totalStaff,
-    staffWithPhotos,
-    photoCoverage: totalStaff > 0 ? (staffWithPhotos / totalStaff) * 100 : 0,
+    totalDepartments,
+    totalJobTitles,
+    totalOffices,
   };
 }

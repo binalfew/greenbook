@@ -78,7 +78,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       user,
       searchTerm,
       filters: {},
-      filterOptions: { departments: [], jobTitles: [], officeLocations: [] },
+      filterOptions: {
+        departments: [],
+        jobTitles: [],
+        officeLocations: [],
+      },
       error: "Failed to load users from database",
     });
   }
@@ -97,9 +101,9 @@ export default function Users({ loaderData }: Route.ComponentProps) {
     officeLocation?: string;
   };
   const filterOptions = loaderData.filterOptions || {
-    departments: [],
-    jobTitles: [],
-    officeLocations: [],
+    departments: [] as Array<{ id: string; name: string }>,
+    jobTitles: [] as Array<{ id: string; title: string }>,
+    officeLocations: [] as string[],
   };
   const error = hasError ? String(loaderData.error) : null;
 
@@ -133,8 +137,8 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                     <SelectContent>
                       <SelectItem value="all">All Departments</SelectItem>
                       {filterOptions.departments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
+                        <SelectItem key={dept.id} value={dept.name}>
+                          {dept.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -150,8 +154,8 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                     <SelectContent>
                       <SelectItem value="all">All Job Titles</SelectItem>
                       {filterOptions.jobTitles.map((title) => (
-                        <SelectItem key={title} value={title}>
-                          {title}
+                        <SelectItem key={title.id} value={title.title}>
+                          {title.title}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -234,21 +238,9 @@ export default function Users({ loaderData }: Route.ComponentProps) {
                     <Card className="hover:shadow-md transition-shadow">
                       <CardContent className="p-4">
                         <div className="flex items-start gap-4">
-                          {/* Profile Photo */}
+                          {/* Profile Avatar */}
                           <div className="flex-shrink-0">
-                            <img
-                              src={`/api/users/${userProfile.id}/photo`}
-                              alt={`${userProfile.displayName}'s profile photo`}
-                              className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
-                              onError={(e) => {
-                                // Hide the image and show fallback on error
-                                e.currentTarget.style.display = "none";
-                                e.currentTarget.nextElementSibling?.classList.remove(
-                                  "hidden"
-                                );
-                              }}
-                            />
-                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200 hidden">
+                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
                               <span className="text-gray-500 font-semibold text-lg">
                                 {userProfile.displayName
                                   ?.charAt(0)

@@ -9,23 +9,27 @@ async function runSync() {
     const result = await syncAllUsers();
 
     console.log("✅ Sync completed!");
-    console.log("📊 Results:");
+    console.log("📊 Sync Results:");
     console.log(
-      `   Users: ${result.usersSync.recordsProcessed} processed, ${result.usersSync.recordsFailed} failed`
+      `   Users: ${result.usersSync.processed} processed, ${result.usersSync.failed} failed`
     );
     console.log(
-      `   Hierarchy: ${result.hierarchySync.recordsProcessed} processed, ${result.hierarchySync.recordsFailed} failed`
+      `   Reference Data: ${result.referenceDataSync.processed} processed, ${result.referenceDataSync.failed} failed`
     );
     console.log(
-      `   Photos: ${result.photosSync.processed} processed, ${result.photosSync.failed} failed`
+      `   Staff-Reference Links: ${result.linkReferencesSync.processed} processed, ${result.linkReferencesSync.failed} failed`
+    );
+    console.log(
+      `   Hierarchy: ${result.hierarchySync.processed} processed, ${result.hierarchySync.failed} failed`
     );
 
     // Get sync status
     const status = await getSyncStatus();
-    console.log("\n📈 Database Status:");
+    console.log("\n📈 Current Status:");
     console.log(`   Total Staff: ${status.totalStaff}`);
-    console.log(`   Staff with Photos: ${status.staffWithPhotos}`);
-    console.log(`   Photo Coverage: ${status.photoCoverage.toFixed(1)}%`);
+    console.log(`   Total Departments: ${status.totalDepartments}`);
+    console.log(`   Total Job Titles: ${status.totalJobTitles}`);
+    console.log(`   Total Offices: ${status.totalOffices}`);
   } catch (error) {
     console.error("❌ Sync failed:", error);
     process.exit(1);

@@ -13,24 +13,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Organ {
-  id          String       @id @default(uuid())
-  name        String
-  description String?
-  departments Department[]
+model Office {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  staff     Staff[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Department {
-  id      String  @id @default(uuid())
-  name    String
-  organId String
-  organ   Organ   @relation(fields: [organId], references: [id])
-  staff   Staff[]
+  id    String  @id @default(uuid())
+  name  String  @unique
+  staff Staff[]
 }
 
 model JobTitle {
   id    String  @id @default(uuid())
-  title String
+  title String  @unique
   staff Staff[]
 }
 
@@ -62,12 +61,12 @@ model Staff {
   manager       Staff?  @relation("Manager", fields: [managerId], references: [id])
   directReports Staff[] @relation("Manager")
 
-  // Photo
-  userPhoto UserPhoto?
+  // Office relationship
+  officeId String?
+  office   Office? @relation(fields: [officeId], references: [id])
 
   // Legacy fields (keeping for backward compatibility)
   phone          String?
-  photoUrl       String?
   jobTitleId     String?
   jobTitleRef    JobTitle?   @relation(fields: [jobTitleId], references: [id])
   departmentId   String?
@@ -92,6 +91,7 @@ model Staff {
   @@index([jobTitle])
   @@index([officeLocation])
   @@index([managerId])
+  @@index([officeId])
 }
 
 enum UserStatus {
@@ -151,26 +151,34 @@ model Permission {
   @@unique([action, entity, access])
 }
 
-model UserPhoto {
-  id          String   @id @default(uuid())
-  staffId     String   @unique
-  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  photoData   String // Base64 encoded photo data
-  contentType String   @default("image/jpeg")
-  lastSyncAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 model SyncLog {
-  id               String    @id @default(uuid())
-  syncType         String // 'users', 'hierarchy', 'photos', 'full_sync'
+  id               String        @id @default(uuid())
+  syncType         String // 'users', 'hierarchy', 'full_sync', 'selective_sync', 'incremental_sync'
   status           String // 'running', 'success', 'error', 'partial', 'cancelled'
   message          String?
-  recordsProcessed Int       @default(0)
-  recordsFailed    Int       @default(0)
-  startedAt        DateTime  @default(now())
+  recordsProcessed Int           @default(0)
+  recordsFailed    Int           @default(0)
+  startedAt        DateTime      @default(now())
   completedAt      DateTime?
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime      @default(now())
   masterSyncLogId  String? // Reference to master sync log for full syncs
+  scheduleId       String? // Reference to schedule that triggered this sync
+  schedule         SyncSchedule? @relation(fields: [scheduleId], references: [id])
+}
+
+model SyncSchedule {
+  id             String    @id @default(uuid())
+  name           String    @unique
+  description    String?
+  syncType       String // 'incremental', 'full', 'selective'
+  cronExpression String // Cron expression for scheduling
+  syncOptions    Json // Stored sync options as JSON
+  enabled        Boolean   @default(true)
+  lastRun        DateTime?
+  nextRun        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  syncLogs SyncLog[]
 }

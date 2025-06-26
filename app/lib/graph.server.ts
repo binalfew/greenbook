@@ -23,7 +23,7 @@ export interface MicrosoftProfile {
   accountEnabled?: boolean;
   createdDateTime?: string;
   lastPasswordChangeDateTime?: string;
-  photoUrl?: string | null; // URL to user's profile photo
+  gender?: string; // Gender information if available
 }
 
 // Delegated: Graph client with user access token
@@ -54,7 +54,7 @@ export async function getMyProfile(
 ): Promise<MicrosoftProfile> {
   const graphClient = getGraphClientWithUserToken(accessToken);
   try {
-    const user = await graphClient
+    const profile = await graphClient
       .api("/me")
       .select([
         "id",
@@ -76,31 +76,14 @@ export async function getMyProfile(
         "accountEnabled",
         "createdDateTime",
         "lastPasswordChangeDateTime",
+        "gender",
       ])
       .get();
-    return user;
-  } catch (error: any) {
+
+    return profile;
+  } catch (error) {
     console.error("Error fetching my profile:", error);
     throw new Error("Failed to fetch profile from Microsoft Graph");
-  }
-}
-
-// Get user's profile photo URL
-export async function getUserPhotoUrl(userId: string): Promise<string | null> {
-  const graphClient = getGraphClientWithAppToken();
-  try {
-    const photo = await graphClient
-      .api(`/users/${userId}/photo/$value`)
-      .responseType("arraybuffer" as any)
-      .get();
-
-    // Convert the photo to a data URL
-    const buffer = Buffer.from(photo);
-    const base64 = buffer.toString("base64");
-    return `data:image/jpeg;base64,${base64}`;
-  } catch (error) {
-    // User might not have a photo, return null
-    return null;
   }
 }
 
@@ -159,6 +142,7 @@ export async function getUsers(
           "createdDateTime",
           "lastPasswordChangeDateTime",
           "userType",
+          "gender",
         ])
         .get();
     }
@@ -234,6 +218,7 @@ export async function searchUsers(
           "createdDateTime",
           "lastPasswordChangeDateTime",
           "userType",
+          "gender",
         ])
         .get();
     }
@@ -276,6 +261,7 @@ export async function getUserProfile(
         "accountEnabled",
         "createdDateTime",
         "lastPasswordChangeDateTime",
+        "gender",
       ])
       .get();
     return user;

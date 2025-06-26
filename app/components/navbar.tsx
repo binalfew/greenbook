@@ -32,6 +32,48 @@ export default function Navbar({ user }: { user: User | undefined }) {
               <div className="flex h-5 items-center space-x-4 text-sm">
                 <div>Welcome, {user.name || user.username || user.email}</div>
                 <Separator orientation="vertical" />
+                <Link
+                  to="/admin/sync"
+                  className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  Sync Data
+                </Link>
+                <Separator orientation="vertical" />
+                <Link
+                  to="/admin/schedules"
+                  className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  Schedules
+                </Link>
+                <Separator orientation="vertical" />
+                <Link
+                  to="/admin/offices"
+                  className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  Offices
+                </Link>
+                <Separator orientation="vertical" />
+                <Link
+                  to="/admin/departments"
+                  className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  Departments
+                </Link>
+                <Separator orientation="vertical" />
+                <Link
+                  to="/admin/jobTitles"
+                  className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  Job Titles
+                </Link>
+                <Separator orientation="vertical" />
+                <Link
+                  to="/token-status"
+                  className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  Token Status
+                </Link>
+                <Separator orientation="vertical" />
                 <Button
                   variant="link"
                   type="submit"

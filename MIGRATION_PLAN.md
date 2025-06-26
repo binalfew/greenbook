@@ -1,96 +1,150 @@
-# Migration Plan: Graph API to Database-Backed Solution
+# Migration Plan: Microsoft Graph Integration
 
 ## Overview
 
-This document outlines the plan to migrate from direct Microsoft Graph API calls to a database-backed solution that maintains the same data structure and functionality while improving scalability and performance.
+This document outlines the migration plan for integrating Microsoft Graph API to replace the existing placeholder data with real organizational data.
 
 ## Current State
 
-### What We Have Now
-
-- Direct Microsoft Graph API calls for all user data
-- Real-time data fetching on every request
-- Limited scalability due to API rate limits
-- Potential performance issues with large datasets
-- No offline capability
-
-### Graph API Functions Currently Used
-
-1. `getMyProfile()` - Current user profile
-2. `getUserProfile(userId)` - Specific user profile
-3. `getUsers()` - List all users with pagination
-4. `searchUsers()` - Search users with filters
-5. `getUserPhotoUrl()` - User profile photos
-6. `getUserManager()` - Manager information
-7. `getUserDirectReports()` - Direct reports
-8. `getUserOrgHierarchy()` - Organizational hierarchy
-9. `getFilterOptions()` - Available filter options
+- ✅ Basic Remix application structure
+- ✅ Authentication with Microsoft OAuth
+- ✅ Database schema with Staff, Department, JobTitle, Office models
+- ✅ User management and session handling
+- ✅ Basic UI components and routing
+- ✅ Sync infrastructure and logging
 
 ## Target State
 
-### What We Want
+- ✅ Microsoft Graph API integration
+- ✅ Real-time user data synchronization
+- ✅ Organizational hierarchy management
+- ✅ Reference data management (departments, job titles, offices)
+- ✅ Selective sync capabilities
+- ✅ Sync scheduling and monitoring
 
-- Database-backed user data with periodic synchronization
-- Fast, scalable queries without API rate limits
-- Offline capability for basic functionality
-- Maintained data structure compatibility
-- Incremental sync capabilities
+## Implementation Phases
 
-## Database Schema Design
+### Phase 1: Core Infrastructure ✅
 
-### Enhanced Staff Model
+1. **Database Schema** ✅
+
+   - Staff model with Microsoft Graph fields
+   - Department, JobTitle, Office reference tables
+   - SyncLog for tracking synchronization
+   - SyncSchedule for automated syncs
+
+2. **Microsoft Graph Client** ✅
+
+   - Application-level authentication
+   - User profile fetching
+   - Manager relationship resolution
+   - Organizational hierarchy building
+
+3. **Sync Engine** ✅
+   - Selective sync capabilities
+   - Incremental sync support
+   - Error handling and retry logic
+   - Sync status tracking
+
+### Phase 2: Data Synchronization ✅
+
+1. **User Sync** ✅
+
+   - Fetch users from Microsoft Graph
+   - Map to local Staff model
+   - Handle updates and new users
+   - Maintain data consistency
+
+2. **Reference Data Sync** ✅
+
+   - Extract departments, job titles, offices
+   - Create/update reference tables
+   - Link staff to reference data
+   - Maintain referential integrity
+
+3. **Hierarchy Sync** ✅
+   - Build manager-direct report relationships
+   - Update organizational structure
+   - Handle hierarchy changes
+   - Support multi-level management chains
+
+### Phase 3: Advanced Features ✅
+
+1. **Selective Sync** ✅
+
+   - Choose specific data types to sync
+   - Optimize sync performance
+   - Reduce API usage
+   - Support targeted updates
+
+2. **Sync Scheduling** ✅
+
+   - Automated sync schedules
+   - Cron-based scheduling
+   - Configurable sync options
+   - Schedule management UI
+
+3. **Monitoring & Logging** ✅
+   - Sync status tracking
+   - Performance metrics
+   - Error reporting
+   - Audit trail
+
+## Database Schema
+
+### Staff Model
 
 ```prisma
 model Staff {
-  id                    String     @id @default(uuid())
-  microsoftId          String     @unique // Microsoft Graph user ID
-  displayName          String
-  givenName            String?
-  surname              String?
-  userPrincipalName    String     @unique
-  email                String     @unique
-  jobTitle             String?
-  department           String?
-  officeLocation       String?
-  mobilePhone          String?
-  businessPhones       String[]   // Array of phone numbers
-  preferredLanguage    String?
-  employeeId           String?
-  employeeType         String?
-  employeeHireDate     DateTime?
-  usageLocation        String?
-  accountEnabled       Boolean    @default(true)
-  createdDateTime      DateTime?
+  id                         String    @id @default(uuid())
+  microsoftId                String    @unique // Microsoft Graph user ID
+  displayName                String
+  givenName                  String?
+  surname                    String?
+  userPrincipalName          String    @unique
+  email                      String    @unique
+  jobTitle                   String?
+  department                 String?
+  officeLocation             String?
+  mobilePhone                String?
+  businessPhones             String[] // Array of phone numbers
+  preferredLanguage          String?
+  employeeId                 String?
+  employeeType               String?
+  employeeHireDate           DateTime?
+  usageLocation              String?
+  accountEnabled             Boolean   @default(true)
+  createdDateTime            DateTime?
   lastPasswordChangeDateTime DateTime?
-  userType             String?
+  userType                   String?
 
   // Organizational hierarchy
-  managerId            String?
-  manager              Staff?     @relation("Manager", fields: [managerId], references: [id])
-  directReports        Staff[]    @relation("Manager")
+  managerId     String?
+  manager       Staff?  @relation("Manager", fields: [managerId], references: [id])
+  directReports Staff[] @relation("Manager")
 
-  // Photo
-  userPhoto            UserPhoto?
+  // Office relationship
+  officeId String?
+  office   Office? @relation(fields: [officeId], references: [id])
 
   // Legacy fields (keeping for backward compatibility)
-  phone                String?
-  photoUrl             String?
-  jobTitleId           String?
-  jobTitleRef          JobTitle?  @relation(fields: [jobTitleId], references: [id])
-  departmentId         String?
-  departmentRef        Department? @relation(fields: [departmentId], references: [id])
-  employmentType       String?
-  expertise            String[]
-  biography            String?
-  bioEn                String?
-  bioFr                String?
-  bioAr                String?
-  bioPt                String?
+  phone          String?
+  jobTitleId     String?
+  jobTitleRef    JobTitle?   @relation(fields: [jobTitleId], references: [id])
+  departmentId   String?
+  departmentRef  Department? @relation(fields: [departmentId], references: [id])
+  employmentType String?
+  expertise      String[]
+  biography      String?
+  bioEn          String?
+  bioFr          String?
+  bioAr          String?
+  bioPt          String?
 
   // Metadata
-  lastSyncAt           DateTime   @default(now())
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  lastSyncAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([microsoftId])
   @@index([email])
@@ -99,210 +153,196 @@ model Staff {
   @@index([jobTitle])
   @@index([officeLocation])
   @@index([managerId])
+  @@index([officeId])
 }
 ```
 
-### New Models
+### Reference Tables
 
 ```prisma
-model UserPhoto {
-  id          String   @id @default(uuid())
-  staffId     String   @unique
-  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  photoData   String   // Base64 encoded photo data
-  contentType String   @default("image/jpeg")
-  lastSyncAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Office {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  staff     Staff[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model SyncLog {
-  id          String   @id @default(uuid())
-  syncType    String   // 'users', 'hierarchy', 'photos'
-  status      String   // 'success', 'error', 'partial'
-  message     String?
-  recordsProcessed Int  @default(0)
-  recordsFailed    Int  @default(0)
-  startedAt   DateTime @default(now())
-  completedAt DateTime?
-  createdAt   DateTime @default(now())
+model Department {
+  id    String  @id @default(uuid())
+  name  String  @unique
+  staff Staff[]
+}
+
+model JobTitle {
+  id    String  @id @default(uuid())
+  title String  @unique
+  staff Staff[]
 }
 ```
 
-## Migration Strategy
+### Sync Infrastructure
 
-### Phase 1: Database Schema and Services ✅
+```prisma
+model SyncLog {
+  id               String        @id @default(uuid())
+  syncType         String // 'users', 'hierarchy', 'full_sync', 'selective_sync', 'incremental_sync'
+  status           String // 'running', 'success', 'error', 'partial', 'cancelled'
+  message          String?
+  recordsProcessed Int           @default(0)
+  recordsFailed    Int           @default(0)
+  startedAt        DateTime      @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  masterSyncLogId  String? // Reference to master sync log for full syncs
+  scheduleId       String? // Reference to schedule that triggered this sync
+  schedule         SyncSchedule? @relation(fields: [scheduleId], references: [id])
+}
 
-- [x] Enhanced Staff model with Microsoft Graph fields
-- [x] UserPhoto model for storing profile photos
-- [x] SyncLog model for tracking synchronization
-- [x] Staff service functions (`staff.server.ts`)
-- [x] Synchronization service (`sync.server.ts`)
+model SyncSchedule {
+  id             String    @id @default(uuid())
+  name           String    @unique
+  description    String?
+  syncType       String // 'incremental', 'full', 'selective'
+  cronExpression String // Cron expression for scheduling
+  syncOptions    Json // Stored sync options as JSON
+  enabled        Boolean   @default(true)
+  lastRun        DateTime?
+  nextRun        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-### Phase 2: Data Migration
+  // Relations
+  syncLogs SyncLog[]
+}
+```
 
-- [ ] Initial data sync from Microsoft Graph
-- [ ] Photo migration
-- [ ] Hierarchy relationship setup
-- [ ] Data validation and cleanup
+## API Integration
 
-### Phase 3: Route Updates ✅
+### Microsoft Graph Functions
 
-- [x] Updated users index route (`/users`)
-- [x] Updated user detail route (`/users/$userId`)
-- [x] Updated photo API route (`/api/users/$userId/photo`)
-- [x] Added sync API route (`/api/sync`)
+- ✅ `getUsers()` - Fetch all users with pagination
+- ✅ `getUserProfile()` - Get individual user profile
+- ✅ `getUserManager()` - Get user's manager
+- ✅ `getUserDirectReports()` - Get user's direct reports
+- ✅ `getFilterOptions()` - Get departments, job titles, offices
 
-### Phase 4: Component Compatibility
+### Sync Functions
 
-- [x] Type adapter for MicrosoftProfile compatibility
-- [x] Updated OrgChart component usage
-- [x] Maintained existing UI/UX
+- ✅ `selectiveSync()` - Sync specific data types
+- ✅ `syncAllUsers()` - Full sync for backward compatibility
+- ✅ `incrementalSync()` - Sync only changed data
+- ✅ `syncUser()` - Sync individual user
+- ✅ `cancelSync()` - Cancel running sync
+- ✅ `getSyncStatus()` - Get sync status and statistics
 
-### Phase 5: Testing and Validation
+## UI Components
 
-- [ ] Test all routes with database data
-- [ ] Validate data integrity
-- [ ] Performance testing
-- [ ] Error handling validation
+### Admin Interface
 
-### Phase 6: Deployment and Monitoring
+- ✅ Sync management dashboard
+- ✅ Selective sync controls
+- ✅ Schedule management
+- ✅ Sync status monitoring
+- ✅ Reference data management
 
-- [ ] Deploy database changes
-- [ ] Run initial sync
-- [ ] Monitor sync performance
-- [ ] Set up automated sync scheduling
+### User Interface
 
-## Implementation Details
+- ✅ User list with filtering
+- ✅ Individual user profiles
+- ✅ Organizational hierarchy display
+- ✅ Search and pagination
 
-### Data Synchronization
+## Configuration
 
-#### Full Sync Process
+### Environment Variables
 
-1. **User Data Sync**: Fetch all users from Graph API and upsert to database
-2. **Hierarchy Sync**: Build manager relationships
-3. **Photo Sync**: Download and store user photos (optional)
+```env
+MICROSOFT_TENANT_ID=your-tenant-id
+MICROSOFT_CLIENT_ID=your-client-id
+MICROSOFT_CLIENT_SECRET=your-client-secret
+DATABASE_URL=your-database-url
+SESSION_SECRET=your-session-secret
+```
 
-#### Incremental Sync (Future Enhancement)
-
-- Track last sync timestamp
-- Only sync users modified since last sync
-- Update hierarchy for changed users only
-
-#### Sync API Endpoints
-
-- `GET /api/sync?action=full` - Full synchronization
-- `GET /api/sync?action=incremental` - Incremental sync
-- `GET /api/sync?action=user&userId=xxx` - Sync specific user
-- `GET /api/sync?action=status` - Get sync status
-
-### Type Compatibility
-
-#### MicrosoftProfile Adapter
+### Sync Options
 
 ```typescript
-function staffToMicrosoftProfile(staff: StaffWithPhoto): MicrosoftProfile {
-  return {
-    id: staff.microsoftId,
-    displayName: staff.displayName,
-    givenName: staff.givenName || undefined,
-    surname: staff.surname || undefined,
-    userPrincipalName: staff.userPrincipalName,
-    mail: staff.email,
-    // ... other fields
-  };
+interface SyncOptions {
+  users?: boolean;
+  referenceData?: boolean;
+  hierarchy?: boolean;
+  linkReferences?: boolean;
 }
 ```
 
-This ensures existing components continue to work without modification.
+## Migration Steps
 
-### Performance Optimizations
+### 1. Database Setup ✅
 
-#### Database Indexes
+- [x] Run Prisma migrations
+- [x] Seed initial data
+- [x] Verify schema integrity
 
-- `microsoftId` - Fast lookups by Microsoft ID
-- `email` - Email-based searches
-- `department`, `jobTitle`, `officeLocation` - Filter queries
-- `managerId` - Hierarchy queries
+### 2. Microsoft Graph Integration ✅
 
-#### Caching Strategy
+- [x] Configure application permissions
+- [x] Implement Graph client
+- [x] Test API connectivity
+- [x] Handle authentication
 
-- Photo caching with 1-hour TTL
-- Filter options cached in memory
-- User list pagination
+### 3. Sync Implementation ✅
 
-## Benefits
+- [x] User data synchronization
+- [x] Reference data extraction
+- [x] Hierarchy relationship building
+- [x] Error handling and logging
 
-### Scalability
+### 4. UI Development ✅
 
-- No API rate limits
-- Faster query performance
-- Reduced external dependencies
+- [x] Admin sync interface
+- [x] User management views
+- [x] Organizational charts
+- [x] Search and filtering
 
-### Reliability
+### 5. Testing & Validation ✅
 
-- Offline capability
-- Better error handling
-- Data consistency
+- [x] Sync functionality testing
+- [x] Data integrity verification
+- [x] Performance optimization
+- [x] Error scenario handling
 
-### Maintainability
+## Performance Considerations
 
-- Centralized data management
-- Easier testing
-- Better monitoring
+- **Batch processing**: Process users in batches to avoid memory issues
+- **Pagination**: Use Microsoft Graph pagination for large datasets
+- **Caching**: Implement caching for frequently accessed data
+- **Incremental syncs**: Only sync changed data to reduce API usage
+- **Parallel processing**: Use concurrent operations where possible
 
-### Cost Optimization
+## Security Considerations
 
-- Reduced API calls
-- Lower bandwidth usage
-- Better resource utilization
+- **Application permissions**: Use least-privilege access
+- **Token management**: Secure storage and rotation of access tokens
+- **Data validation**: Validate all incoming data from Microsoft Graph
+- **Error handling**: Don't expose sensitive information in error messages
+- **Audit logging**: Track all sync operations for security monitoring
 
-## Risks and Mitigation
+## Monitoring & Maintenance
 
-### Data Freshness
+- **Sync monitoring**: Track sync success rates and performance
+- **Error tracking**: Monitor and alert on sync failures
+- **Data quality**: Regular validation of synchronized data
+- **Performance metrics**: Monitor API usage and response times
+- **Capacity planning**: Monitor database growth and API limits
 
-- **Risk**: Data may become stale
-- **Mitigation**: Regular sync scheduling, sync status monitoring
+## Future Enhancements
 
-### Storage Requirements
-
-- **Risk**: Increased database storage for photos
-- **Mitigation**: Photo compression, cleanup strategies
-
-### Migration Complexity
-
-- **Risk**: Complex data migration process
-- **Mitigation**: Phased approach, rollback capabilities
-
-## Next Steps
-
-1. **Run Initial Sync**: Execute full data synchronization
-2. **Validate Data**: Ensure all data migrated correctly
-3. **Test Routes**: Verify all functionality works with database
-4. **Performance Test**: Measure query performance improvements
-5. **Set Up Monitoring**: Monitor sync status and performance
-6. **Schedule Regular Syncs**: Set up automated synchronization
-
-## Monitoring and Maintenance
-
-### Sync Monitoring
-
-- Track sync success/failure rates
-- Monitor sync duration
-- Alert on sync failures
-
-### Data Quality
-
-- Validate data integrity
-- Monitor data freshness
-- Track photo coverage
-
-### Performance Metrics
-
-- Query response times
-- Database connection usage
-- Memory and storage utilization
-
-## Conclusion
-
-This migration provides a solid foundation for scaling the application while maintaining the same user experience. The database-backed approach offers significant performance and reliability improvements while reducing external dependencies.
+1. **Advanced filtering**: Support for complex user queries
+2. **Real-time updates**: Webhook-based real-time synchronization
+3. **Data analytics**: Sync performance and data quality analytics
+4. **Multi-tenant support**: Support for multiple organizations
+5. **API rate limiting**: Intelligent rate limiting and retry logic
+6. **Data archival**: Historical data management and cleanup
+7. **Export capabilities**: Data export for reporting and analysis
+8. **Integration APIs**: REST APIs for external system integration

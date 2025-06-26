@@ -69,12 +69,11 @@ let microsoftStrategy = new MicrosoftStrategy(
 authenticator.use(microsoftStrategy);
 
 export async function getUserEmail(request: Request) {
-  const cookieSession = await authSessionStorage.getSession(
-    request.headers.get("cookie")
-  );
-  const userId = cookieSession.get(userIdKey);
+  const sessionId = await getSessionId(request);
+  if (!sessionId) return null;
 
-  return userId ?? null;
+  const dbSession = await getDBSession(sessionId);
+  return dbSession?.user?.email ?? null;
 }
 
 export async function getSessionId(request: Request) {
@@ -221,11 +220,27 @@ export async function requireUser(request: Request) {
     throw logout({ request });
   }
 
-  const user = await prisma.user.findUnique({
+  // Try to find user by email first
+  let user = await prisma.user.findUnique({
     where: {
       email: userEmail,
     },
   });
+
+  // If not found by email, try by Microsoft ID (userId)
+  if (!user) {
+    const sessionId = await getSessionId(request);
+    if (sessionId) {
+      const dbSession = await getDBSession(sessionId);
+      if (dbSession?.userId) {
+        user = await prisma.user.findUnique({
+          where: {
+            id: dbSession.userId,
+          },
+        });
+      }
+    }
+  }
 
   if (!user) {
     throw logout({ request });

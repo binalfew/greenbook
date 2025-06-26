@@ -1,12 +1,18 @@
-import type { Staff, SyncLog, UserPhoto } from "@prisma/client";
+import type { Staff, SyncLog } from "@prisma/client";
 import type { MicrosoftProfile } from "./graph.server";
 import prisma from "./prisma";
 
-// Type for staff with photo data
-export type StaffWithPhoto = Staff & {
-  userPhoto?: UserPhoto | null;
+// Type for staff with hierarchy data
+export type StaffWithHierarchy = Staff & {
   manager?: Staff | null;
   directReports?: Staff[];
+};
+
+// Type for filter options from reference tables
+export type FilterOptions = {
+  departments: Array<{ id: string; name: string }>;
+  jobTitles: Array<{ id: string; title: string }>;
+  officeLocations: string[];
 };
 
 // Convert Microsoft Graph profile to database format
@@ -44,11 +50,10 @@ function graphProfileToStaffData(profile: MicrosoftProfile) {
 // Get staff by Microsoft ID
 export async function getStaffByMicrosoftId(
   microsoftId: string
-): Promise<StaffWithPhoto | null> {
+): Promise<StaffWithHierarchy | null> {
   return prisma.staff.findUnique({
     where: { microsoftId },
     include: {
-      userPhoto: true,
       manager: true,
       directReports: true,
     },
@@ -58,11 +63,10 @@ export async function getStaffByMicrosoftId(
 // Get staff by email
 export async function getStaffByEmail(
   email: string
-): Promise<StaffWithPhoto | null> {
+): Promise<StaffWithHierarchy | null> {
   return prisma.staff.findUnique({
     where: { email },
     include: {
-      userPhoto: true,
       manager: true,
       directReports: true,
     },
@@ -70,11 +74,12 @@ export async function getStaffByEmail(
 }
 
 // Get staff by ID
-export async function getStaffById(id: string): Promise<StaffWithPhoto | null> {
+export async function getStaffById(
+  id: string
+): Promise<StaffWithHierarchy | null> {
   return prisma.staff.findUnique({
     where: { id },
     include: {
-      userPhoto: true,
       manager: true,
       directReports: true,
     },
@@ -89,7 +94,7 @@ export async function getStaffList(params: {
   jobTitle?: string;
   officeLocation?: string;
   search?: string;
-}): Promise<{ staff: StaffWithPhoto[]; total: number }> {
+}): Promise<{ staff: StaffWithHierarchy[]; total: number }> {
   const {
     skip = 0,
     take = 50,
@@ -125,7 +130,6 @@ export async function getStaffList(params: {
       take,
       orderBy: { displayName: "asc" },
       include: {
-        userPhoto: true,
         manager: true,
         directReports: true,
       },
@@ -138,23 +142,14 @@ export async function getStaffList(params: {
 
 // Get staff organizational hierarchy
 export async function getStaffHierarchy(staffId: string): Promise<{
-  manager: StaffWithPhoto | null;
-  directReports: StaffWithPhoto[];
+  manager: StaffWithHierarchy | null;
+  directReports: StaffWithHierarchy[];
 }> {
   const staff = await prisma.staff.findUnique({
     where: { id: staffId },
     include: {
-      userPhoto: true,
-      manager: {
-        include: {
-          userPhoto: true,
-        },
-      },
-      directReports: {
-        include: {
-          userPhoto: true,
-        },
-      },
+      manager: true,
+      directReports: true,
     },
   });
 
@@ -167,8 +162,8 @@ export async function getStaffHierarchy(staffId: string): Promise<{
 // Get staff manager chain
 export async function getStaffManagerChain(
   staffId: string
-): Promise<StaffWithPhoto[]> {
-  const managers: StaffWithPhoto[] = [];
+): Promise<StaffWithHierarchy[]> {
+  const managers: StaffWithHierarchy[] = [];
   let currentStaffId = staffId;
 
   // Follow the manager chain up to 10 levels to prevent infinite loops
@@ -176,12 +171,7 @@ export async function getStaffManagerChain(
     const staff = await prisma.staff.findUnique({
       where: { id: currentStaffId },
       include: {
-        userPhoto: true,
-        manager: {
-          include: {
-            userPhoto: true,
-          },
-        },
+        manager: true,
       },
     });
 
@@ -192,46 +182,6 @@ export async function getStaffManagerChain(
   }
 
   return managers;
-}
-
-// Get filter options
-export async function getFilterOptions(): Promise<{
-  departments: string[];
-  jobTitles: string[];
-  officeLocations: string[];
-}> {
-  const [departments, jobTitles, officeLocations] = await Promise.all([
-    prisma.staff.findMany({
-      where: { accountEnabled: true },
-      select: { department: true },
-      distinct: ["department"],
-    }),
-    prisma.staff.findMany({
-      where: { accountEnabled: true },
-      select: { jobTitle: true },
-      distinct: ["jobTitle"],
-    }),
-    prisma.staff.findMany({
-      where: { accountEnabled: true },
-      select: { officeLocation: true },
-      distinct: ["officeLocation"],
-    }),
-  ]);
-
-  return {
-    departments: departments
-      .map((d) => d.department)
-      .filter((dept): dept is string => Boolean(dept))
-      .sort(),
-    jobTitles: jobTitles
-      .map((j) => j.jobTitle)
-      .filter((title): title is string => Boolean(title))
-      .sort(),
-    officeLocations: officeLocations
-      .map((o) => o.officeLocation)
-      .filter((location): location is string => Boolean(location))
-      .sort(),
-  };
 }
 
 // Sync staff data from Microsoft Graph
@@ -434,30 +384,261 @@ export async function syncHierarchyFromGraph(
   return syncLog;
 }
 
-// Store user photo
-export async function storeUserPhoto(
-  staffId: string,
-  photoData: string,
-  contentType: string = "image/jpeg"
-): Promise<void> {
-  await prisma.userPhoto.upsert({
-    where: { staffId },
-    update: {
-      photoData,
-      contentType,
-      lastSyncAt: new Date(),
-    },
-    create: {
-      staffId,
-      photoData,
-      contentType,
+// Sync reference data (Organ, Department, JobTitle) from staff data
+export async function syncReferenceData(
+  profiles: MicrosoftProfile[],
+  masterSyncLogId?: string,
+  checkCancellation?: () => Promise<void>
+): Promise<SyncLog> {
+  const syncLog = await prisma.syncLog.create({
+    data: {
+      syncType: "reference_data",
+      status: "running",
+      startedAt: new Date(),
+      masterSyncLogId: masterSyncLogId || null,
     },
   });
+
+  let processed = 0;
+  let failed = 0;
+
+  console.log(`📋 Starting reference data sync...`);
+
+  try {
+    // Extract unique values from profiles
+    const departments = new Set<string>();
+    const jobTitles = new Set<string>();
+    const offices = new Set<string>();
+
+    profiles.forEach((profile) => {
+      if (profile.department) departments.add(profile.department);
+      if (profile.jobTitle) jobTitles.add(profile.jobTitle);
+      if (profile.officeLocation) offices.add(profile.officeLocation);
+    });
+
+    console.log(
+      `   Found ${departments.size} unique departments, ${jobTitles.size} unique job titles, and ${offices.size} unique offices`
+    );
+
+    // Sync departments
+    for (const deptName of departments) {
+      try {
+        if (checkCancellation) await checkCancellation();
+
+        await prisma.department.upsert({
+          where: { name: deptName },
+          update: {},
+          create: { name: deptName },
+        });
+
+        processed++;
+      } catch (error) {
+        console.error(`   ❌ Failed to sync department ${deptName}:`, error);
+        failed++;
+      }
+    }
+
+    // Sync job titles
+    for (const title of jobTitles) {
+      try {
+        if (checkCancellation) await checkCancellation();
+
+        await prisma.jobTitle.upsert({
+          where: { title },
+          update: {},
+          create: { title },
+        });
+
+        processed++;
+      } catch (error) {
+        console.error(`   ❌ Failed to sync job title ${title}:`, error);
+        failed++;
+      }
+    }
+
+    // Sync offices
+    for (const officeName of offices) {
+      try {
+        if (checkCancellation) await checkCancellation();
+
+        await prisma.office.upsert({
+          where: { name: officeName },
+          update: {},
+          create: { name: officeName },
+        });
+
+        processed++;
+      } catch (error) {
+        console.error(`   ❌ Failed to sync office ${officeName}:`, error);
+        failed++;
+      }
+    }
+
+    console.log(
+      `📋 Reference data sync completed: ${processed} processed, ${failed} failed`
+    );
+
+    await prisma.syncLog.update({
+      where: { id: syncLog.id },
+      data: {
+        status: failed > 0 ? "partial" : "success",
+        recordsProcessed: processed,
+        recordsFailed: failed,
+        completedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error(`❌ Reference data sync failed:`, error);
+    await prisma.syncLog.update({
+      where: { id: syncLog.id },
+      data: {
+        status: "error",
+        message: error instanceof Error ? error.message : "Unknown error",
+        recordsProcessed: processed,
+        recordsFailed: failed,
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  return syncLog;
 }
 
-// Get user photo
-export async function getUserPhoto(staffId: string): Promise<UserPhoto | null> {
-  return prisma.userPhoto.findUnique({
-    where: { staffId },
+// Update staff records to link to reference tables
+export async function linkStaffToReferenceData(
+  profiles: MicrosoftProfile[],
+  masterSyncLogId?: string,
+  checkCancellation?: () => Promise<void>
+): Promise<SyncLog> {
+  const syncLog = await prisma.syncLog.create({
+    data: {
+      syncType: "link_references",
+      status: "running",
+      startedAt: new Date(),
+      masterSyncLogId: masterSyncLogId || null,
+    },
   });
+
+  let processed = 0;
+  let failed = 0;
+
+  console.log(
+    `🔗 Starting staff-reference linking for ${profiles.length} profiles...`
+  );
+
+  try {
+    for (let i = 0; i < profiles.length; i++) {
+      if (checkCancellation) await checkCancellation();
+
+      const profile = profiles[i];
+
+      if (i % 10 === 0) {
+        console.log(
+          `   Linking references for user ${i + 1}/${profiles.length}...`
+        );
+      }
+
+      try {
+        // Find department, job title, and office IDs
+        let departmentId: string | null = null;
+        let jobTitleId: string | null = null;
+        let officeId: string | null = null;
+
+        if (profile.department) {
+          const dept = await prisma.department.findUnique({
+            where: { name: profile.department },
+            select: { id: true },
+          });
+          departmentId = dept?.id || null;
+        }
+
+        if (profile.jobTitle) {
+          const title = await prisma.jobTitle.findUnique({
+            where: { title: profile.jobTitle },
+            select: { id: true },
+          });
+          jobTitleId = title?.id || null;
+        }
+
+        if (profile.officeLocation) {
+          const office = await prisma.office.findUnique({
+            where: { name: profile.officeLocation },
+            select: { id: true },
+          });
+          officeId = office?.id || null;
+        }
+
+        // Update staff record with reference IDs
+        await prisma.staff.update({
+          where: { microsoftId: profile.id },
+          data: {
+            departmentId,
+            jobTitleId,
+            officeId,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        processed++;
+      } catch (error) {
+        console.error(
+          `   ❌ Failed to link references for ${profile.id}:`,
+          error
+        );
+        failed++;
+      }
+    }
+
+    console.log(
+      `🔗 Staff-reference linking completed: ${processed} processed, ${failed} failed`
+    );
+
+    await prisma.syncLog.update({
+      where: { id: syncLog.id },
+      data: {
+        status: failed > 0 ? "partial" : "success",
+        recordsProcessed: processed,
+        recordsFailed: failed,
+        completedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error(`❌ Staff-reference linking failed:`, error);
+    await prisma.syncLog.update({
+      where: { id: syncLog.id },
+      data: {
+        status: "error",
+        message: error instanceof Error ? error.message : "Unknown error",
+        recordsProcessed: processed,
+        recordsFailed: failed,
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  return syncLog;
+}
+
+// Get filter options from reference tables
+export async function getFilterOptions(): Promise<FilterOptions> {
+  const [departments, jobTitles, offices] = await Promise.all([
+    prisma.department.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.jobTitle.findMany({
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.office.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  return {
+    departments,
+    jobTitles,
+    officeLocations: offices.map((o) => o.name),
+  };
 }

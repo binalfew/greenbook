@@ -83,9 +83,17 @@ export async function updateDBSession(
 }
 
 export async function deleteDBSession(sessionId: string) {
-  return await prisma.userSession.delete({
-    where: { sessionId },
-  });
+  try {
+    return await prisma.userSession.delete({
+      where: { sessionId },
+    });
+  } catch (error: any) {
+    // Ignore "not found" error (P2025)
+    if (error.code === "P2025") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function cleanupExpiredSessions() {
