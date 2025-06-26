@@ -11,7 +11,7 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import Navbar from "./components/navbar";
-import { getUserEmail } from "./lib/auth.server";
+import { getUserEmail, isAdminUser } from "./lib/auth.server";
 import { getUserByEmail } from "./lib/db.server";
 
 export const links: Route.LinksFunction = () => [
@@ -40,12 +40,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     return data({ user: undefined });
   }
 
+  // Check if user has admin privileges
+  const isAdmin = await isAdminUser(user.id);
+
   const formattedUser = {
     id: user.id,
     email: user.email,
     username: user.name,
     name: user.name,
     role: user.role,
+    isAdmin,
   };
 
   return data({ user: formattedUser });
@@ -74,7 +78,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
   return (
     <div className="bg-background min-h-screen">
       <Navbar user={user} />
-      <main className="container mx-auto px-1 py-8">
+      <main className="mx-auto px-1 py-8">
         <Outlet />
       </main>
     </div>

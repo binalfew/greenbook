@@ -268,3 +268,21 @@ export async function logout({ request }: { request: Request }) {
     headers: { "Set-Cookie": await authSessionStorage.destroySession(session) },
   });
 }
+
+export async function isAdminUser(userId: string) {
+  const adminUser = await prisma.adminUser.findUnique({
+    where: { userId },
+  });
+  return !!adminUser;
+}
+
+export async function requireAdminUser(request: Request) {
+  const user = await requireUser(request);
+
+  const isAdmin = await isAdminUser(user.id);
+  if (!isAdmin) {
+    throw new Response("Unauthorized", { status: 403 });
+  }
+
+  return user;
+}

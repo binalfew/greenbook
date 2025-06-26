@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { requireUser } from "~/lib/auth.server";
+import { requireAdminUser } from "~/lib/auth.server";
 import prisma from "~/lib/prisma";
 import type { Route } from "./+types/admin.jobTitles";
 
@@ -29,7 +29,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  await requireAdminUser(request);
 
   try {
     const jobTitles = await prisma.jobTitle.findMany({
@@ -114,22 +114,12 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                 <TableRow>
                   <TableHead>Job Title</TableHead>
                   <TableHead className="text-right">Staff Count</TableHead>
-                  <TableHead className="text-right">Percentage</TableHead>
-                  <TableHead className="text-right">Rank</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {jobTitles
                   .sort((a, b) => b._count.staff - a._count.staff)
                   .map((jobTitle, index) => {
-                    const percentage =
-                      summary.totalStaff > 0
-                        ? (
-                            (jobTitle._count.staff / summary.totalStaff) *
-                            100
-                          ).toFixed(1)
-                        : "0";
-
                     return (
                       <TableRow key={jobTitle.id}>
                         <TableCell className="font-medium">
@@ -137,24 +127,6 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                         </TableCell>
                         <TableCell className="text-right font-semibold text-purple-600">
                           {jobTitle._count.staff}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {percentage}%
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              index === 0
-                                ? "bg-yellow-100 text-yellow-800"
-                                : index === 1
-                                ? "bg-gray-100 text-gray-800"
-                                : index === 2
-                                ? "bg-orange-100 text-orange-800"
-                                : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            #{index + 1}
-                          </span>
                         </TableCell>
                       </TableRow>
                     );
@@ -181,7 +153,6 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                   <TableHead>Rank</TableHead>
                   <TableHead>Job Title</TableHead>
                   <TableHead className="text-right">Staff Count</TableHead>
-                  <TableHead className="text-right">Percentage</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -189,14 +160,6 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                   .sort((a, b) => b._count.staff - a._count.staff)
                   .slice(0, 10)
                   .map((jobTitle, index) => {
-                    const percentage =
-                      summary.totalStaff > 0
-                        ? (
-                            (jobTitle._count.staff / summary.totalStaff) *
-                            100
-                          ).toFixed(1)
-                        : "0";
-
                     return (
                       <TableRow key={jobTitle.id}>
                         <TableCell>
@@ -219,9 +182,6 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                         </TableCell>
                         <TableCell className="text-right font-semibold text-purple-600">
                           {jobTitle._count.staff}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {percentage}%
                         </TableCell>
                       </TableRow>
                     );
@@ -247,7 +207,6 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                 <TableRow>
                   <TableHead>Job Title</TableHead>
                   <TableHead className="text-right">Staff Count</TableHead>
-                  <TableHead className="text-right">Percentage</TableHead>
                   <TableHead>Distribution</TableHead>
                 </TableRow>
               </TableHeader>
@@ -271,9 +230,6 @@ export default function AdminJobTitles({ loaderData }: Route.ComponentProps) {
                         </TableCell>
                         <TableCell className="text-right font-semibold text-purple-600">
                           {jobTitle._count.staff}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {percentage}%
                         </TableCell>
                         <TableCell>
                           <div className="w-full bg-gray-200 rounded-full h-2">

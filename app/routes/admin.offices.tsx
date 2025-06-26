@@ -6,7 +6,15 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { requireUser } from "~/lib/auth.server";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { requireAdminUser } from "~/lib/auth.server";
 import prisma from "~/lib/prisma";
 import type { Route } from "./+types/admin.offices";
 
@@ -21,7 +29,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  await requireAdminUser(request);
 
   try {
     const offices = await prisma.office.findMany({
@@ -59,33 +67,12 @@ export default function AdminOffices({ loaderData }: Route.ComponentProps) {
   const { offices, summary } = loaderData;
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Offices</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.totalOffices}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.totalStaff}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Offices List */}
+    <div className="container mx-auto p-6 space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Office Locations</CardTitle>
+          <CardTitle>All Offices</CardTitle>
           <CardDescription>
-            Office locations and their staff counts
+            Complete list of office locations with staff counts
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -94,29 +81,24 @@ export default function AdminOffices({ loaderData }: Route.ComponentProps) {
               No offices found. Run a sync to populate office data.
             </p>
           ) : (
-            <div className="space-y-4">
-              {offices.map((office) => (
-                <div key={office.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">{office.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Created:{" "}
-                        {new Date(office.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold text-blue-600">
-                        {office._count.staff}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        staff members
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Office Name</TableHead>
+                  <TableHead className="text-right">Staff Count</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {offices.map((office) => (
+                  <TableRow key={office.id}>
+                    <TableCell className="font-medium">{office.name}</TableCell>
+                    <TableCell className="text-right font-semibold text-blue-600">
+                      {office._count.staff}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

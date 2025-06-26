@@ -18,7 +18,8 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
-import { getAllSchedules } from "~/lib/scheduler.server";
+import { requireAdminUser } from "~/lib/auth.server";
+import { getSchedules } from "~/lib/scheduler.server";
 
 interface SyncSchedule {
   id: string;
@@ -38,8 +39,9 @@ interface LoaderData {
   schedules: SyncSchedule[];
 }
 
-export async function loader() {
-  const schedules = await getAllSchedules();
+export async function loader({ request }: { request: Request }) {
+  await requireAdminUser(request);
+  const schedules = await getSchedules();
   return { schedules };
 }
 

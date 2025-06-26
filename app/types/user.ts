@@ -6,6 +6,7 @@ const User = z.object({
   username: z.string().nullable(),
   name: z.string().nullable(),
   role: z.string(),
+  isAdmin: z.boolean().optional(),
 });
 
 export type User = z.infer<typeof User>;

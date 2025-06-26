@@ -2,9 +2,9 @@ import { data } from "react-router";
 import {
   getTokenStatus,
   getValidAccessToken,
-  requireUser,
+  requireAdminUser,
 } from "~/lib/auth.server";
-import type { Route } from "./+types/token-status";
+import type { Route } from "./+types/admin.token";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -14,7 +14,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requireUser(request);
+  const user = await requireAdminUser(request);
   const tokenStatus = await getTokenStatus(request);
   const validToken = await getValidAccessToken(request);
 

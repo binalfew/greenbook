@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { requireUser } from "~/lib/auth.server";
+import { requireAdminUser } from "~/lib/auth.server";
 import prisma from "~/lib/prisma";
 import type { Route } from "./+types/admin.departments";
 
@@ -29,7 +29,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  await requireAdminUser(request);
 
   try {
     const departments = await prisma.department.findMany({
@@ -86,19 +86,10 @@ export default function AdminDepartments({ loaderData }: Route.ComponentProps) {
                 <TableRow>
                   <TableHead>Department Name</TableHead>
                   <TableHead className="text-right">Staff Count</TableHead>
-                  <TableHead className="text-right">Percentage</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {departments.map((department) => {
-                  const percentage =
-                    summary.totalStaff > 0
-                      ? (
-                          (department._count.staff / summary.totalStaff) *
-                          100
-                        ).toFixed(1)
-                      : "0";
-
                   return (
                     <TableRow key={department.id}>
                       <TableCell className="font-medium">
@@ -106,9 +97,6 @@ export default function AdminDepartments({ loaderData }: Route.ComponentProps) {
                       </TableCell>
                       <TableCell className="text-right font-semibold text-green-600">
                         {department._count.staff}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {percentage}%
                       </TableCell>
                     </TableRow>
                   );

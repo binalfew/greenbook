@@ -1,11 +1,8 @@
-import type { SyncSchedule } from "@prisma/client";
+import type { SyncSchedule as PrismaSyncSchedule } from "@prisma/client";
 import * as cron from "node-cron";
+import type { ScheduleSyncType, SyncOptions } from "~/types/sync";
 import prisma from "./prisma";
-import {
-  incrementalSync,
-  selectiveSync,
-  type SyncOptions,
-} from "./sync.server";
+import { incrementalSync, selectiveSync } from "./sync.server";
 
 // Global scheduler instance
 class SyncScheduler {
@@ -17,10 +14,12 @@ class SyncScheduler {
 
     console.log("🚀 Initializing sync scheduler...");
 
+    // Load all enabled schedules from database
     const schedules = await prisma.syncSchedule.findMany({
       where: { enabled: true },
     });
 
+    // Start each schedule
     for (const schedule of schedules) {
       await this.startSchedule(schedule);
     }
@@ -29,7 +28,7 @@ class SyncScheduler {
     console.log(`✅ Scheduler initialized with ${schedules.length} schedules`);
   }
 
-  async startSchedule(schedule: SyncSchedule) {
+  async startSchedule(schedule: PrismaSyncSchedule) {
     if (this.schedules.has(schedule.id)) return;
 
     console.log(`🔄 Starting schedule: ${schedule.name}`);
@@ -70,7 +69,7 @@ class SyncScheduler {
     this.isInitialized = false;
   }
 
-  private async executeScheduledSync(schedule: SyncSchedule) {
+  private async executeScheduledSync(schedule: PrismaSyncSchedule) {
     console.log(`🔄 Executing scheduled sync: ${schedule.name}`);
 
     try {
@@ -79,7 +78,7 @@ class SyncScheduler {
         data: { lastRun: new Date() },
       });
 
-      let result: any;
+      let result: unknown;
 
       // Execute based on sync type
       switch (schedule.syncType) {
@@ -144,11 +143,11 @@ const scheduler = new SyncScheduler();
 export async function createSchedule(data: {
   name: string;
   description?: string;
-  syncType: "incremental" | "full" | "selective";
+  syncType: ScheduleSyncType;
   cronExpression: string;
   syncOptions: SyncOptions;
   enabled?: boolean;
-}): Promise<SyncSchedule> {
+}): Promise<PrismaSyncSchedule> {
   if (!cron.validate(data.cronExpression)) {
     throw new Error("Invalid cron expression");
   }
@@ -177,12 +176,12 @@ export async function updateSchedule(
   data: Partial<{
     name: string;
     description: string;
-    syncType: "incremental" | "full" | "selective";
+    syncType: ScheduleSyncType;
     cronExpression: string;
     syncOptions: SyncOptions;
     enabled: boolean;
   }>
-): Promise<SyncSchedule> {
+): Promise<PrismaSyncSchedule> {
   if (scheduler.isScheduleRunning(id)) {
     await scheduler.stopSchedule(id);
   }
@@ -219,39 +218,15 @@ export async function deleteSchedule(id: string): Promise<void> {
   });
 }
 
-export async function toggleSchedule(
-  id: string,
-  enabled: boolean
-): Promise<SyncSchedule> {
-  const schedule = await prisma.syncSchedule.findUnique({
-    where: { id },
-  });
-
-  if (!schedule) {
-    throw new Error("Schedule not found");
-  }
-
-  if (enabled) {
-    await scheduler.startSchedule(schedule);
-  } else {
-    await scheduler.stopSchedule(id);
-  }
-
-  return await prisma.syncSchedule.update({
-    where: { id },
-    data: { enabled },
-  });
-}
-
-export async function getAllSchedules(): Promise<SyncSchedule[]> {
+export async function getSchedules(): Promise<PrismaSyncSchedule[]> {
   return await prisma.syncSchedule.findMany({
     orderBy: { createdAt: "desc" },
   });
 }
 
-export async function getScheduleById(
+export async function getSchedule(
   id: string
-): Promise<SyncSchedule | null> {
+): Promise<PrismaSyncSchedule | null> {
   return await prisma.syncSchedule.findUnique({
     where: { id },
   });

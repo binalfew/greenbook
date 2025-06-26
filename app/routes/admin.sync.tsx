@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { data, Form } from "react-router";
+import { data, useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -9,24 +9,24 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
-import { requireUser } from "~/lib/auth.server";
-import { cancelSync, getSyncStatus, syncAllUsers } from "~/lib/sync.server";
+import { requireAdminUser } from "~/lib/auth.server";
+import {
+  cancelSync,
+  getSyncStatus,
+  selectiveSync,
+  syncAllUsers,
+} from "~/lib/sync.server";
+import type { SyncLogWithDetails, SyncOptions } from "~/types/sync";
 
-export function meta({}: any) {
+export function meta() {
   return [
     { title: "Data Sync - Greenbook" },
     { name: "description", content: "Synchronize data from Microsoft Graph" },
   ];
 }
 
-export async function loader({ request }: any) {
-  const user = await requireUser(request);
-
-  // For now, any authenticated user can access sync
-  // TODO: Add proper admin role check later
-  // if (user.role !== "admin") {
-  //   throw redirect("/");
-  // }
+export async function loader({ request }: { request: Request }) {
+  await requireAdminUser(request);
 
   const status = await getSyncStatus();
   return data({
@@ -38,8 +38,8 @@ export async function loader({ request }: any) {
   });
 }
 
-export async function action({ request }: any) {
-  const user = await requireUser(request);
+export async function action({ request }: { request: Request }) {
+  await requireAdminUser(request);
 
   const formData = await request.formData();
   const action = formData.get("action") as string;
@@ -63,7 +63,7 @@ export async function action({ request }: any) {
   if (action === "selective_sync") {
     try {
       // Parse sync options from form data
-      const syncOptions = {
+      const syncOptions: SyncOptions = {
         users: formData.get("users") === "true",
         referenceData: formData.get("referenceData") === "true",
         hierarchy: formData.get("hierarchy") === "true",
@@ -79,7 +79,6 @@ export async function action({ request }: any) {
         });
       }
 
-      const { selectiveSync } = await import("~/lib/sync.server");
       const result = await selectiveSync(syncOptions);
 
       return data({
@@ -131,20 +130,48 @@ export async function action({ request }: any) {
   return data({ success: false, message: "Invalid action" });
 }
 
-export default function AdminSync({ loaderData }: any) {
-  const actionData = loaderData as any;
+interface LoaderData {
+  recentSyncs: SyncLogWithDetails[];
+  totalStaff: number;
+  totalDepartments: number;
+  totalJobTitles: number;
+  totalOffices: number;
+}
 
-  const [formData, setFormData] = useState({
+interface ActionData {
+  success: boolean;
+  message: string;
+  result?: any;
+  options?: SyncOptions;
+}
+
+export default function AdminSync({
+  loaderData,
+}: {
+  loaderData: LoaderData & ActionData;
+}) {
+  const actionData = loaderData as ActionData;
+  const syncFetcher = useFetcher();
+  const selectiveSyncFetcher = useFetcher();
+  const cancelSyncFetcher = useFetcher();
+
+  const [formData, setFormData] = useState<SyncOptions>({
     users: true,
-    referenceData: false,
-    hierarchy: false,
+    referenceData: true,
+    hierarchy: true,
     linkReferences: true,
   });
 
   // Check if there's a sync currently running
   const runningSync = loaderData.recentSyncs.find(
-    (sync: any) => sync.status === "running"
+    (sync: SyncLogWithDetails) => sync.status === "running"
   );
+
+  // Check if any fetcher is submitting
+  const isSubmitting =
+    syncFetcher.state === "submitting" ||
+    selectiveSyncFetcher.state === "submitting" ||
+    cancelSyncFetcher.state === "submitting";
 
   return (
     <div className="container mx-auto py-8">
@@ -172,7 +199,7 @@ export default function AdminSync({ loaderData }: any) {
                   </div>
                 </div>
               </div>
-              <Form method="post" className="flex-shrink-0">
+              <cancelSyncFetcher.Form method="post" className="flex-shrink-0">
                 <input type="hidden" name="action" value="cancel" />
                 <input type="hidden" name="syncId" value={runningSync.id} />
                 <Button
@@ -180,6 +207,7 @@ export default function AdminSync({ loaderData }: any) {
                   variant="outline"
                   size="sm"
                   className="border-red-200 text-red-700 hover:bg-red-50"
+                  disabled={cancelSyncFetcher.state === "submitting"}
                   onClick={(e) => {
                     if (
                       !confirm(
@@ -190,9 +218,11 @@ export default function AdminSync({ loaderData }: any) {
                     }
                   }}
                 >
-                  🛑 Cancel Sync
+                  {cancelSyncFetcher.state === "submitting"
+                    ? "🛑 Cancelling..."
+                    : "🛑 Cancel Sync"}
                 </Button>
-              </Form>
+              </cancelSyncFetcher.Form>
             </div>
           </div>
         )}
@@ -242,7 +272,7 @@ export default function AdminSync({ loaderData }: any) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Form method="post" className="space-y-6">
+            <selectiveSyncFetcher.Form method="post" className="space-y-6">
               <input type="hidden" name="action" value="selective_sync" />
 
               <div className="space-y-4">
@@ -334,12 +364,20 @@ export default function AdminSync({ loaderData }: any) {
                 </p>
               </div>
 
-              <Button type="submit" className="w-full" disabled={!!runningSync}>
-                {runningSync
+              <Button
+                type="submit"
+                className="w-full cursor-pointer"
+                disabled={
+                  !!runningSync || selectiveSyncFetcher.state === "submitting"
+                }
+              >
+                {selectiveSyncFetcher.state === "submitting"
+                  ? "🔄 Starting Selective Sync..."
+                  : runningSync
                   ? "🔄 Sync in Progress..."
                   : "🎯 Start Selective Sync"}
               </Button>
-            </Form>
+            </selectiveSyncFetcher.Form>
           </CardContent>
         </Card>
 
@@ -352,12 +390,20 @@ export default function AdminSync({ loaderData }: any) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Form method="post">
+            <syncFetcher.Form method="post">
               <input type="hidden" name="action" value="sync" />
-              <Button type="submit" className="w-full" disabled={!!runningSync}>
-                {runningSync ? "🔄 Sync in Progress..." : "🚀 Start Full Sync"}
+              <Button
+                type="submit"
+                className="w-full cursor-pointer"
+                disabled={!!runningSync || syncFetcher.state === "submitting"}
+              >
+                {syncFetcher.state === "submitting"
+                  ? "🔄 Starting Full Sync..."
+                  : runningSync
+                  ? "🔄 Sync in Progress..."
+                  : "🚀 Start Full Sync"}
               </Button>
-            </Form>
+            </syncFetcher.Form>
 
             {runningSync && (
               <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -386,7 +432,7 @@ export default function AdminSync({ loaderData }: any) {
           <CardHeader>
             <CardTitle>Recent Sync Logs</CardTitle>
             <CardDescription>
-              History of synchronization attempts
+              History of synchronization attempts with detailed breakdown
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -395,49 +441,116 @@ export default function AdminSync({ loaderData }: any) {
                 No sync logs found
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {loaderData.recentSyncs
                   .filter(
-                    (sync: any) =>
+                    (sync: SyncLogWithDetails) =>
                       sync.syncType === "full_sync" ||
-                      sync.syncType === "selective_sync"
+                      sync.syncType === "selective_sync" ||
+                      sync.syncType === "incremental_sync"
                   )
-                  .map((sync: any) => (
+                  .map((sync: SyncLogWithDetails) => (
                     <div
                       key={sync.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      className="border border-gray-200 rounded-lg overflow-hidden"
                     >
-                      <div>
-                        <div className="font-medium">
-                          {sync.syncType === "full_sync"
-                            ? "Full Sync"
-                            : "Selective Sync"}
+                      {/* Main sync log entry */}
+                      <div className="flex items-center justify-between p-4 bg-gray-50">
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {sync.syncType === "full_sync"
+                              ? "Full Sync"
+                              : sync.syncType === "selective_sync"
+                              ? "Selective Sync"
+                              : "Incremental Sync"}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {sync.totalProcessed || sync.recordsProcessed}{" "}
+                            processed, {sync.totalFailed || sync.recordsFailed}{" "}
+                            failed
+                          </div>
+                          {sync.childLogs && sync.childLogs.length > 0 && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {sync.childLogs.length} phase(s) completed
+                            </div>
+                          )}
                         </div>
-                        <div className="text-sm text-gray-600">
-                          {sync.recordsProcessed} processed,{" "}
-                          {sync.recordsFailed} failed
+                        <div className="text-right">
+                          <div
+                            className={`text-sm font-medium ${
+                              sync.status === "success"
+                                ? "text-green-600"
+                                : sync.status === "running"
+                                ? "text-blue-600"
+                                : sync.status === "cancelled"
+                                ? "text-orange-600"
+                                : sync.status === "partial"
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {sync.status}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(sync.startedAt).toLocaleString()}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div
-                          className={`text-sm font-medium ${
-                            sync.status === "success"
-                              ? "text-green-600"
-                              : sync.status === "running"
-                              ? "text-blue-600"
-                              : sync.status === "cancelled"
-                              ? "text-orange-600"
-                              : sync.status === "partial"
-                              ? "text-yellow-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {sync.status}
+
+                      {/* Child logs details */}
+                      {sync.childLogs && sync.childLogs.length > 0 && (
+                        <div className="border-t border-gray-200">
+                          <details className="group">
+                            <summary className="cursor-pointer p-3 hover:bg-gray-50 text-sm font-medium text-gray-700">
+                              📊 View Phase Details ({sync.childLogs.length}{" "}
+                              phases)
+                            </summary>
+                            <div className="px-3 pb-3 space-y-2">
+                              {sync.childLogs.map((child) => (
+                                <div
+                                  key={child.id}
+                                  className="flex items-center justify-between py-2 px-3 bg-white rounded border"
+                                >
+                                  <div className="flex-1">
+                                    <div className="text-sm font-medium">
+                                      {child.syncType === "users"
+                                        ? "Users"
+                                        : child.syncType === "hierarchy"
+                                        ? "Organizational Hierarchy"
+                                        : child.syncType === "reference_data"
+                                        ? "Reference Data"
+                                        : child.syncType === "link_references"
+                                        ? "Staff-Reference Links"
+                                        : child.syncType}
+                                    </div>
+                                    <div className="text-xs text-gray-600">
+                                      {child.recordsProcessed} processed,{" "}
+                                      {child.recordsFailed} failed
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div
+                                      className={`text-xs font-medium ${
+                                        child.status === "success"
+                                          ? "text-green-600"
+                                          : child.status === "running"
+                                          ? "text-blue-600"
+                                          : child.status === "cancelled"
+                                          ? "text-orange-600"
+                                          : child.status === "partial"
+                                          ? "text-yellow-600"
+                                          : "text-red-600"
+                                      }`}
+                                    >
+                                      {child.status}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(sync.startedAt).toLocaleString()}
-                        </div>
-                      </div>
+                      )}
                     </div>
                   ))}
               </div>
@@ -446,45 +559,105 @@ export default function AdminSync({ loaderData }: any) {
         </Card>
 
         {/* Action Results */}
-        {actionData?.message && (
+        {(actionData?.message ||
+          syncFetcher.data?.message ||
+          selectiveSyncFetcher.data?.message ||
+          cancelSyncFetcher.data?.message) && (
           <div
             className={`mt-6 p-4 rounded-lg ${
-              actionData.success
+              actionData?.success ||
+              syncFetcher.data?.success ||
+              selectiveSyncFetcher.data?.success ||
+              cancelSyncFetcher.data?.success
                 ? "bg-green-50 border border-green-200"
                 : "bg-red-50 border border-red-200"
             }`}
           >
             <p
-              className={actionData.success ? "text-green-800" : "text-red-800"}
+              className={
+                actionData?.success ||
+                syncFetcher.data?.success ||
+                selectiveSyncFetcher.data?.success ||
+                cancelSyncFetcher.data?.success
+                  ? "text-green-800"
+                  : "text-red-800"
+              }
             >
-              {actionData.message}
+              {actionData?.message ||
+                syncFetcher.data?.message ||
+                selectiveSyncFetcher.data?.message ||
+                cancelSyncFetcher.data?.message}
             </p>
-            {actionData.result && (
+            {(actionData?.result ||
+              syncFetcher.data?.result ||
+              selectiveSyncFetcher.data?.result) && (
               <div className="mt-2 text-sm">
-                {actionData.result.usersSync && (
+                {(
+                  actionData?.result ||
+                  syncFetcher.data?.result ||
+                  selectiveSyncFetcher.data?.result
+                )?.usersSync && (
                   <p>
-                    Users: {actionData.result.usersSync.recordsProcessed}{" "}
+                    Users:{" "}
+                    {
+                      (
+                        actionData?.result ||
+                        syncFetcher.data?.result ||
+                        selectiveSyncFetcher.data?.result
+                      )?.usersSync.recordsProcessed
+                    }{" "}
                     processed
                   </p>
                 )}
-                {actionData.result.referenceDataSync && (
+                {(
+                  actionData?.result ||
+                  syncFetcher.data?.result ||
+                  selectiveSyncFetcher.data?.result
+                )?.referenceDataSync && (
                   <p>
                     Reference Data:{" "}
-                    {actionData.result.referenceDataSync.recordsProcessed}{" "}
+                    {
+                      (
+                        actionData?.result ||
+                        syncFetcher.data?.result ||
+                        selectiveSyncFetcher.data?.result
+                      )?.referenceDataSync.recordsProcessed
+                    }{" "}
                     processed
                   </p>
                 )}
-                {actionData.result.linkReferencesSync && (
+                {(
+                  actionData?.result ||
+                  syncFetcher.data?.result ||
+                  selectiveSyncFetcher.data?.result
+                )?.linkReferencesSync && (
                   <p>
                     Staff-Reference Links:{" "}
-                    {actionData.result.linkReferencesSync.recordsProcessed}{" "}
+                    {
+                      (
+                        actionData?.result ||
+                        syncFetcher.data?.result ||
+                        selectiveSyncFetcher.data?.result
+                      )?.linkReferencesSync.recordsProcessed
+                    }{" "}
                     processed
                   </p>
                 )}
-                {actionData.result.hierarchySync && (
+                {(
+                  actionData?.result ||
+                  syncFetcher.data?.result ||
+                  selectiveSyncFetcher.data?.result
+                )?.hierarchySync && (
                   <p>
                     Hierarchy:{" "}
-                    {actionData.result.hierarchySync.recordsProcessed} processed
+                    {
+                      (
+                        actionData?.result ||
+                        syncFetcher.data?.result ||
+                        selectiveSyncFetcher.data?.result
+                      )?.hierarchySync.recordsProcessed
+                    }{" "}
+                    processed
                   </p>
                 )}
               </div>

@@ -1,8 +1,17 @@
+import type {
+  SyncLogDetail,
+  SyncLogWithDetails,
+  SyncOptions,
+  SyncResult,
+  SyncResults,
+} from "~/types/sync";
 import {
   getUserManager,
+  getUserProfile,
   getUsers,
   type MicrosoftProfile,
 } from "./graph.server";
+import prisma from "./prisma";
 import {
   getStaffByMicrosoftId,
   linkStaffToReferenceData,
@@ -13,8 +22,6 @@ import {
 
 // Cancel sync function
 export async function cancelSync(syncId: string): Promise<boolean> {
-  const prisma = (await import("./prisma")).default;
-
   console.log(`🛑 Cancel sync requested for ID: ${syncId}`);
 
   // Check if sync exists and is running
@@ -48,8 +55,6 @@ export async function cancelSync(syncId: string): Promise<boolean> {
 
 // Check if sync should be cancelled by checking database
 async function checkCancellation(syncId: string): Promise<void> {
-  const prisma = (await import("./prisma")).default;
-
   const syncLog = await prisma.syncLog.findUnique({
     where: { id: syncId },
     select: { status: true },
@@ -61,24 +66,11 @@ async function checkCancellation(syncId: string): Promise<void> {
   }
 }
 
-// Types for selective sync
-export interface SyncOptions {
-  users?: boolean;
-  referenceData?: boolean;
-  hierarchy?: boolean;
-  linkReferences?: boolean; // This is typically needed when syncing users or reference data
-}
-
 // Selective sync function
 export async function selectiveSync(
   options: SyncOptions = {},
   scheduleId?: string
-): Promise<{
-  usersSync?: any;
-  referenceDataSync?: any;
-  linkReferencesSync?: any;
-  hierarchySync?: any;
-}> {
+): Promise<SyncResults> {
   console.log("🎯 Starting selective synchronization...");
   console.log("=".repeat(50));
   console.log("Selected sync options:", options);
@@ -87,7 +79,6 @@ export async function selectiveSync(
   }
 
   // Create master sync log
-  const prisma = (await import("./prisma")).default;
   const masterSyncLog = await prisma.syncLog.create({
     data: {
       syncType: "selective_sync",
@@ -99,7 +90,7 @@ export async function selectiveSync(
 
   console.log(`🆔 Sync ID set to: ${masterSyncLog.id}`);
 
-  const results: any = {};
+  const results: SyncResults = {};
   let allUsers: MicrosoftProfile[] = [];
 
   try {
@@ -126,8 +117,8 @@ export async function selectiveSync(
       console.log(`✅ Found ${allUsers.length} total users`);
     }
 
-    // Step 2: Sync users if selected
-    if (options.users) {
+    // Step 2: Sync users if selected OR if hierarchy is selected (needed for hierarchy sync)
+    if (options.users || options.hierarchy) {
       console.log("📝 Step 2: Syncing user data to database...");
       results.usersSync = await syncStaffFromGraph(
         allUsers,
@@ -136,7 +127,7 @@ export async function selectiveSync(
       );
       await checkCancellation(masterSyncLog.id);
       console.log(
-        `✅ User sync completed: ${results.usersSync.recordsProcessed} processed, ${results.usersSync.recordsFailed} failed`
+        `✅ User sync completed: ${results.usersSync?.recordsProcessed} processed, ${results.usersSync?.recordsFailed} failed`
       );
     }
 
@@ -152,7 +143,7 @@ export async function selectiveSync(
       );
       await checkCancellation(masterSyncLog.id);
       console.log(
-        `✅ Reference data sync completed: ${results.referenceDataSync.recordsProcessed} processed, ${results.referenceDataSync.recordsFailed} failed`
+        `✅ Reference data sync completed: ${results.referenceDataSync?.recordsProcessed} processed, ${results.referenceDataSync?.recordsFailed} failed`
       );
     }
 
@@ -166,7 +157,7 @@ export async function selectiveSync(
       );
       await checkCancellation(masterSyncLog.id);
       console.log(
-        `✅ Staff-reference linking completed: ${results.linkReferencesSync.recordsProcessed} processed, ${results.linkReferencesSync.recordsFailed} failed`
+        `✅ Staff-reference linking completed: ${results.linkReferencesSync?.recordsProcessed} processed, ${results.linkReferencesSync?.recordsFailed} failed`
       );
     }
 
@@ -193,12 +184,10 @@ export async function selectiveSync(
 
           if (manager) {
             const managerStaff = await getStaffByMicrosoftId(manager.id);
-            if (managerStaff) {
-              hierarchyData.push({
-                staffId: user.id,
-                managerId: managerStaff.id,
-              });
-            }
+            hierarchyData.push({
+              staffId: user.id,
+              managerId: manager.id,
+            });
           } else {
             hierarchyData.push({
               staffId: user.id,
@@ -292,12 +281,7 @@ export async function selectiveSync(
 }
 
 // Keep the existing syncAllUsers function for backward compatibility
-export async function syncAllUsers(): Promise<{
-  usersSync: any;
-  referenceDataSync: any;
-  linkReferencesSync: any;
-  hierarchySync: any;
-}> {
+export async function syncAllUsers(): Promise<SyncResults> {
   const result = await selectiveSync({
     users: true,
     referenceData: true,
@@ -317,10 +301,7 @@ export async function syncAllUsers(): Promise<{
 export async function incrementalSync(
   options: SyncOptions = {},
   scheduleId?: string
-): Promise<{
-  usersSync: any;
-  hierarchySync: any;
-}> {
+): Promise<Pick<SyncResults, "usersSync" | "hierarchySync">> {
   console.log("🔄 Starting incremental synchronization...");
   if (scheduleId) {
     console.log(
@@ -351,22 +332,24 @@ export async function incrementalSync(
 
 // Sync specific user
 export async function syncUser(userId: string): Promise<{
-  userSync: any;
-  hierarchySync: any;
+  userSync: SyncResult;
+  hierarchySync: SyncResult;
 }> {
   console.log(`👤 Starting sync for user: ${userId}`);
 
   // Get user profile from Microsoft Graph
-  const { getUserProfile } = await import("./graph.server");
   const userProfile = await getUserProfile(userId);
 
   // Sync user data
   const userSync = await syncStaffFromGraph([userProfile]);
 
   // Sync hierarchy for this user
-  let hierarchySync = { recordsProcessed: 0, recordsFailed: 0 };
+  let hierarchySync: SyncResult = {
+    recordsProcessed: 0,
+    recordsFailed: 0,
+    status: "success",
+  };
   try {
-    const { getUserManager } = await import("./graph.server");
     const manager = await getUserManager(userId);
 
     if (manager) {
@@ -380,26 +363,71 @@ export async function syncUser(userId: string): Promise<{
     }
   } catch (error) {
     console.error(`❌ Failed to sync hierarchy for user ${userId}:`, error);
-    hierarchySync.recordsFailed = 1;
+    hierarchySync = {
+      recordsProcessed: 0,
+      recordsFailed: 1,
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 
   return { userSync, hierarchySync };
 }
 
 // Get sync status
-export async function getSyncStatus() {
-  const prisma = (await import("./prisma")).default;
-
-  const recentSyncs = await prisma.syncLog.findMany({
+export async function getSyncStatus(): Promise<{
+  recentSyncs: SyncLogWithDetails[];
+  totalStaff: number;
+  totalDepartments: number;
+  totalJobTitles: number;
+  totalOffices: number;
+}> {
+  // Get master sync logs (full_sync, selective_sync, incremental_sync)
+  const masterSyncs = await prisma.syncLog.findMany({
     where: {
-      OR: [
-        { syncType: "full_sync" },
-        { masterSyncLogId: null }, // Individual phase logs that aren't part of a full sync
-      ],
+      syncType: {
+        in: ["full_sync", "selective_sync", "incremental_sync"],
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 20,
   });
+
+  // Get child sync logs for each master sync
+  const syncsWithDetails = await Promise.all(
+    masterSyncs.map(async (masterSync) => {
+      const childLogs = await prisma.syncLog.findMany({
+        where: {
+          masterSyncLogId: masterSync.id,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      // Calculate totals from child logs
+      let totalProcessed = 0;
+      let totalFailed = 0;
+      const childDetails: SyncLogDetail[] = childLogs.map((child) => {
+        totalProcessed += child.recordsProcessed;
+        totalFailed += child.recordsFailed;
+        return {
+          id: child.id,
+          syncType: child.syncType,
+          status: child.status,
+          recordsProcessed: child.recordsProcessed,
+          recordsFailed: child.recordsFailed,
+          startedAt: child.startedAt,
+          completedAt: child.completedAt,
+        };
+      });
+
+      return {
+        ...masterSync,
+        childLogs: childDetails,
+        totalProcessed,
+        totalFailed,
+      } as SyncLogWithDetails;
+    })
+  );
 
   const [totalStaff, totalDepartments, totalJobTitles, totalOffices] =
     await Promise.all([
@@ -410,7 +438,7 @@ export async function getSyncStatus() {
     ]);
 
   return {
-    recentSyncs,
+    recentSyncs: syncsWithDetails,
     totalStaff,
     totalDepartments,
     totalJobTitles,

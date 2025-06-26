@@ -65,24 +65,14 @@ model Staff {
   officeId String?
   office   Office? @relation(fields: [officeId], references: [id])
 
-  // Legacy fields (keeping for backward compatibility)
-  phone          String?
-  jobTitleId     String?
-  jobTitleRef    JobTitle?   @relation(fields: [jobTitleId], references: [id])
-  departmentId   String?
-  departmentRef  Department? @relation(fields: [departmentId], references: [id])
-  employmentType String?
-  expertise      String[]
-  biography      String?
-  bioEn          String?
-  bioFr          String?
-  bioAr          String?
-  bioPt          String?
-
   // Metadata
-  lastSyncAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  lastSyncAt   DateTime    @default(now())
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  Department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  JobTitle     JobTitle?   @relation(fields: [jobTitleId], references: [id])
+  jobTitleId   String?
 
   @@index([microsoftId])
   @@index([email])
@@ -109,8 +99,18 @@ model User {
   role      String
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
-  roles     Role[]
   sessions  UserSession[]
+  adminUser AdminUser?
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model UserSession {
@@ -128,33 +128,34 @@ model UserSession {
   @@index([userId])
 }
 
-model Role {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  description String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  permissions Permission[]
-  users       User[]
+enum SyncType {
+  users
+  hierarchy
+  reference_data
+  link_references
+  full_sync
+  selective_sync
+  incremental_sync
 }
 
-model Permission {
-  id          String   @id @default(cuid())
-  action      String
-  entity      String
-  access      String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  roles       Role[]
+enum SyncStatus {
+  running
+  success
+  error
+  partial
+  cancelled
+}
 
-  @@unique([action, entity, access])
+enum ScheduleSyncType {
+  incremental
+  full
+  selective
 }
 
 model SyncLog {
   id               String        @id @default(uuid())
-  syncType         String // 'users', 'hierarchy', 'full_sync', 'selective_sync', 'incremental_sync'
-  status           String // 'running', 'success', 'error', 'partial', 'cancelled'
+  syncType         SyncType
+  status           SyncStatus
   message          String?
   recordsProcessed Int           @default(0)
   recordsFailed    Int           @default(0)
@@ -167,17 +168,17 @@ model SyncLog {
 }
 
 model SyncSchedule {
-  id             String    @id @default(uuid())
-  name           String    @unique
+  id             String           @id @default(uuid())
+  name           String           @unique
   description    String?
-  syncType       String // 'incremental', 'full', 'selective'
+  syncType       ScheduleSyncType
   cronExpression String // Cron expression for scheduling
   syncOptions    Json // Stored sync options as JSON
-  enabled        Boolean   @default(true)
+  enabled        Boolean          @default(true)
   lastRun        DateTime?
   nextRun        DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   // Relations
   syncLogs SyncLog[]

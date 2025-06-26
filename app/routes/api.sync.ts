@@ -1,5 +1,5 @@
 import { data } from "react-router";
-import { requireUser } from "~/lib/auth.server";
+import { requireAdminUser } from "~/lib/auth.server";
 import {
   getSyncStatus,
   incrementalSync,
@@ -7,10 +7,11 @@ import {
   syncAllUsers,
   syncUser,
 } from "~/lib/sync.server";
+import type { SyncOptions } from "~/types/sync";
 import type { Route } from "./+types/api.sync";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  await requireAdminUser(request);
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
   const userId = url.searchParams.get("userId");
@@ -39,23 +40,17 @@ export async function loader({ request }: Route.LoaderArgs) {
       default:
         return data({ success: false, error: "Invalid action" });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Sync error:", error);
     return data({
       success: false,
-      error: error.message || "Sync operation failed",
+      error: error instanceof Error ? error.message : "Sync operation failed",
     });
   }
 }
 
 export async function action({ request }: { request: Request }) {
-  const user = await requireUser(request);
-
-  // For now, any authenticated user can trigger sync
-  // TODO: Add proper admin role check later
-  // if (user.role !== "admin") {
-  //   return data({ error: "Unauthorized" }, { status: 403 });
-  // }
+  await requireAdminUser(request);
 
   if (request.method !== "POST") {
     return data({ error: "Method not allowed" }, { status: 405 });
@@ -67,7 +62,7 @@ export async function action({ request }: { request: Request }) {
 
     if (action === "selective_sync") {
       // Parse sync options from form data
-      const syncOptions = {
+      const syncOptions: SyncOptions = {
         users: formData.get("users") === "true",
         referenceData: formData.get("referenceData") === "true",
         hierarchy: formData.get("hierarchy") === "true",
@@ -92,8 +87,18 @@ export async function action({ request }: { request: Request }) {
       });
     }
 
+    if (action === "sync") {
+      // Full sync - equivalent to selective sync with all options enabled
+      const result = await syncAllUsers();
+      return data({
+        success: true,
+        message: "Full sync completed successfully",
+        result,
+      });
+    }
+
     return data({ error: "Invalid action" }, { status: 400 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("API sync error:", error);
     return data(
       {

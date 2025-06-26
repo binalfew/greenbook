@@ -1,30 +1,34 @@
 import { data } from "react-router";
+import { requireAdminUser } from "~/lib/auth.server";
 import {
   createSchedule,
   deleteSchedule,
-  getAllSchedules,
-  getScheduleById,
-  toggleSchedule,
+  getSchedule,
+  getSchedules,
   updateSchedule,
 } from "~/lib/scheduler.server";
 
 export async function loader({ request }: { request: Request }) {
+  await requireAdminUser(request);
+
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
 
   if (id) {
-    const schedule = await getScheduleById(id);
+    const schedule = await getSchedule(id);
     if (!schedule) {
       return data({ error: "Schedule not found" }, { status: 404 });
     }
     return data({ schedule });
   }
 
-  const schedules = await getAllSchedules();
+  const schedules = await getSchedules();
   return data({ schedules });
 }
 
 export async function action({ request }: { request: Request }) {
+  await requireAdminUser(request);
+
   const formData = await request.formData();
   const action = formData.get("action") as string;
 
@@ -100,7 +104,7 @@ export async function action({ request }: { request: Request }) {
       case "toggle": {
         const id = formData.get("id") as string;
         const enabled = formData.get("enabled") === "true";
-        const schedule = await toggleSchedule(id, enabled);
+        const schedule = await updateSchedule(id, { enabled });
         return data({ success: true, schedule });
       }
 

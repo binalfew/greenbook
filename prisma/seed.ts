@@ -11,131 +11,29 @@ async function main() {
   await prisma.office.deleteMany();
   await prisma.jobTitle.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.role.deleteMany();
-  await prisma.permission.deleteMany();
   await prisma.syncLog.deleteMany();
   await prisma.syncSchedule.deleteMany();
 
   console.log("🗑️  Cleared existing data");
 
-  // Create Permissions
-  const permissions = await Promise.all([
-    prisma.permission.create({
-      data: {
-        action: "read",
-        entity: "staff",
-        access: "all",
-        description: "Read all staff information",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "write",
-        entity: "staff",
-        access: "own",
-        description: "Write own staff information",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "delete",
-        entity: "staff",
-        access: "all",
-        description: "Delete staff records",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "read",
-        entity: "department",
-        access: "all",
-        description: "Read department information",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "write",
-        entity: "department",
-        access: "all",
-        description: "Write department information",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "read",
-        entity: "office",
-        access: "all",
-        description: "Read office information",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "write",
-        entity: "office",
-        access: "all",
-        description: "Write office information",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "manage",
-        entity: "users",
-        access: "all",
-        description: "Manage all users",
-      },
-    }),
-    prisma.permission.create({
-      data: {
-        action: "manage",
-        entity: "roles",
-        access: "all",
-        description: "Manage roles and permissions",
-      },
-    }),
-  ]);
-
-  console.log("✅ Created permissions");
-
-  // Create Roles
-  const adminRole = await prisma.role.create({
+  // Create default admin user
+  const adminUser = await prisma.user.create({
     data: {
-      name: "Administrator",
-      description: "Full system access",
-      permissions: {
-        connect: permissions.map((p) => ({ id: p.id })),
-      },
+      email: "binalfewk@africanunion.org",
+      name: "Binalfew",
+      status: "ACTIVE",
+      role: "admin",
     },
   });
 
-  const managerRole = await prisma.role.create({
+  // Create admin privileges for the user
+  await prisma.adminUser.create({
     data: {
-      name: "Manager",
-      description: "Department management access",
-      permissions: {
-        connect: [
-          { id: permissions[0].id }, // read staff all
-          { id: permissions[1].id }, // write staff own
-          { id: permissions[3].id }, // read department all
-          { id: permissions[4].id }, // write department all
-        ],
-      },
+      userId: adminUser.id,
     },
   });
 
-  const staffRole = await prisma.role.create({
-    data: {
-      name: "Staff",
-      description: "Basic staff access",
-      permissions: {
-        connect: [
-          { id: permissions[0].id }, // read staff all
-          { id: permissions[1].id }, // write staff own
-        ],
-      },
-    },
-  });
-
-  console.log("✅ Created roles");
+  console.log("✅ Created admin user: binalfewk@africanunion.org");
 
   // Create default sync schedules
   const schedules = await Promise.all([
