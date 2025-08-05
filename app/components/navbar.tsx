@@ -1,4 +1,5 @@
 import { Form, Link } from "react-router";
+import logoAssetUrl from "~/assets/logo.svg";
 import { Button } from "~/components/ui/button";
 import type { User } from "~/types/user";
 import { Separator } from "./ui/separator";
@@ -12,15 +13,8 @@ export default function Navbar({ user }: { user: User | undefined }) {
       style={{ backgroundColor: "#40734b" }}
     >
       <div className="flex items-center gap-3">
-        <Link to="/" className="flex items-center gap-2 cursor-pointer group">
-          <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
-            <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-              <div className="w-4 h-4 bg-orange-500 rounded-full relative">
-                <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 bg-white rounded-full"></div>
-                <div className="absolute bottom-0.5 right-0.5 w-1 h-1 bg-white rounded-full"></div>
-              </div>
-            </div>
-          </div>
+        <Link to="/" className="flex items-center gap-4 cursor-pointer group">
+          <img src={logoAssetUrl} alt="Logo" className="h-10 w-10 scale-175" />
           <span className="text-xl font-semibold text-white">Greenbook</span>
         </Link>
       </div>
