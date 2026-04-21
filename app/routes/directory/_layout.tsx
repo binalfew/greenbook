@@ -5,6 +5,7 @@ import { LanguageSwitcher } from "~/components/language-switcher";
 import { cn } from "~/utils/misc";
 import { getLangFromRequest } from "~/utils/i18n-cookie.server";
 import { PUBLIC_CACHE_HEADER } from "~/utils/public-directory.server";
+import { resolveBrandTheme } from "~/utils/theme.server";
 import type { Route } from "./+types/_layout";
 
 // Public cross-tenant directory chrome. No tenant slug in the URL, no
@@ -15,7 +16,8 @@ export const handle = { i18n: "directory-public" };
 
 export async function loader({ request }: Route.LoaderArgs) {
   const lang = getLangFromRequest(request) ?? "en";
-  return data({ lang }, { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } });
+  const brandTheme = await resolveBrandTheme(request);
+  return data({ lang, brandTheme }, { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } });
 }
 
 export function headers() {

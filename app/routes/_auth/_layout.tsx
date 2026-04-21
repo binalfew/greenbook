@@ -1,17 +1,21 @@
 import { Outlet } from "react-router";
 import { BrandedPanel, RightPanel } from "~/components/auth/auth-layout";
 import { getLangFromRequest } from "~/utils/i18n-cookie.server";
+import { resolveBrandTheme } from "~/utils/theme.server";
 import type { Route } from "./+types/_layout";
 
 /**
  * Auth group layout — renders a branded left panel + form-hosting right panel
  * for every `_auth/*` route (login, signup, forgot-password, 2fa-*, etc.).
  * Reads the language cookie so the in-panel language switcher defaults to the
- * right locale before the user has a tenant session.
+ * right locale before the user has a tenant session. Resolves the brand
+ * theme from the last-visited tenant so auth pages inherit the tenant's
+ * `data-brand` look.
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const currentLanguage = getLangFromRequest(request) ?? "en";
-  return { currentLanguage };
+  const brandTheme = await resolveBrandTheme(request);
+  return { currentLanguage, brandTheme };
 }
 
 export default function AuthLayout({ loaderData }: Route.ComponentProps) {

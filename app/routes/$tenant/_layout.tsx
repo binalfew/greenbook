@@ -11,7 +11,7 @@ import { getUnreadCount, listNotifications } from "~/services/notifications.serv
 import { resolveTenant } from "~/utils/tenant.server";
 import { getSidebarState, getSidebarGroupState } from "~/utils/sidebar.server";
 import { getLayoutMode } from "~/utils/layout-mode.server";
-import { getTheme } from "~/utils/theme.server";
+import { brandCookie, getTheme } from "~/utils/theme.server";
 import type { Route } from "./+types/_layout";
 
 export const handle = { breadcrumb: "Home" };
@@ -82,37 +82,44 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     shipped.includes(c as (typeof shipped)[number]),
   );
 
-  return data({
-    tenant: {
-      id: tenant.id,
-      name: tenant.name,
-      slug: tenant.slug,
-      logoUrl: tenant.logoUrl,
-      brandTheme: tenant.brandTheme,
-      subscriptionPlan: tenant.subscriptionPlan,
+  // Remember this tenant's slug so auth + public pages can pick up the
+  // same brand theme. Refreshed on every tenant visit.
+  const setBrandCookie = await brandCookie.serialize(tenant.slug);
+
+  return data(
+    {
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        logoUrl: tenant.logoUrl,
+        brandTheme: tenant.brandTheme,
+        subscriptionPlan: tenant.subscriptionPlan,
+      },
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+      roles: user.roles.map((r) => r.name),
+      permissions: user.permissions.map((p) => ({ resource: p.resource, action: p.action })),
+      isGlobalAdmin,
+      enabledFeatures,
+      currentLanguage,
+      allowedLanguages,
+      notifications: {
+        enabled: notificationsEnabled,
+        unreadCount,
+        recent: recentNotifications,
+      },
+      theme: getTheme(request),
+      sidebarOpen: getSidebarState(request),
+      sidebarGroups: getSidebarGroupState(request),
+      layoutMode: getLayoutMode(request),
     },
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    },
-    roles: user.roles.map((r) => r.name),
-    permissions: user.permissions.map((p) => ({ resource: p.resource, action: p.action })),
-    isGlobalAdmin,
-    enabledFeatures,
-    currentLanguage,
-    allowedLanguages,
-    notifications: {
-      enabled: notificationsEnabled,
-      unreadCount,
-      recent: recentNotifications,
-    },
-    theme: getTheme(request),
-    sidebarOpen: getSidebarState(request),
-    sidebarGroups: getSidebarGroupState(request),
-    layoutMode: getLayoutMode(request),
-  });
+    { headers: { "Set-Cookie": setBrandCookie } },
+  );
 }
 
 export default function TenantLayout({ loaderData }: Route.ComponentProps) {
