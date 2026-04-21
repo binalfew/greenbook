@@ -20,9 +20,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const pageSize = Math.max(1, Number(url.searchParams.get("pageSize")) || 25);
   const status = url.searchParams.get("status") || "";
+  const q = url.searchParams.get("q")?.trim() || "";
 
   const result = await listMyChanges(tenantId, user.id, {
-    where: { ...(status ? { status } : {}) },
+    where: {
+      ...(status ? { status } : {}),
+      ...(q ? { search: q } : {}),
+    },
     page,
     pageSize,
   });
@@ -74,6 +78,7 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
         data={changes}
         columns={columns}
         rowKey="id"
+        searchConfig={{ placeholder: t("changes.searchPlaceholder") }}
         filters={filters}
         pagination={pagination}
         emptyState={{

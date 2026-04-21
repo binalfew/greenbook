@@ -12,7 +12,29 @@ import {
   type ChangeOperationKey,
   type DirectoryEntityKey,
 } from "~/utils/schemas/directory";
+import { normaliseSearchTerm } from "~/utils/db/search.server";
 import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
+
+// Build a Prisma where-fragment that matches the search term against a
+// change-request's submittedBy / reviewedBy user fields plus an exact
+// `entityId` match. Used by all three list helpers (pending / mine /
+// history) so the DataTable search box behaves consistently.
+function buildChangeSearchFilter(raw: unknown): Prisma.ChangeRequestWhereInput {
+  const term = normaliseSearchTerm(raw);
+  if (!term) return {};
+  const mode = "insensitive" as const;
+  return {
+    OR: [
+      { entityId: term },
+      { submittedBy: { firstName: { contains: term, mode } } },
+      { submittedBy: { lastName: { contains: term, mode } } },
+      { submittedBy: { email: { contains: term, mode } } },
+      { reviewedBy: { firstName: { contains: term, mode } } },
+      { reviewedBy: { lastName: { contains: term, mode } } },
+      { reviewedBy: { email: { contains: term, mode } } },
+    ],
+  };
+}
 
 import {
   _applyCreateOrg,
@@ -638,6 +660,7 @@ export async function listPendingChanges(tenantId: string, options: PaginatedQue
     status: "PENDING",
     ...(where.entityType ? { entityType: where.entityType as DirectoryEntityKey } : {}),
     ...(where.submittedById ? { submittedById: where.submittedById as string } : {}),
+    ...buildChangeSearchFilter(where.search),
   };
 
   const [data, total] = await Promise.all([
@@ -667,6 +690,7 @@ export async function listMyChanges(
     ...(where.status
       ? { status: where.status as "PENDING" | "APPROVED" | "REJECTED" | "WITHDRAWN" }
       : {}),
+    ...buildChangeSearchFilter(where.search),
   };
 
   const [data, total] = await Promise.all([
@@ -691,6 +715,7 @@ export async function listChangeHistory(tenantId: string, options: PaginatedQuer
     status: { in: ["APPROVED", "REJECTED", "WITHDRAWN"] },
     ...(where.entityType ? { entityType: where.entityType as DirectoryEntityKey } : {}),
     ...(where.entityId ? { entityId: where.entityId as string } : {}),
+    ...buildChangeSearchFilter(where.search),
   };
 
   const [data, total] = await Promise.all([

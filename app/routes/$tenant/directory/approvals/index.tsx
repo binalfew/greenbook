@@ -35,9 +35,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const pageSize = Math.max(1, Number(url.searchParams.get("pageSize")) || 25);
   const entityType = url.searchParams.get("entityType") || "";
+  const q = url.searchParams.get("q")?.trim() || "";
 
   const result = await listPendingChanges(tenantId, {
-    where: { ...(entityType ? { entityType } : {}) },
+    where: {
+      ...(entityType ? { entityType } : {}),
+      ...(q ? { search: q } : {}),
+    },
     page,
     pageSize,
   });
@@ -116,6 +120,7 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
         rowKey="id"
         selectable
         onSelectionChange={setSelectedIds}
+        searchConfig={{ placeholder: t("changes.searchPlaceholder") }}
         filters={filters}
         toolbarExtra={
           hasSelection ? (

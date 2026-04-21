@@ -185,7 +185,7 @@
     "mineSubtitle": "Track your pending, approved, rejected, and withdrawn change requests.",
     "historyTitle": "History",
     "historySubtitle": "Every approved, rejected, and withdrawn change request in this tenant.",
-    "searchPlaceholder": "Search submitter...",
+    "searchPlaceholder": "Search submitter, reviewer, or record ID…",
     "emptyPending": "No pending change requests.",
     "emptyPendingDescription": "Focal persons' submissions will appear here for review.",
     "emptyMine": "You haven't submitted any changes yet.",

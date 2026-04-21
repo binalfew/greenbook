@@ -19,9 +19,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const pageSize = Math.max(1, Number(url.searchParams.get("pageSize")) || 25);
   const entityType = url.searchParams.get("entityType") || "";
+  const q = url.searchParams.get("q")?.trim() || "";
 
   const result = await listChangeHistory(tenantId, {
-    where: { ...(entityType ? { entityType } : {}) },
+    where: {
+      ...(entityType ? { entityType } : {}),
+      ...(q ? { search: q } : {}),
+    },
     page,
     pageSize,
   });
@@ -74,6 +78,7 @@ export default function ChangeHistory({ loaderData, params }: Route.ComponentPro
         data={changes}
         columns={columns}
         rowKey="id"
+        searchConfig={{ placeholder: t("changes.searchPlaceholder") }}
         filters={filters}
         pagination={pagination}
         emptyState={{

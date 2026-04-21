@@ -185,7 +185,7 @@
     "mineSubtitle": "Suivez vos demandes de modification en attente, approuvées, rejetées et retirées.",
     "historyTitle": "Historique",
     "historySubtitle": "Toutes les demandes approuvées, rejetées ou retirées dans ce tenant.",
-    "searchPlaceholder": "Rechercher un soumissionnaire...",
+    "searchPlaceholder": "Rechercher un soumissionnaire, relecteur ou identifiant…",
     "emptyPending": "Aucune demande en attente.",
     "emptyPendingDescription": "Les soumissions des points focaux apparaîtront ici pour revue.",
     "emptyMine": "Vous n'avez soumis aucune modification.",
