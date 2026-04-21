@@ -17,6 +17,7 @@ import enSso from "~/locales/en/sso.json";
 import enPwa from "~/locales/en/pwa.json";
 import enNotes from "~/locales/en/notes.json";
 import enDirectory from "~/locales/en/directory.json";
+import enDirectoryPublic from "~/locales/en/directory-public.json";
 
 // French namespaces
 import frCommon from "~/locales/fr/common.json";
@@ -33,6 +34,7 @@ import frSso from "~/locales/fr/sso.json";
 import frPwa from "~/locales/fr/pwa.json";
 import frNotes from "~/locales/fr/notes.json";
 import frDirectory from "~/locales/fr/directory.json";
+import frDirectoryPublic from "~/locales/fr/directory-public.json";
 
 /**
  * Languages the template ships with. Add new entries here AND register the
@@ -73,6 +75,7 @@ const resources = {
     pwa: enPwa,
     notes: enNotes,
     directory: enDirectory,
+    "directory-public": enDirectoryPublic,
   },
   fr: {
     common: frCommon,
@@ -89,6 +92,7 @@ const resources = {
     pwa: frPwa,
     notes: frNotes,
     directory: frDirectory,
+    "directory-public": frDirectoryPublic,
   },
 };
 
@@ -107,6 +111,7 @@ export const NAMESPACES = [
   "pwa",
   "notes",
   "directory",
+  "directory-public",
 ] as const;
 
 let initialized = false;

@@ -1,0 +1,15 @@
+# Public directory aggregates approved records from participating bodies.
+# Admin surfaces under /login, /signup, and tenant-scoped paths stay out of
+# crawler indexes; the public directory is explicitly welcomed.
+
+User-agent: *
+Allow: /public/directory/
+Allow: /public/directory
+
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify
+Disallow: /accept-invite

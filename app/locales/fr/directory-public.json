@@ -1,0 +1,81 @@
+{
+  "siteTitle": "Répertoire de l'UA",
+  "siteTagline": "Organisations, personnes et postes à travers l'Union africaine.",
+  "home": "Accueil",
+  "organizations": "Organisations",
+  "people": "Personnes",
+  "search": "Rechercher",
+  "searchPlaceholder": "Rechercher des organisations, personnes, postes…",
+  "landing": {
+    "hero": "Le répertoire de l'Union africaine",
+    "heroDescription": "Parcourez la structure officielle de l'Union africaine — organes principaux, commissions, départements, bureaux — et les personnes qui y occupent des postes. Les dossiers approuvés de chaque organisme participant, tenus à jour par les équipes éditoriales de chaque entité.",
+    "browseOrgs": "Parcourir les organisations",
+    "browsePeople": "Parcourir les personnes",
+    "featuredOrgs": "Organes principaux",
+    "featuredOrgsEmpty": "Aucune organisation n'est encore répertoriée publiquement. Revenez bientôt.",
+    "subordinateCount_one": "{{count}} entité subordonnée",
+    "subordinateCount_other": "{{count}} entités subordonnées",
+    "emptyOverall": "Le répertoire public n'est pas encore disponible.",
+    "emptyOverallHelp": "Aucun organisme participant n'a adhéré au répertoire public à ce jour."
+  },
+  "organizationsPage": {
+    "title": "Organisations",
+    "subtitle": "Parcourez l'arborescence publiée des organes de l'Union africaine.",
+    "viewList": "Liste",
+    "viewTree": "Arbre",
+    "searchPlaceholder": "Filtrer les organisations…",
+    "empty": "Aucune organisation publique trouvée.",
+    "emptyHelp": "Essayez d'ajuster votre recherche ou revenez à la page d'accueil."
+  },
+  "peoplePage": {
+    "title": "Personnes",
+    "subtitle": "Individus occupant actuellement des postes au sein de l'Union africaine.",
+    "searchPlaceholder": "Rechercher par nom…",
+    "filterByMemberState": "Nationalité",
+    "filterByMemberStateAny": "Tous les États membres",
+    "empty": "Aucune personne ne correspond à cette recherche.",
+    "emptyHelp": "Essayez un autre nom ou réinitialisez les filtres.",
+    "currentPosition": "Actuellement",
+    "noCurrent": "Aucun poste actuel n'est listé publiquement.",
+    "page": "Page {{page}} sur {{total}}"
+  },
+  "personDetail": {
+    "notFound": "Ce profil n'est pas disponible.",
+    "notFoundHelp": "La personne n'est peut-être pas publiée ou a été retirée du répertoire public.",
+    "backToPeople": "Retour aux personnes",
+    "nationality": "Nationalité",
+    "languages": "Langues",
+    "biography": "Biographie",
+    "currentPositions": "Postes actuels",
+    "contact": "Contact",
+    "contactPrivate": "Les coordonnées ne sont pas publiques.",
+    "unknownNationality": "—"
+  },
+  "orgDetail": {
+    "notFound": "Cette organisation n'est pas disponible.",
+    "notFoundHelp": "L'organisation n'est peut-être pas publiée ou a été retirée du répertoire public.",
+    "backToOrgs": "Retour aux organisations",
+    "type": "Type",
+    "parent": "Organisation parente",
+    "established": "Fondée",
+    "mandate": "Mandat",
+    "contact": "Contact",
+    "positions": "Postes",
+    "positionsEmpty": "Aucun poste actif répertorié."
+  },
+  "positionDetail": {
+    "notFound": "Ce poste n'est pas disponible.",
+    "notFoundHelp": "Le poste n'est peut-être pas publié ou a été retiré du répertoire public.",
+    "backToOrgs": "Retour aux organisations",
+    "atOrganization": "À {{org}}",
+    "reportsTo": "Rattaché à",
+    "currentHolder": "Titulaire actuel",
+    "vacant": "Vacant",
+    "previousHolders": "Titulaires précédents",
+    "previousHoldersEmpty": "Aucun historique des titulaires précédents."
+  },
+  "footer": {
+    "copyright": "© {{year}} Union africaine. Les informations publiées peuvent être corrigées par les équipes éditoriales de chaque organisme participant.",
+    "robots": "Ce répertoire n'agrège que les dossiers publics approuvés."
+  }
+}

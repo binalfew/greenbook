@@ -1,0 +1,81 @@
+{
+  "siteTitle": "AU Directory",
+  "siteTagline": "Organizations, people, and positions across the African Union.",
+  "home": "Home",
+  "organizations": "Organizations",
+  "people": "People",
+  "search": "Search",
+  "searchPlaceholder": "Search organizations, people, positions…",
+  "landing": {
+    "hero": "The African Union Directory",
+    "heroDescription": "Browse the official structure of the African Union — principal organs, commissions, departments, offices — and the people who hold positions across them. Approved records from every participating body, kept up to date by each tenant's editorial team.",
+    "browseOrgs": "Browse organizations",
+    "browsePeople": "Browse people",
+    "featuredOrgs": "Principal organs",
+    "featuredOrgsEmpty": "No organizations are publicly listed yet. Check back soon.",
+    "subordinateCount_one": "{{count}} subordinate",
+    "subordinateCount_other": "{{count}} subordinates",
+    "emptyOverall": "The public directory is not yet available.",
+    "emptyOverallHelp": "No participating bodies have opted into the public directory at this time."
+  },
+  "organizationsPage": {
+    "title": "Organizations",
+    "subtitle": "Browse the published tree of African Union bodies.",
+    "viewList": "List",
+    "viewTree": "Tree",
+    "searchPlaceholder": "Filter organizations…",
+    "empty": "No public organizations found.",
+    "emptyHelp": "Try adjusting your search, or return to the home page."
+  },
+  "peoplePage": {
+    "title": "People",
+    "subtitle": "Individuals currently holding positions across the African Union.",
+    "searchPlaceholder": "Search people by name…",
+    "filterByMemberState": "Nationality",
+    "filterByMemberStateAny": "All member states",
+    "empty": "No people match this search.",
+    "emptyHelp": "Try a different name or reset the filters.",
+    "currentPosition": "Currently",
+    "noCurrent": "No current position listed publicly.",
+    "page": "Page {{page}} of {{total}}"
+  },
+  "personDetail": {
+    "notFound": "This profile is not available.",
+    "notFoundHelp": "The person may not be published or may have been removed from the public directory.",
+    "backToPeople": "Back to people",
+    "nationality": "Nationality",
+    "languages": "Languages",
+    "biography": "Biography",
+    "currentPositions": "Current positions",
+    "contact": "Contact",
+    "contactPrivate": "Contact information is not public.",
+    "unknownNationality": "—"
+  },
+  "orgDetail": {
+    "notFound": "This organization is not available.",
+    "notFoundHelp": "The organization may not be published or may have been removed from the public directory.",
+    "backToOrgs": "Back to organizations",
+    "type": "Type",
+    "parent": "Parent",
+    "established": "Established",
+    "mandate": "Mandate",
+    "contact": "Contact",
+    "positions": "Positions",
+    "positionsEmpty": "No active positions listed."
+  },
+  "positionDetail": {
+    "notFound": "This position is not available.",
+    "notFoundHelp": "The position may not be published or may have been removed from the public directory.",
+    "backToOrgs": "Back to organizations",
+    "atOrganization": "At {{org}}",
+    "reportsTo": "Reports to",
+    "currentHolder": "Current holder",
+    "vacant": "Vacant",
+    "previousHolders": "Previous holders",
+    "previousHoldersEmpty": "No recorded history of previous holders."
+  },
+  "footer": {
+    "copyright": "© {{year}} African Union. Published information may be corrected by each participating body's editorial team.",
+    "robots": "This directory aggregates approved, public records only."
+  }
+}

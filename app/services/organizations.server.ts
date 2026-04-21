@@ -481,6 +481,7 @@ export async function publicGetOrganization(id: string, publicTenantIds: string[
       positions: {
         where: { deletedAt: null, isActive: true },
         orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+        take: 50,
         select: { id: true, title: true, type: { select: { name: true } } },
       },
     },
