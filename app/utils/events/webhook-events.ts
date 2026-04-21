@@ -18,6 +18,22 @@ export const WEBHOOK_EVENTS = {
   "invitation.created": "An invitation has been sent",
   "invitation.accepted": "An invitation has been accepted",
   "invitation.revoked": "An invitation has been revoked",
+  "organization.created": "A directory organization has been created",
+  "organization.updated": "A directory organization has been updated",
+  "organization.deleted": "A directory organization has been deleted",
+  "organization.moved": "A directory organization has been reparented",
+  "person.created": "A directory person record has been created",
+  "person.updated": "A directory person record has been updated",
+  "person.deleted": "A directory person record has been deleted",
+  "position.created": "A directory position has been created",
+  "position.updated": "A directory position has been updated",
+  "position.deleted": "A directory position has been deleted",
+  "position.assigned": "A person has been assigned to a position",
+  "position.ended": "A position assignment has been ended",
+  "change.submitted": "A directory change request has been submitted for review",
+  "change.approved": "A directory change request has been approved and applied",
+  "change.rejected": "A directory change request has been rejected",
+  "change.withdrawn": "A directory change request has been withdrawn by its submitter",
 } as const;
 
 export type WebhookEventType = keyof typeof WEBHOOK_EVENTS;

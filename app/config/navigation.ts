@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, FileText, ClipboardList, Bell } from "lucide-react";
+import { LayoutDashboard, FileText, ClipboardList, Bell, Network } from "lucide-react";
 
 export type Permission = { resource: string; action: string };
 
@@ -71,6 +71,48 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           url: basePrefix,
           icon: LayoutDashboard,
           end: true,
+        },
+        {
+          title: "Directory",
+          tKey: "directory",
+          description: "AU organizations, people, and the positions that connect them.",
+          url: `${basePrefix}/directory`,
+          icon: Network,
+          featureFlag: "FF_DIRECTORY",
+          children: [
+            {
+              title: "Organizations",
+              tKey: "orgs",
+              url: `${basePrefix}/directory/organizations`,
+              featureFlag: "FF_DIRECTORY",
+            },
+            {
+              title: "People",
+              tKey: "people",
+              url: `${basePrefix}/directory/people`,
+              featureFlag: "FF_DIRECTORY",
+            },
+            {
+              title: "Positions",
+              tKey: "positions",
+              url: `${basePrefix}/directory/positions`,
+              featureFlag: "FF_DIRECTORY",
+            },
+            {
+              title: "Approvals",
+              tKey: "approvals",
+              url: `${basePrefix}/directory/changes`,
+              featureFlag: "FF_DIRECTORY",
+              permission: "directory-change:read-all",
+            },
+            {
+              title: "My submissions",
+              tKey: "mySubs",
+              url: `${basePrefix}/directory/changes/mine`,
+              featureFlag: "FF_DIRECTORY",
+              permission: "directory-change:submit",
+            },
+          ],
         },
         {
           title: "Notes",

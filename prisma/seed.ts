@@ -65,6 +65,25 @@ const UNIQUE_PERMISSIONS = [
   { resource: "note", action: "delete", module: "content", description: "Delete notes" },
   { resource: "two-factor", action: "read", module: "auth", description: "Read 2FA enforcement policy" },
   { resource: "two-factor", action: "update", module: "auth", description: "Update 2FA enforcement policy" },
+  // Directory — focal_person authors submissions, manager reviews
+  { resource: "organization", action: "read", module: "directory", description: "Read organizations" },
+  { resource: "organization", action: "write", module: "directory", description: "Create or edit organizations (via approval)" },
+  { resource: "organization", action: "delete", module: "directory", description: "Delete organizations (via approval)" },
+  { resource: "person", action: "read", module: "directory", description: "Read people" },
+  { resource: "person", action: "write", module: "directory", description: "Create or edit people (via approval)" },
+  { resource: "person", action: "delete", module: "directory", description: "Delete people (via approval)" },
+  { resource: "position", action: "read", module: "directory", description: "Read positions" },
+  { resource: "position", action: "write", module: "directory", description: "Create or edit positions (via approval)" },
+  { resource: "position", action: "delete", module: "directory", description: "Delete positions (via approval)" },
+  { resource: "position-assignment", action: "read", module: "directory", description: "Read position assignments" },
+  { resource: "position-assignment", action: "write", module: "directory", description: "Create or edit position assignments (via approval)" },
+  { resource: "position-assignment", action: "delete", module: "directory", description: "Delete position assignments (via approval)" },
+  { resource: "directory-change", action: "submit", module: "directory", description: "Submit directory change requests" },
+  { resource: "directory-change", action: "withdraw-own", module: "directory", description: "Withdraw own pending submissions" },
+  { resource: "directory-change", action: "read-own", module: "directory", description: "Read own submissions" },
+  { resource: "directory-change", action: "read-all", module: "directory", description: "Read every submission in the tenant" },
+  { resource: "directory-change", action: "approve", module: "directory", description: "Approve directory change requests" },
+  { resource: "directory-change", action: "reject", module: "directory", description: "Reject directory change requests" },
 ];
 
 async function main() {
@@ -108,21 +127,26 @@ async function main() {
     },
   });
 
-  // Create system tenant
-  console.log("Creating system tenant...");
-  const tenant = await prisma.tenant.upsert({
-    where: { name: "System" },
-    update: {},
-    create: {
-      name: "System",
-      slug: "system",
-      email: "system@template.local",
-      phone: "+0000000000",
-      city: "—",
-      state: "—",
-      address: "—",
-    },
+  // Resolve or create the default tenant. Prefer a tenant that already
+  // owns slug "system" (including forks that renamed the default), falling
+  // back to creating a fresh "System" tenant on a clean database.
+  console.log("Resolving default tenant...");
+  const existingTenant = await prisma.tenant.findFirst({
+    where: { slug: "system", deletedAt: null },
   });
+  const tenant =
+    existingTenant ??
+    (await prisma.tenant.create({
+      data: {
+        name: "System",
+        slug: "system",
+        email: "system@template.local",
+        phone: "+0000000000",
+        city: "—",
+        state: "—",
+        address: "—",
+      },
+    }));
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -184,6 +208,77 @@ async function main() {
     await prisma.rolePermission.create({
       data: { roleId: adminRole.id, permissionId: perm.id, access: "any" },
     });
+  }
+
+  // Directory roles — focal_person (authors submissions) + manager (reviewer)
+  console.log("Seeding directory roles...");
+  const focalPersonRole = await prisma.role.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: "focal_person" } },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      name: "focal_person",
+      scope: "TENANT",
+      description: "Authors directory submissions; cannot approve",
+    },
+  });
+  const managerRole = await prisma.role.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: "manager" } },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      name: "manager",
+      scope: "TENANT",
+      description: "Reviews + approves directory submissions; can self-approve direct edits",
+    },
+  });
+
+  const focalPersonPerms = [
+    { resource: "organization", action: "read" },
+    { resource: "person", action: "read" },
+    { resource: "position", action: "read" },
+    { resource: "position-assignment", action: "read" },
+    { resource: "directory-change", action: "submit" },
+    { resource: "directory-change", action: "withdraw-own" },
+    { resource: "directory-change", action: "read-own" },
+  ];
+  const managerPerms = [
+    ...focalPersonPerms,
+    { resource: "organization", action: "write" },
+    { resource: "organization", action: "delete" },
+    { resource: "person", action: "write" },
+    { resource: "person", action: "delete" },
+    { resource: "position", action: "write" },
+    { resource: "position", action: "delete" },
+    { resource: "position-assignment", action: "write" },
+    { resource: "position-assignment", action: "delete" },
+    { resource: "directory-change", action: "read-all" },
+    { resource: "directory-change", action: "approve" },
+    { resource: "directory-change", action: "reject" },
+  ];
+
+  await prisma.rolePermission.deleteMany({ where: { roleId: focalPersonRole.id } });
+  for (const { resource, action } of focalPersonPerms) {
+    const perm = await prisma.permission.findUnique({
+      where: { resource_action: { resource, action } },
+    });
+    if (perm) {
+      await prisma.rolePermission.create({
+        data: { roleId: focalPersonRole.id, permissionId: perm.id, access: "any" },
+      });
+    }
+  }
+
+  await prisma.rolePermission.deleteMany({ where: { roleId: managerRole.id } });
+  for (const { resource, action } of managerPerms) {
+    const perm = await prisma.permission.findUnique({
+      where: { resource_action: { resource, action } },
+    });
+    if (perm) {
+      await prisma.rolePermission.create({
+        data: { roleId: managerRole.id, permissionId: perm.id, access: "any" },
+      });
+    }
   }
 
   // Create admin user
@@ -271,6 +366,19 @@ async function main() {
       enabled: true,
       description: "Notes demo entity — living documentation of every template pattern",
     },
+    {
+      key: "FF_DIRECTORY",
+      scope: "tenant",
+      enabled: true,
+      description: "AU Directory (Organizations, People, Positions, Assignments) admin surface",
+    },
+    {
+      key: "FF_PUBLIC_DIRECTORY",
+      scope: "tenant",
+      enabled: true,
+      description:
+        "Opt-in: tenant contributes approved records to the cross-tenant public directory at /public/directory",
+    },
   ];
   for (const f of DEFAULT_FLAGS) {
     await prisma.featureFlag.upsert({
@@ -283,14 +391,30 @@ async function main() {
     where: { key: { notIn: DEFAULT_FLAGS.map((f) => f.key) } },
   });
 
+  // Opt the system tenant into the cross-tenant public directory by default
+  // (per-tenant flag stores the tenant id in `enabledForTenants`).
+  await prisma.featureFlag.update({
+    where: { key: "FF_PUBLIC_DIRECTORY" },
+    data: {
+      enabledForTenants: { set: [tenant.id] },
+    },
+  });
+
   // Seed default reference data for the system tenant.
   console.log("Seeding default reference data...");
   await seedReferenceData(tenant.id);
 
+  // Seed directory baseline for the system tenant: org types, position
+  // types, regions, member states, starter org tree, demo focal/manager users.
+  console.log("Seeding directory baseline...");
+  await seedDirectory(tenant.id, { activeStatusId: activeStatus.id, focalRoleId: focalPersonRole.id, managerRoleId: managerRole.id });
+
   console.log("✅ Seeding completed!");
   console.log("🔑 Users created:");
-  console.log("   Admin: admin@example.com / admin123");
-  console.log("   User:  user@example.com / user123");
+  console.log("   Admin:        admin@example.com / admin123");
+  console.log("   User:         user@example.com / user123");
+  console.log("   Focal person: focal@example.com / focal123");
+  console.log("   Manager:      manager@example.com / manager123");
 }
 
 /**
@@ -368,6 +492,297 @@ async function seedReferenceData(tenantId: string) {
 
 /** Exported for tenant-setup.server.ts to copy defaults to new tenants. */
 export { seedReferenceData };
+
+// ─── Directory baseline ──────────────────────────────────────────────────
+
+const ORGANIZATION_TYPES = [
+  { code: "ROOT", name: "Root", level: 0, description: "Top-level tenant root (e.g., AU)" },
+  { code: "MAIN_ORGAN", name: "Main Organ", level: 1, description: "Principal organs of the AU" },
+  { code: "DEPARTMENT", name: "Department", level: 2 },
+  { code: "OFFICE", name: "Office", level: 3 },
+  { code: "UNIT", name: "Unit", level: 4 },
+];
+
+const POSITION_TYPES = [
+  { code: "CHAIRPERSON", name: "Chairperson", hierarchyLevel: 0 },
+  { code: "DEPUTY_CHAIRPERSON", name: "Deputy Chairperson", hierarchyLevel: 1 },
+  { code: "COMMISSIONER", name: "Commissioner", hierarchyLevel: 2 },
+  { code: "DIRECTOR", name: "Director", hierarchyLevel: 3 },
+  { code: "DEPUTY_DIRECTOR", name: "Deputy Director", hierarchyLevel: 4 },
+  { code: "HEAD_OF_UNIT", name: "Head of Unit", hierarchyLevel: 5 },
+  { code: "SENIOR_OFFICER", name: "Senior Officer", hierarchyLevel: 6 },
+  { code: "OFFICER", name: "Officer", hierarchyLevel: 7 },
+  { code: "ADMIN_STAFF", name: "Administrative Staff", hierarchyLevel: 8 },
+];
+
+const REGIONAL_GROUPS = [
+  { code: "CA", name: "Central Africa" },
+  { code: "EA", name: "Eastern Africa" },
+  { code: "NA", name: "Northern Africa" },
+  { code: "SA", name: "Southern Africa" },
+  { code: "WA", name: "Western Africa" },
+];
+
+// AU Member States — 55 countries with region assignments.
+// Source: African Union (member states at accession / charter).
+const MEMBER_STATES: Array<{
+  abbr: string;
+  name: string;
+  dateJoined: string;
+  regionCode: string;
+  active?: boolean;
+}> = [
+  { abbr: "DZA", name: "Algeria", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "AGO", name: "Angola", dateJoined: "1975-02-11", regionCode: "CA" },
+  { abbr: "BEN", name: "Benin", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "BWA", name: "Botswana", dateJoined: "1966-10-31", regionCode: "SA" },
+  { abbr: "BFA", name: "Burkina Faso", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "BDI", name: "Burundi", dateJoined: "1963-05-25", regionCode: "EA" },
+  { abbr: "CPV", name: "Cabo Verde", dateJoined: "1975-07-18", regionCode: "WA" },
+  { abbr: "CMR", name: "Cameroon", dateJoined: "1963-05-25", regionCode: "CA" },
+  { abbr: "CAF", name: "Central African Republic", dateJoined: "1963-05-25", regionCode: "CA" },
+  { abbr: "TCD", name: "Chad", dateJoined: "1963-05-25", regionCode: "CA" },
+  { abbr: "COM", name: "Comoros", dateJoined: "1975-07-18", regionCode: "EA" },
+  { abbr: "COG", name: "Congo", dateJoined: "1963-05-25", regionCode: "CA" },
+  { abbr: "COD", name: "Democratic Republic of the Congo", dateJoined: "1963-05-25", regionCode: "CA" },
+  { abbr: "CIV", name: "Côte d'Ivoire", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "DJI", name: "Djibouti", dateJoined: "1977-06-27", regionCode: "EA" },
+  { abbr: "EGY", name: "Egypt", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "GNQ", name: "Equatorial Guinea", dateJoined: "1968-10-12", regionCode: "CA" },
+  { abbr: "ERI", name: "Eritrea", dateJoined: "1993-05-24", regionCode: "EA" },
+  { abbr: "SWZ", name: "Eswatini", dateJoined: "1968-09-06", regionCode: "SA" },
+  { abbr: "ETH", name: "Ethiopia", dateJoined: "1963-05-25", regionCode: "EA" },
+  { abbr: "GAB", name: "Gabon", dateJoined: "1963-05-25", regionCode: "CA" },
+  { abbr: "GMB", name: "Gambia", dateJoined: "1965-02-18", regionCode: "WA" },
+  { abbr: "GHA", name: "Ghana", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "GIN", name: "Guinea", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "GNB", name: "Guinea-Bissau", dateJoined: "1974-09-19", regionCode: "WA" },
+  { abbr: "KEN", name: "Kenya", dateJoined: "1963-12-13", regionCode: "EA" },
+  { abbr: "LSO", name: "Lesotho", dateJoined: "1966-10-31", regionCode: "SA" },
+  { abbr: "LBR", name: "Liberia", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "LBY", name: "Libya", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "MDG", name: "Madagascar", dateJoined: "1963-05-25", regionCode: "EA" },
+  { abbr: "MWI", name: "Malawi", dateJoined: "1964-07-13", regionCode: "SA" },
+  { abbr: "MLI", name: "Mali", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "MRT", name: "Mauritania", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "MUS", name: "Mauritius", dateJoined: "1968-08-01", regionCode: "EA" },
+  { abbr: "MAR", name: "Morocco", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "MOZ", name: "Mozambique", dateJoined: "1975-07-18", regionCode: "SA" },
+  { abbr: "NAM", name: "Namibia", dateJoined: "1990-06-01", regionCode: "SA" },
+  { abbr: "NER", name: "Niger", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "NGA", name: "Nigeria", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "RWA", name: "Rwanda", dateJoined: "1963-05-25", regionCode: "EA" },
+  { abbr: "STP", name: "São Tomé and Príncipe", dateJoined: "1975-07-18", regionCode: "CA" },
+  { abbr: "SEN", name: "Senegal", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "SYC", name: "Seychelles", dateJoined: "1976-06-29", regionCode: "EA" },
+  { abbr: "SLE", name: "Sierra Leone", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "SOM", name: "Somalia", dateJoined: "1963-05-25", regionCode: "EA" },
+  { abbr: "ZAF", name: "South Africa", dateJoined: "1994-06-06", regionCode: "SA" },
+  { abbr: "SSD", name: "South Sudan", dateJoined: "2011-07-28", regionCode: "EA" },
+  { abbr: "SDN", name: "Sudan", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "TZA", name: "Tanzania", dateJoined: "1964-04-26", regionCode: "EA" },
+  { abbr: "TGO", name: "Togo", dateJoined: "1963-05-25", regionCode: "WA" },
+  { abbr: "TUN", name: "Tunisia", dateJoined: "1963-05-25", regionCode: "NA" },
+  { abbr: "UGA", name: "Uganda", dateJoined: "1963-05-25", regionCode: "EA" },
+  { abbr: "ZMB", name: "Zambia", dateJoined: "1964-10-24", regionCode: "SA" },
+  { abbr: "ZWE", name: "Zimbabwe", dateJoined: "1980-06-01", regionCode: "SA" },
+  { abbr: "ESH", name: "Sahrawi Arab Democratic Republic", dateJoined: "1982-02-22", regionCode: "NA" },
+];
+
+async function seedDirectory(
+  tenantId: string,
+  { activeStatusId, focalRoleId, managerRoleId }: {
+    activeStatusId: string;
+    focalRoleId: string;
+    managerRoleId: string;
+  },
+) {
+  for (const [i, t] of ORGANIZATION_TYPES.entries()) {
+    await prisma.organizationType.upsert({
+      where: { tenantId_code: { tenantId, code: t.code } },
+      update: { name: t.name, level: t.level, description: t.description ?? null, sortOrder: i },
+      create: { tenantId, sortOrder: i, ...t, description: t.description ?? null },
+    });
+  }
+  for (const t of POSITION_TYPES) {
+    await prisma.positionType.upsert({
+      where: { tenantId_code: { tenantId, code: t.code } },
+      update: { name: t.name, hierarchyLevel: t.hierarchyLevel },
+      create: { tenantId, ...t },
+    });
+  }
+
+  // Regions + member states (55 AU members)
+  const regionByCode: Record<string, string> = {};
+  for (const r of REGIONAL_GROUPS) {
+    const row = await prisma.regionalGroup.upsert({
+      where: { tenantId_code: { tenantId, code: r.code } },
+      update: { name: r.name },
+      create: { tenantId, code: r.code, name: r.name },
+    });
+    regionByCode[r.code] = row.id;
+  }
+  for (const m of MEMBER_STATES) {
+    const state = await prisma.memberState.upsert({
+      where: { tenantId_abbreviation: { tenantId, abbreviation: m.abbr } },
+      update: {
+        fullName: m.name,
+        dateJoined: new Date(m.dateJoined),
+        isActive: m.active ?? true,
+      },
+      create: {
+        tenantId,
+        fullName: m.name,
+        abbreviation: m.abbr,
+        dateJoined: new Date(m.dateJoined),
+        isActive: m.active ?? true,
+      },
+    });
+    const regionId = regionByCode[m.regionCode];
+    if (regionId) {
+      const existing = await prisma.memberStateRegion.findUnique({
+        where: {
+          memberStateId_regionalGroupId: {
+            memberStateId: state.id,
+            regionalGroupId: regionId,
+          },
+        },
+      });
+      if (!existing) {
+        await prisma.memberStateRegion.create({
+          data: { memberStateId: state.id, regionalGroupId: regionId },
+        });
+      }
+    }
+  }
+
+  // Starter org tree: AU (root) → Commission (main organ) → 3 sample
+  // departments / offices. Safe to re-run; keyed on (tenantId, name).
+  const rootType = await prisma.organizationType.findUniqueOrThrow({
+    where: { tenantId_code: { tenantId, code: "ROOT" } },
+  });
+  const mainOrganType = await prisma.organizationType.findUniqueOrThrow({
+    where: { tenantId_code: { tenantId, code: "MAIN_ORGAN" } },
+  });
+  const deptType = await prisma.organizationType.findUniqueOrThrow({
+    where: { tenantId_code: { tenantId, code: "DEPARTMENT" } },
+  });
+  const officeType = await prisma.organizationType.findUniqueOrThrow({
+    where: { tenantId_code: { tenantId, code: "OFFICE" } },
+  });
+
+  const au = await upsertOrg(tenantId, {
+    name: "African Union",
+    acronym: "AU",
+    typeId: rootType.id,
+    parentId: null,
+    sortOrder: 0,
+  });
+  const commission = await upsertOrg(tenantId, {
+    name: "African Union Commission",
+    acronym: "AUC",
+    typeId: mainOrganType.id,
+    parentId: au.id,
+    sortOrder: 0,
+  });
+  await upsertOrg(tenantId, {
+    name: "Office of the Chairperson",
+    acronym: "OOC",
+    typeId: officeType.id,
+    parentId: commission.id,
+    sortOrder: 0,
+  });
+  await upsertOrg(tenantId, {
+    name: "Office of the Deputy Chairperson",
+    acronym: "ODC",
+    typeId: officeType.id,
+    parentId: commission.id,
+    sortOrder: 1,
+  });
+  await upsertOrg(tenantId, {
+    name: "Department of Political Affairs, Peace and Security",
+    acronym: "PAPS",
+    typeId: deptType.id,
+    parentId: commission.id,
+    sortOrder: 2,
+  });
+  await upsertOrg(tenantId, {
+    name: "Department of Economic Development, Trade, Tourism, Industry and Mining",
+    acronym: "ETTIM",
+    typeId: deptType.id,
+    parentId: commission.id,
+    sortOrder: 3,
+  });
+
+  // Demo users: focal person + manager. Idempotent on email.
+  const focalPassword = await hash("focal123", 10);
+  await prisma.user.upsert({
+    where: { email: "focal@example.com" },
+    update: {},
+    create: {
+      email: "focal@example.com",
+      firstName: "Fola",
+      lastName: "Adeyemi",
+      tenantId,
+      userStatusId: activeStatusId,
+      userRoles: { create: { roleId: focalRoleId } },
+      password: { create: { hash: focalPassword } },
+    },
+  });
+  const managerPassword = await hash("manager123", 10);
+  await prisma.user.upsert({
+    where: { email: "manager@example.com" },
+    update: {},
+    create: {
+      email: "manager@example.com",
+      firstName: "Marta",
+      lastName: "Okonkwo",
+      tenantId,
+      userStatusId: activeStatusId,
+      userRoles: { create: { roleId: managerRoleId } },
+      password: { create: { hash: managerPassword } },
+    },
+  });
+}
+
+async function upsertOrg(
+  tenantId: string,
+  data: {
+    name: string;
+    acronym: string | null;
+    typeId: string;
+    parentId: string | null;
+    sortOrder: number;
+  },
+) {
+  const existing = await prisma.organization.findFirst({
+    where: { tenantId, name: data.name, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) {
+    return prisma.organization.update({
+      where: { id: existing.id },
+      data: {
+        acronym: data.acronym,
+        typeId: data.typeId,
+        parentId: data.parentId,
+        sortOrder: data.sortOrder,
+      },
+    });
+  }
+  return prisma.organization.create({
+    data: {
+      tenantId,
+      name: data.name,
+      acronym: data.acronym,
+      typeId: data.typeId,
+      parentId: data.parentId,
+      sortOrder: data.sortOrder,
+    },
+  });
+}
+
+export { seedDirectory };
 
 main()
   .catch((e) => {

@@ -54,16 +54,18 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  userRoles       UserRole[]
-  sessions        Session[]
-  password        Password?
-  recoveryCodes   RecoveryCode[]
-  passwordHistory PasswordHistory[]
-  invitationsSent Invitation[]
-  notifications   Notification[]
-  ssoConnections  SSOConnection[]
-  notesAuthored   Note[]            @relation("NoteAuthor")
-  noteComments    NoteComment[]
+  userRoles        UserRole[]
+  sessions         Session[]
+  password         Password?
+  recoveryCodes    RecoveryCode[]
+  passwordHistory  PasswordHistory[]
+  invitationsSent  Invitation[]
+  notifications    Notification[]
+  ssoConnections   SSOConnection[]
+  notesAuthored    Note[]            @relation("NoteAuthor")
+  noteComments     NoteComment[]
+  submittedChanges ChangeRequest[]   @relation("ChangeSubmitter")
+  reviewedChanges  ChangeRequest[]   @relation("ChangeReviewer")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -254,6 +256,15 @@ model Tenant {
   ssoConnections       SSOConnection[]
   notes                Note[]
   noteCategories       NoteCategory[]
+  organizations        Organization[]
+  organizationTypes    OrganizationType[]
+  people               Person[]
+  positions            Position[]
+  positionTypes        PositionType[]
+  positionAssignments  PositionAssignment[]
+  memberStates         MemberState[]
+  regionalGroups       RegionalGroup[]
+  changeRequests       ChangeRequest[]
 
   @@index([name])
   @@index([slug])
@@ -683,4 +694,294 @@ model NoteComment {
   @@index([noteId, createdAt])
   @@index([authorId])
   @@index([deletedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Directory subsystem — Organizations, People, Positions, Assignments
+// + editorial workflow (ChangeRequest). See
+// docs/plans/2026-04-21-organizations-people-directory.md.
+// ─────────────────────────────────────────────────────────────────────────
+
+model RegionalGroup {
+  id          String  @id @default(cuid())
+  tenantId    String
+  code        String  @db.VarChar(20)
+  name        String  @db.VarChar(100)
+  description String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members MemberStateRegion[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([deletedAt])
+}
+
+model MemberState {
+  id             String   @id @default(cuid())
+  tenantId       String
+  fullName       String   @db.VarChar(255)
+  abbreviation   String   @db.VarChar(20)
+  dateJoined     DateTime @db.Date
+  isActive       Boolean  @default(true)
+  predecessorOrg String?  @db.VarChar(10) // OAU | AU
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  regions MemberStateRegion[]
+  people  Person[]
+
+  @@unique([tenantId, abbreviation])
+  @@index([tenantId])
+  @@index([fullName])
+  @@index([deletedAt])
+}
+
+model MemberStateRegion {
+  id              String @id @default(cuid())
+  memberStateId   String
+  regionalGroupId String
+
+  createdAt DateTime @default(now())
+
+  memberState   MemberState   @relation(fields: [memberStateId], references: [id], onDelete: Cascade)
+  regionalGroup RegionalGroup @relation(fields: [regionalGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([memberStateId, regionalGroupId])
+  @@index([regionalGroupId])
+}
+
+model OrganizationType {
+  id          String  @id @default(cuid())
+  tenantId    String
+  name        String  @db.VarChar(100)
+  code        String  @db.VarChar(50)
+  level       Int
+  description String?
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organizations Organization[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([deletedAt])
+}
+
+model Organization {
+  id                String    @id @default(cuid())
+  tenantId          String
+  name              String    @db.VarChar(255)
+  acronym           String?   @db.VarChar(50)
+  typeId            String
+  parentId          String?
+  description       String?   @db.Text
+  mandate           String?   @db.Text
+  establishmentDate DateTime? @db.Date
+  isActive          Boolean   @default(true)
+  website           String?   @db.VarChar(255)
+  email             String?   @db.VarChar(255)
+  phone             String?   @db.VarChar(50)
+  address           String?   @db.Text
+  sortOrder         Int       @default(0)
+  version           Int       @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      OrganizationType @relation(fields: [typeId], references: [id])
+  parent    Organization?    @relation("OrgTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Organization[]   @relation("OrgTree")
+  positions Position[]
+
+  @@index([tenantId])
+  @@index([tenantId, parentId])
+  @@index([tenantId, typeId])
+  @@index([name])
+  @@index([acronym])
+  @@index([deletedAt])
+}
+
+model Person {
+  id            String   @id @default(cuid())
+  tenantId      String
+  firstName     String   @db.VarChar(100)
+  lastName      String   @db.VarChar(100)
+  honorific     String?  @db.VarChar(50)
+  email         String?  @db.VarChar(255)
+  phone         String?  @db.VarChar(50)
+  bio           String?  @db.Text
+  photoUrl      String?  @db.VarChar(500)
+  memberStateId String?
+  languages     String[]
+
+  // Contact-visibility opt-ins — public helpers only surface these when true.
+  showEmail Boolean @default(false)
+  showPhone Boolean @default(false)
+
+  version Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberState MemberState?         @relation(fields: [memberStateId], references: [id])
+  assignments PositionAssignment[]
+
+  @@index([tenantId])
+  @@index([tenantId, lastName, firstName])
+  @@index([tenantId, memberStateId])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+model PositionType {
+  id             String  @id @default(cuid())
+  tenantId       String
+  name           String  @db.VarChar(100)
+  code           String  @db.VarChar(50)
+  description    String?
+  hierarchyLevel Int?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  positions Position[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([deletedAt])
+}
+
+model Position {
+  id             String  @id @default(cuid())
+  tenantId       String
+  organizationId String
+  typeId         String
+  title          String  @db.VarChar(255)
+  reportsToId    String?
+  description    String? @db.Text
+  isActive       Boolean @default(true)
+  sortOrder      Int     @default(0)
+  version        Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type         PositionType         @relation(fields: [typeId], references: [id])
+  reportsTo    Position?            @relation("PositionReports", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports      Position[]           @relation("PositionReports")
+  assignments  PositionAssignment[]
+
+  @@index([tenantId])
+  @@index([tenantId, organizationId])
+  @@index([tenantId, typeId])
+  @@index([deletedAt])
+}
+
+model PositionAssignment {
+  id         String    @id @default(cuid())
+  tenantId   String
+  positionId String
+  personId   String
+  startDate  DateTime  @db.Date
+  endDate    DateTime? @db.Date
+  isCurrent  Boolean   @default(true)
+  notes      String?
+  version    Int       @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  person   Person   @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, positionId, isCurrent])
+  @@index([tenantId, personId])
+  @@index([tenantId, startDate])
+  @@index([deletedAt])
+}
+
+// ─── Editorial workflow ──────────────────────────────────────────────────
+
+enum ChangeOperation {
+  CREATE
+  UPDATE
+  DELETE
+  MOVE
+}
+
+enum ChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ApprovalMode {
+  REVIEWED
+  SELF_APPROVED
+}
+
+enum DirectoryEntity {
+  ORGANIZATION
+  PERSON
+  POSITION
+  POSITION_ASSIGNMENT
+}
+
+model ChangeRequest {
+  id            String          @id @default(cuid())
+  tenantId      String
+  entityType    DirectoryEntity
+  entityId      String?
+  operation     ChangeOperation
+  payload       Json
+  status        ChangeStatus    @default(PENDING)
+  approvalMode  ApprovalMode    @default(REVIEWED)
+  submittedById String
+  submittedAt   DateTime        @default(now())
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewerNotes String?         @db.Text
+  appliedAt     DateTime?
+  failureReason String?         @db.Text
+  clonedFromId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  submittedBy User            @relation("ChangeSubmitter", fields: [submittedById], references: [id])
+  reviewedBy  User?           @relation("ChangeReviewer", fields: [reviewedById], references: [id])
+  clonedFrom  ChangeRequest?  @relation("ChangeClone", fields: [clonedFromId], references: [id], onDelete: SetNull)
+  clones      ChangeRequest[] @relation("ChangeClone")
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, submittedById])
+  @@index([tenantId, status, submittedAt])
+  @@index([tenantId, status, reviewedAt])
 }

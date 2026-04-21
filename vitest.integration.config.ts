@@ -1,3 +1,4 @@
+import path from "node:path";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { defineConfig } from "vitest/config";
 
@@ -9,6 +10,11 @@ const testDbUrl =
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  resolve: {
+    alias: {
+      "~": path.resolve(__dirname, "app"),
+    },
+  },
   test: {
     include: ["tests/integration/**/*.{test,spec}.ts"],
     environment: "node",

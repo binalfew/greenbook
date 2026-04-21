@@ -15,6 +15,8 @@ export const FEATURE_FLAG_KEYS = {
   I18N: "FF_I18N",
   AUDIT_EXPORT: "FF_AUDIT_EXPORT",
   NOTES: "FF_NOTES",
+  DIRECTORY: "FF_DIRECTORY",
+  PUBLIC_DIRECTORY: "FF_PUBLIC_DIRECTORY",
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[keyof typeof FEATURE_FLAG_KEYS];

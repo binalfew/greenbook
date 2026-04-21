@@ -103,3 +103,9 @@ temp/
 prisma/migrations/
 /app/generated/prisma
 /prisma/seed.ts
+
+# React Router typegen output
+.react-router/
+
+# Playwright MCP session artifacts
+.playwright-mcp/

@@ -1,0 +1,297 @@
+{
+  "title": "Directory",
+  "subtitle": "Organizations, people, and the positions that connect them. Every change flows through the approval queue before it appears publicly.",
+  "tabs": {
+    "home": "Overview",
+    "organizations": "Organizations",
+    "people": "People",
+    "positions": "Positions",
+    "changes": "Approvals",
+    "mySubmissions": "My submissions"
+  },
+  "kpi": {
+    "organizations": "Organizations",
+    "people": "People",
+    "positions": "Positions",
+    "pendingChanges": "Pending review",
+    "mySubmissions": "My submissions"
+  },
+  "organizations": {
+    "title": "Organizations",
+    "title_one": "Organization",
+    "title_other": "Organizations",
+    "subtitle": "The org tree — AU, main organs, departments, offices, and units.",
+    "searchPlaceholder": "Search organizations...",
+    "emptyTitle": "No organizations yet",
+    "emptyDescription": "Submit the first organization to populate the tree.",
+    "new": "New organization",
+    "newSubtitle": "Submit a new organization for review.",
+    "edit": "Edit organization",
+    "editSubtitle": "Your edit will go to the approval queue before becoming public.",
+    "deleteTitle": "Delete this organization?",
+    "deleteDescription": "The organization will be soft-deleted after the change is approved. Children must be reparented first.",
+    "deleteButton": "Submit for deletion",
+    "deleteButtonDirect": "Delete now",
+    "deleteReasonLabel": "Reason (optional)",
+    "deleteBlockedChildren_one": "Cannot delete — {{count}} child organization must be reparented first.",
+    "deleteBlockedChildren_other": "Cannot delete — {{count}} child organizations must be reparented first.",
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "e.g. Department of Infrastructure and Energy",
+      "acronym": "Acronym",
+      "acronymPlaceholder": "e.g. DIE",
+      "type": "Type",
+      "typePlaceholder": "Select a type",
+      "parent": "Parent",
+      "parentPlaceholder": "Top-level (no parent)",
+      "description": "Description",
+      "mandate": "Mandate",
+      "establishmentDate": "Established",
+      "website": "Website",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address",
+      "isActive": "Active",
+      "sortOrder": "Sort order"
+    },
+    "cards": {
+      "basics": "Basics",
+      "contact": "Contact",
+      "metadata": "Metadata"
+    },
+    "tree": {
+      "title": "Organization tree",
+      "subtitle": "Read-only view of the current published hierarchy. Use the list view to submit changes.",
+      "subtitleManager": "Drag any organization onto another to reparent. Moves are applied immediately and recorded in the approval history.",
+      "viewList": "List view",
+      "viewTree": "Tree view"
+    }
+  },
+  "people": {
+    "title": "People",
+    "subtitle": "Individuals who hold positions across the Union.",
+    "searchPlaceholder": "Search people...",
+    "emptyTitle": "No people yet",
+    "emptyDescription": "Submit the first person record to populate the directory.",
+    "new": "New person",
+    "newSubtitle": "Submit a new person for review.",
+    "edit": "Edit person",
+    "editSubtitle": "Your edit will go to the approval queue before becoming public.",
+    "deleteTitle": "Delete this person?",
+    "deleteDescription": "The person record will be soft-deleted after approval. End their current assignments first.",
+    "deleteButton": "Submit for deletion",
+    "deleteButtonDirect": "Delete now",
+    "deleteReasonLabel": "Reason (optional)",
+    "deleteBlockedAssignments_one": "Cannot delete — {{count}} current assignment must be ended first.",
+    "deleteBlockedAssignments_other": "Cannot delete — {{count}} current assignments must be ended first.",
+    "fields": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "honorific": "Honorific",
+      "honorificPlaceholder": "H.E., Dr., Prof., …",
+      "email": "Email",
+      "phone": "Phone",
+      "bio": "Biography",
+      "photoUrl": "Photo URL",
+      "memberState": "Nationality",
+      "memberStatePlaceholder": "Select a member state",
+      "languages": "Languages",
+      "languagesHelp": "Comma-separated ISO codes (en, fr, am).",
+      "showEmail": "Show email publicly",
+      "showPhone": "Show phone publicly"
+    },
+    "cards": {
+      "basics": "Basics",
+      "contact": "Contact",
+      "assignments": "Positions held",
+      "metadata": "Metadata"
+    },
+    "currentPosition": "Current position",
+    "noCurrentAssignments": "Not currently holding a position.",
+    "visibility": {
+      "contactPublic": "Contact info public",
+      "contactPrivate": "Contact info hidden from public"
+    }
+  },
+  "positions": {
+    "title": "Positions",
+    "subtitle": "Formal posts inside an organization — who reports to whom and who currently holds them.",
+    "searchPlaceholder": "Search positions...",
+    "emptyTitle": "No positions yet",
+    "emptyDescription": "Submit the first position to populate the directory.",
+    "new": "New position",
+    "newSubtitle": "Submit a new position for review.",
+    "edit": "Edit position",
+    "editSubtitle": "Your edit will go to the approval queue before becoming public.",
+    "deleteTitle": "Delete this position?",
+    "deleteDescription": "The position will be soft-deleted after approval. End the current assignment first.",
+    "deleteButton": "Submit for deletion",
+    "deleteButtonDirect": "Delete now",
+    "deleteReasonLabel": "Reason (optional)",
+    "deleteBlockedAssignments_one": "Cannot delete — {{count}} current assignment must be ended first.",
+    "deleteBlockedAssignments_other": "Cannot delete — {{count}} current assignments must be ended first.",
+    "fields": {
+      "title": "Title",
+      "titlePlaceholder": "e.g. Director of Infrastructure",
+      "organization": "Organization",
+      "organizationPlaceholder": "Select an organization",
+      "type": "Type",
+      "typePlaceholder": "Select a position type",
+      "reportsTo": "Reports to",
+      "reportsToPlaceholder": "No direct supervisor",
+      "description": "Description",
+      "isActive": "Active",
+      "sortOrder": "Sort order"
+    },
+    "cards": {
+      "basics": "Basics",
+      "reporting": "Reporting",
+      "holders": "Holders",
+      "metadata": "Metadata"
+    },
+    "currentHolder": "Current holder",
+    "noCurrentHolder": "Vacant",
+    "directReports": "Direct reports"
+  },
+  "assignments": {
+    "assignPerson": "Assign person",
+    "assignSubtitle": "Create a new assignment. The current holder (if any) will be closed on approval.",
+    "endAssignment": "End assignment",
+    "endSubtitle": "Set the end date and optional notes. The position becomes vacant after approval.",
+    "fields": {
+      "person": "Person",
+      "personPlaceholder": "Select a person",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "notes": "Notes"
+    },
+    "timelineCurrent": "Current",
+    "timelineFrom": "From {{date}}",
+    "timelineUntil": "until {{date}}",
+    "timelinePresent": "present",
+    "empty": "No assignments yet."
+  },
+  "changes": {
+    "title": "Approvals queue",
+    "subtitle": "Review and publish directory changes submitted by focal persons.",
+    "mineTitle": "My submissions",
+    "mineSubtitle": "Track your pending, approved, rejected, and withdrawn change requests.",
+    "historyTitle": "History",
+    "historySubtitle": "Every approved, rejected, and withdrawn change request in this tenant.",
+    "searchPlaceholder": "Search submitter...",
+    "emptyPending": "No pending change requests.",
+    "emptyPendingDescription": "Focal persons' submissions will appear here for review.",
+    "emptyMine": "You haven't submitted any changes yet.",
+    "emptyMineDescription": "When you edit a record, your submission will appear here.",
+    "emptyHistory": "No change history yet.",
+    "emptyHistoryDescription": "Approved, rejected, and withdrawn submissions will appear here.",
+    "detailTitle": "Change request",
+    "detailSubtitle": "Review the proposed change before approving or rejecting.",
+    "beforeAfter": {
+      "title": "What will change",
+      "empty": "No field differences to show."
+    },
+    "columns": {
+      "entity": "Entity",
+      "operation": "Operation",
+      "submitter": "Submitter",
+      "submittedAt": "Submitted",
+      "reviewer": "Reviewer",
+      "reviewedAt": "Reviewed",
+      "notes": "Notes",
+      "status": "Status"
+    },
+    "entityLabel": {
+      "ORGANIZATION": "Organization",
+      "PERSON": "Person",
+      "POSITION": "Position",
+      "POSITION_ASSIGNMENT": "Assignment"
+    },
+    "operationLabel": {
+      "CREATE": "Create",
+      "UPDATE": "Update",
+      "DELETE": "Delete",
+      "MOVE": "Move"
+    },
+    "statusLabel": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "filters": {
+      "allEntities": "All entity types",
+      "allStatuses": "All statuses"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "withdraw": "Withdraw",
+      "viewEntity": "View current record",
+      "batchApprove": "Approve selected",
+      "batchReject": "Reject selected"
+    },
+    "approveDialog": {
+      "title": "Approve this change?",
+      "description": "The change will be applied immediately and appear on the public directory if this tenant contributes to it.",
+      "notesLabel": "Notes (optional)",
+      "confirm": "Approve"
+    },
+    "rejectDialog": {
+      "title": "Reject this change?",
+      "description": "The submitter will be notified. A reason is required.",
+      "notesLabel": "Reason",
+      "confirm": "Reject"
+    },
+    "withdrawDialog": {
+      "title": "Withdraw this submission?",
+      "description": "Only you can withdraw your own pending submissions.",
+      "confirm": "Withdraw"
+    },
+    "batchSummary": {
+      "approved_one": "Approved 1 change.",
+      "approved_other": "Approved {{count}} changes.",
+      "rejected_one": "Rejected 1 change.",
+      "rejected_other": "Rejected {{count}} changes.",
+      "failed_one": "{{count}} failed.",
+      "failed_other": "{{count}} failed.",
+      "skipped_one": "{{count}} skipped (no longer pending).",
+      "skipped_other": "{{count}} skipped (no longer pending)."
+    },
+    "selfApprovedTag": "Self-approved",
+    "reviewedBy": "Reviewed by {{name}} on {{date}}",
+    "submittedBy": "Submitted by {{name}} on {{date}}",
+    "approvalMode": "Approval mode",
+    "approvalModeLabel": {
+      "REVIEWED": "Reviewed",
+      "SELF_APPROVED": "Self-approved"
+    },
+    "metadata": "Metadata"
+  },
+  "actions": {
+    "submit": "Submit for review",
+    "submitAndApprove": "Save and publish",
+    "submitAndEdit": "Submit changes",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "back": "Back"
+  },
+  "submission": {
+    "createdSubmittedForReview": "Submitted for review",
+    "updatedSubmittedForReview": "Your edit was submitted for review",
+    "deletedSubmittedForReview": "Your delete request was submitted for review",
+    "createdPublished": "Created and published",
+    "updatedPublished": "Updated and published",
+    "deletedPublished": "Deleted"
+  },
+  "status": {
+    "published": "Published",
+    "pendingYours": "Pending your review",
+    "pendingOther": "Pending review",
+    "rejected": "Needs attention",
+    "withdrawn": "Withdrawn",
+    "inactive": "Inactive"
+  }
+}

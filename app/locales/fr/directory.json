@@ -1,0 +1,297 @@
+{
+  "title": "Répertoire",
+  "subtitle": "Organisations, personnes et postes qui les relient. Chaque modification passe par la file d'attente d'approbation avant d'apparaître publiquement.",
+  "tabs": {
+    "home": "Aperçu",
+    "organizations": "Organisations",
+    "people": "Personnes",
+    "positions": "Postes",
+    "changes": "Approbations",
+    "mySubmissions": "Mes soumissions"
+  },
+  "kpi": {
+    "organizations": "Organisations",
+    "people": "Personnes",
+    "positions": "Postes",
+    "pendingChanges": "En attente de revue",
+    "mySubmissions": "Mes soumissions"
+  },
+  "organizations": {
+    "title": "Organisations",
+    "title_one": "Organisation",
+    "title_other": "Organisations",
+    "subtitle": "L'arbre organisationnel — UA, organes principaux, départements, bureaux et unités.",
+    "searchPlaceholder": "Rechercher des organisations...",
+    "emptyTitle": "Aucune organisation",
+    "emptyDescription": "Soumettez la première organisation pour peupler l'arbre.",
+    "new": "Nouvelle organisation",
+    "newSubtitle": "Soumettez une nouvelle organisation pour revue.",
+    "edit": "Modifier l'organisation",
+    "editSubtitle": "Votre modification passera par la file d'approbation avant de devenir publique.",
+    "deleteTitle": "Supprimer cette organisation ?",
+    "deleteDescription": "L'organisation sera supprimée (soft-delete) après approbation. Les enfants doivent d'abord être réaffectés.",
+    "deleteButton": "Soumettre pour suppression",
+    "deleteButtonDirect": "Supprimer maintenant",
+    "deleteReasonLabel": "Motif (optionnel)",
+    "deleteBlockedChildren_one": "Impossible de supprimer — {{count}} organisation enfant doit d'abord être réaffectée.",
+    "deleteBlockedChildren_other": "Impossible de supprimer — {{count}} organisations enfants doivent d'abord être réaffectées.",
+    "fields": {
+      "name": "Nom",
+      "namePlaceholder": "ex. Département des infrastructures et de l'énergie",
+      "acronym": "Acronyme",
+      "acronymPlaceholder": "ex. DIE",
+      "type": "Type",
+      "typePlaceholder": "Sélectionner un type",
+      "parent": "Parent",
+      "parentPlaceholder": "Racine (pas de parent)",
+      "description": "Description",
+      "mandate": "Mandat",
+      "establishmentDate": "Créée le",
+      "website": "Site web",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "address": "Adresse",
+      "isActive": "Active",
+      "sortOrder": "Ordre de tri"
+    },
+    "cards": {
+      "basics": "Informations",
+      "contact": "Contact",
+      "metadata": "Métadonnées"
+    },
+    "tree": {
+      "title": "Arborescence des organisations",
+      "subtitle": "Vue en lecture seule de la hiérarchie publiée. Utilisez la vue en liste pour soumettre des modifications.",
+      "subtitleManager": "Glissez une organisation sur une autre pour la rattacher. Les déplacements sont appliqués immédiatement et consignés dans l'historique d'approbation.",
+      "viewList": "Vue en liste",
+      "viewTree": "Vue en arbre"
+    }
+  },
+  "people": {
+    "title": "Personnes",
+    "subtitle": "Individus occupant des postes dans l'Union.",
+    "searchPlaceholder": "Rechercher des personnes...",
+    "emptyTitle": "Aucune personne",
+    "emptyDescription": "Soumettez la première personne pour peupler le répertoire.",
+    "new": "Nouvelle personne",
+    "newSubtitle": "Soumettez une nouvelle personne pour revue.",
+    "edit": "Modifier la personne",
+    "editSubtitle": "Votre modification passera par la file d'approbation.",
+    "deleteTitle": "Supprimer cette personne ?",
+    "deleteDescription": "Le dossier sera supprimé (soft-delete) après approbation. Mettez fin aux affectations en cours avant.",
+    "deleteButton": "Soumettre pour suppression",
+    "deleteButtonDirect": "Supprimer maintenant",
+    "deleteReasonLabel": "Motif (optionnel)",
+    "deleteBlockedAssignments_one": "Impossible de supprimer — {{count}} affectation en cours doit être clôturée.",
+    "deleteBlockedAssignments_other": "Impossible de supprimer — {{count}} affectations en cours doivent être clôturées.",
+    "fields": {
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "honorific": "Titre honorifique",
+      "honorificPlaceholder": "S.E., Dr, Prof., …",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "bio": "Biographie",
+      "photoUrl": "URL de la photo",
+      "memberState": "Nationalité",
+      "memberStatePlaceholder": "Sélectionner un État membre",
+      "languages": "Langues",
+      "languagesHelp": "Codes ISO séparés par des virgules (en, fr, am).",
+      "showEmail": "Afficher l'e-mail publiquement",
+      "showPhone": "Afficher le téléphone publiquement"
+    },
+    "cards": {
+      "basics": "Informations",
+      "contact": "Contact",
+      "assignments": "Postes occupés",
+      "metadata": "Métadonnées"
+    },
+    "currentPosition": "Poste actuel",
+    "noCurrentAssignments": "Aucun poste actuel.",
+    "visibility": {
+      "contactPublic": "Contact visible publiquement",
+      "contactPrivate": "Contact masqué du public"
+    }
+  },
+  "positions": {
+    "title": "Postes",
+    "subtitle": "Postes formels dans une organisation — hiérarchie et titulaires actuels.",
+    "searchPlaceholder": "Rechercher des postes...",
+    "emptyTitle": "Aucun poste",
+    "emptyDescription": "Soumettez le premier poste pour peupler le répertoire.",
+    "new": "Nouveau poste",
+    "newSubtitle": "Soumettez un nouveau poste pour revue.",
+    "edit": "Modifier le poste",
+    "editSubtitle": "Votre modification passera par la file d'approbation.",
+    "deleteTitle": "Supprimer ce poste ?",
+    "deleteDescription": "Le poste sera supprimé (soft-delete) après approbation. Clôturez l'affectation en cours avant.",
+    "deleteButton": "Soumettre pour suppression",
+    "deleteButtonDirect": "Supprimer maintenant",
+    "deleteReasonLabel": "Motif (optionnel)",
+    "deleteBlockedAssignments_one": "Impossible de supprimer — {{count}} affectation en cours doit être clôturée.",
+    "deleteBlockedAssignments_other": "Impossible de supprimer — {{count}} affectations en cours doivent être clôturées.",
+    "fields": {
+      "title": "Titre",
+      "titlePlaceholder": "ex. Directeur des infrastructures",
+      "organization": "Organisation",
+      "organizationPlaceholder": "Sélectionner une organisation",
+      "type": "Type",
+      "typePlaceholder": "Sélectionner un type de poste",
+      "reportsTo": "Rattachement hiérarchique",
+      "reportsToPlaceholder": "Aucun supérieur direct",
+      "description": "Description",
+      "isActive": "Actif",
+      "sortOrder": "Ordre de tri"
+    },
+    "cards": {
+      "basics": "Informations",
+      "reporting": "Rattachement",
+      "holders": "Titulaires",
+      "metadata": "Métadonnées"
+    },
+    "currentHolder": "Titulaire actuel",
+    "noCurrentHolder": "Vacant",
+    "directReports": "Rapports directs"
+  },
+  "assignments": {
+    "assignPerson": "Affecter une personne",
+    "assignSubtitle": "Créer une nouvelle affectation. Le titulaire actuel (s'il existe) sera clôturé à l'approbation.",
+    "endAssignment": "Clôturer l'affectation",
+    "endSubtitle": "Définir la date de fin et les notes. Le poste devient vacant après approbation.",
+    "fields": {
+      "person": "Personne",
+      "personPlaceholder": "Sélectionner une personne",
+      "startDate": "Date de début",
+      "endDate": "Date de fin",
+      "notes": "Notes"
+    },
+    "timelineCurrent": "En cours",
+    "timelineFrom": "Depuis {{date}}",
+    "timelineUntil": "jusqu'au {{date}}",
+    "timelinePresent": "aujourd'hui",
+    "empty": "Aucune affectation."
+  },
+  "changes": {
+    "title": "File d'approbation",
+    "subtitle": "Examinez et publiez les modifications soumises par les points focaux.",
+    "mineTitle": "Mes soumissions",
+    "mineSubtitle": "Suivez vos demandes de modification en attente, approuvées, rejetées et retirées.",
+    "historyTitle": "Historique",
+    "historySubtitle": "Toutes les demandes approuvées, rejetées ou retirées dans ce tenant.",
+    "searchPlaceholder": "Rechercher un soumissionnaire...",
+    "emptyPending": "Aucune demande en attente.",
+    "emptyPendingDescription": "Les soumissions des points focaux apparaîtront ici pour revue.",
+    "emptyMine": "Vous n'avez soumis aucune modification.",
+    "emptyMineDescription": "Lorsque vous modifiez un enregistrement, votre soumission apparaîtra ici.",
+    "emptyHistory": "Aucun historique.",
+    "emptyHistoryDescription": "Les soumissions approuvées, rejetées et retirées apparaîtront ici.",
+    "detailTitle": "Demande de modification",
+    "detailSubtitle": "Examinez la modification proposée avant d'approuver ou de rejeter.",
+    "beforeAfter": {
+      "title": "Ce qui va changer",
+      "empty": "Aucune différence à afficher."
+    },
+    "columns": {
+      "entity": "Entité",
+      "operation": "Opération",
+      "submitter": "Soumissionnaire",
+      "submittedAt": "Soumis le",
+      "reviewer": "Relecteur",
+      "reviewedAt": "Revu le",
+      "notes": "Notes",
+      "status": "Statut"
+    },
+    "entityLabel": {
+      "ORGANIZATION": "Organisation",
+      "PERSON": "Personne",
+      "POSITION": "Poste",
+      "POSITION_ASSIGNMENT": "Affectation"
+    },
+    "operationLabel": {
+      "CREATE": "Créer",
+      "UPDATE": "Mettre à jour",
+      "DELETE": "Supprimer",
+      "MOVE": "Déplacer"
+    },
+    "statusLabel": {
+      "PENDING": "En attente",
+      "APPROVED": "Approuvé",
+      "REJECTED": "Rejeté",
+      "WITHDRAWN": "Retiré"
+    },
+    "filters": {
+      "allEntities": "Tous les types",
+      "allStatuses": "Tous les statuts"
+    },
+    "actions": {
+      "approve": "Approuver",
+      "reject": "Rejeter",
+      "withdraw": "Retirer",
+      "viewEntity": "Voir l'enregistrement actuel",
+      "batchApprove": "Approuver la sélection",
+      "batchReject": "Rejeter la sélection"
+    },
+    "approveDialog": {
+      "title": "Approuver cette modification ?",
+      "description": "La modification sera appliquée immédiatement et apparaîtra publiquement si ce tenant y contribue.",
+      "notesLabel": "Notes (optionnel)",
+      "confirm": "Approuver"
+    },
+    "rejectDialog": {
+      "title": "Rejeter cette modification ?",
+      "description": "Le soumissionnaire sera notifié. Un motif est requis.",
+      "notesLabel": "Motif",
+      "confirm": "Rejeter"
+    },
+    "withdrawDialog": {
+      "title": "Retirer cette soumission ?",
+      "description": "Seul le soumissionnaire peut retirer ses propres soumissions en attente.",
+      "confirm": "Retirer"
+    },
+    "batchSummary": {
+      "approved_one": "1 modification approuvée.",
+      "approved_other": "{{count}} modifications approuvées.",
+      "rejected_one": "1 modification rejetée.",
+      "rejected_other": "{{count}} modifications rejetées.",
+      "failed_one": "{{count}} échec.",
+      "failed_other": "{{count}} échecs.",
+      "skipped_one": "{{count}} ignorée (plus en attente).",
+      "skipped_other": "{{count}} ignorées (plus en attente)."
+    },
+    "selfApprovedTag": "Auto-approuvé",
+    "reviewedBy": "Revu par {{name}} le {{date}}",
+    "submittedBy": "Soumis par {{name}} le {{date}}",
+    "approvalMode": "Mode d'approbation",
+    "approvalModeLabel": {
+      "REVIEWED": "Revu",
+      "SELF_APPROVED": "Auto-approuvé"
+    },
+    "metadata": "Métadonnées"
+  },
+  "actions": {
+    "submit": "Soumettre pour revue",
+    "submitAndApprove": "Enregistrer et publier",
+    "submitAndEdit": "Soumettre les modifications",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "back": "Retour"
+  },
+  "submission": {
+    "createdSubmittedForReview": "Soumis pour revue",
+    "updatedSubmittedForReview": "Votre modification a été soumise pour revue",
+    "deletedSubmittedForReview": "Votre demande de suppression a été soumise",
+    "createdPublished": "Créé et publié",
+    "updatedPublished": "Mis à jour et publié",
+    "deletedPublished": "Supprimé"
+  },
+  "status": {
+    "published": "Publié",
+    "pendingYours": "En attente de votre revue",
+    "pendingOther": "En attente de revue",
+    "rejected": "Nécessite une action",
+    "withdrawn": "Retiré",
+    "inactive": "Inactive"
+  }
+}
