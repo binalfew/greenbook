@@ -391,13 +391,18 @@ async function main() {
     where: { key: { notIn: DEFAULT_FLAGS.map((f) => f.key) } },
   });
 
-  // Opt the system tenant into the cross-tenant public directory by default
-  // (per-tenant flag stores the tenant id in `enabledForTenants`).
+  // Tenant-scoped flags with `enabled: true` are off by default until a
+  // tenant is explicitly added to `enabledForTenants` (see evaluateFlag in
+  // feature-flags.server.ts). Opt the system tenant in so the demo users
+  // can actually reach the admin directory + public directory out of the
+  // box.
+  await prisma.featureFlag.update({
+    where: { key: "FF_DIRECTORY" },
+    data: { enabledForTenants: { set: [tenant.id] } },
+  });
   await prisma.featureFlag.update({
     where: { key: "FF_PUBLIC_DIRECTORY" },
-    data: {
-      enabledForTenants: { set: [tenant.id] },
-    },
+    data: { enabledForTenants: { set: [tenant.id] } },
   });
 
   // Seed default reference data for the system tenant.
