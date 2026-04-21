@@ -17,7 +17,7 @@ import {
   menuContentClass,
   useTreeActions,
 } from "~/components/hierarchy-tree";
-import type { HierarchyNode } from "~/components/hierarchy-tree";
+import type { HierarchyNode, HierarchyTreeProps } from "~/components/hierarchy-tree";
 
 // Consumer wrapper around the generic HierarchyTree for Organizations.
 //
@@ -122,12 +122,12 @@ function transformOrgNodes(
 
 function OrgNodeRenderer({ node, dragHandle, style }: NodeRendererProps<OrgNode>) {
   const navigate = useNavigate();
-  const { moveToRoot, readOnly, baseUrl } = useTreeActions();
+  const { moveToRoot, readOnly, baseUrl, placeholderLabel } = useTreeActions();
   const hasChildren = (node.children?.length ?? 0) > 0;
   const descendantCount = countDescendants(node.data);
 
   if (node.data.isPlaceholder) {
-    return <PlaceholderRow style={style} />;
+    return <PlaceholderRow style={style} label={placeholderLabel} />;
   }
 
   const content = (
@@ -271,6 +271,7 @@ export function OrganizationHierarchyTree({
   canMove,
   searchPlaceholder,
   emptyMessage,
+  labels,
 }: {
   roots: RawOrg[];
   baseUrl: string;
@@ -282,6 +283,8 @@ export function OrganizationHierarchyTree({
   canMove: boolean;
   searchPlaceholder?: string;
   emptyMessage?: string;
+  /** i18n'd toolbar + status labels passed through to HierarchyTree. */
+  labels?: HierarchyTreeProps<OrgNode>["labels"];
 }) {
   return (
     <HierarchyTree<OrgNode>
@@ -297,6 +300,7 @@ export function OrganizationHierarchyTree({
       moveIdField={canMove ? "organizationId" : undefined}
       moveParentField={canMove ? "parentId" : undefined}
       readOnly={!canMove}
+      labels={labels}
       renderBreadcrumb={(node, isLast) => (
         <span
           className={cn(

@@ -1,6 +1,7 @@
 import { ArrowLeft, Mail, Phone, User } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
+import { AssignmentTimeline } from "~/components/directory/assignment-timeline";
 import { PublicDetailNotFound } from "~/components/public/not-found";
 import { Badge } from "~/components/ui/badge";
 import { publicGetPerson } from "~/services/people.server";
@@ -88,29 +89,11 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
 
           <section>
             <h2 className="mb-2 text-sm font-semibold">{t("personDetail.currentPositions")}</h2>
-            {person.currentAssignments.length === 0 ? (
-              <p className="text-muted-foreground text-sm">{t("peoplePage.noCurrent")}</p>
-            ) : (
-              <ul className="divide-border divide-y rounded-md border">
-                {person.currentAssignments.map((a) => (
-                  <li key={a.positionId}>
-                    <Link
-                      to={`/public/directory/positions/${a.positionId}`}
-                      className="hover:bg-muted/60 flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <div className="text-sm font-medium">{a.positionTitle}</div>
-                        {a.organization && (
-                          <div className="text-muted-foreground text-xs">
-                            {a.organization.acronym ?? a.organization.name}
-                          </div>
-                        )}
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AssignmentTimeline
+              entries={person.history}
+              mode="byPerson"
+              basePrefix="/public/directory/positions"
+            />
           </section>
         </div>
 

@@ -64,7 +64,13 @@
       "subtitle": "Vue en lecture seule de la hiérarchie publiée. Utilisez la vue en liste pour soumettre des modifications.",
       "subtitleManager": "Glissez une organisation sur une autre pour la rattacher. Les déplacements sont appliqués immédiatement et consignés dans l'historique d'approbation.",
       "viewList": "Vue en liste",
-      "viewTree": "Vue en arbre"
+      "viewTree": "Vue en arbre",
+      "loadingChildren": "Chargement des éléments enfants…",
+      "expandAll": "Tout déplier",
+      "collapseAll": "Tout replier",
+      "moving": "Déplacement…",
+      "resultCount_one": "{{count}} résultat",
+      "resultCount_other": "{{count}} résultats"
     }
   },
   "people": {

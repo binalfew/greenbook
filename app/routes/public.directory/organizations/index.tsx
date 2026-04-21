@@ -55,6 +55,12 @@ export default function PublicOrganizationsIndex({ loaderData }: Route.Component
           canMove={false}
           searchPlaceholder={t("organizationsPage.searchPlaceholder")}
           emptyMessage={t("organizationsPage.emptyHelp")}
+          labels={{
+            expandAll: t("organizationsPage.expandAll"),
+            collapseAll: t("organizationsPage.collapseAll"),
+            placeholder: t("organizationsPage.loadingChildren"),
+            resultCount: (count) => t("organizationsPage.resultCount", { count }),
+          }}
         />
       )}
     </div>

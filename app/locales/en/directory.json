@@ -64,7 +64,13 @@
       "subtitle": "Read-only view of the current published hierarchy. Use the list view to submit changes.",
       "subtitleManager": "Drag any organization onto another to reparent. Moves are applied immediately and recorded in the approval history.",
       "viewList": "List view",
-      "viewTree": "Tree view"
+      "viewTree": "Tree view",
+      "loadingChildren": "Loading children…",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "moving": "Moving…",
+      "resultCount_one": "{{count}} result",
+      "resultCount_other": "{{count}} results"
     }
   },
   "people": {

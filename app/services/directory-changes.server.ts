@@ -4,6 +4,10 @@ import { prisma } from "~/utils/db/db.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { logger } from "~/utils/monitoring/logger.server";
 import {
+  notifyManagersOfSubmission,
+  notifySubmitterOfDecision,
+} from "~/services/directory-notifications.server";
+import {
   payloadSchemaFor,
   type ChangeOperationKey,
   type DirectoryEntityKey,
@@ -177,6 +181,8 @@ export async function submitChange(input: SubmitInput, ctx: TenantServiceContext
     submittedById: change.submittedById,
   });
 
+  await notifyManagersOfSubmission(change, change.submittedBy);
+
   return change;
 }
 
@@ -346,6 +352,15 @@ export async function approveChange(
     },
   });
 
+  if (result.change.reviewedBy) {
+    await notifySubmitterOfDecision(
+      result.change,
+      "APPROVED",
+      result.change.reviewedBy,
+      notes ?? null,
+    );
+  }
+
   return result;
 }
 
@@ -401,6 +416,10 @@ export async function rejectChange(
     description: `Rejected ${updated.operation} ${updated.entityType}`,
     metadata: { reason: notes },
   });
+
+  if (updated.reviewedBy) {
+    await notifySubmitterOfDecision(updated, "REJECTED", updated.reviewedBy, notes);
+  }
 
   return updated;
 }
@@ -747,7 +766,135 @@ export async function computeDiff(change: ChangeRequest): Promise<FieldDiff[]> {
       diffs.push({ field, before: before ?? null, after });
     }
   }
+
+  // Hydrate cuid references to their human-readable names so the approval
+  // UI shows "Department of Infrastructure" instead of a raw cuid. Keeps
+  // the `field` name unchanged so consumers still dispatch per-field;
+  // only the before/after values swap to display strings.
+  await hydrateReferenceIds(change.entityType as DirectoryEntityKey, diffs, change.tenantId);
+
   return diffs;
+}
+
+// Fields whose values are cuid references to another entity we can resolve
+// to a display name. Keyed by entityType so we only run the lookups we need.
+const REFERENCE_FIELDS: Partial<Record<DirectoryEntityKey, string[]>> = {
+  ORGANIZATION: ["parentId", "typeId"],
+  PERSON: ["memberStateId"],
+  POSITION: ["organizationId", "typeId", "reportsToId"],
+  POSITION_ASSIGNMENT: ["personId", "positionId"],
+};
+
+async function hydrateReferenceIds(
+  entityType: DirectoryEntityKey,
+  diffs: FieldDiff[],
+  tenantId: string,
+): Promise<void> {
+  const refFields = REFERENCE_FIELDS[entityType];
+  if (!refFields || refFields.length === 0) return;
+
+  // Collect every cuid that shows up in a reference field's before/after.
+  const idsByResolver: Record<string, Set<string>> = {};
+  function record(resolver: string, id: unknown) {
+    if (typeof id !== "string" || !id) return;
+    (idsByResolver[resolver] ??= new Set()).add(id);
+  }
+
+  for (const diff of diffs) {
+    if (!refFields.includes(diff.field)) continue;
+    const resolver = resolverFor(entityType, diff.field);
+    if (!resolver) continue;
+    record(resolver, diff.before);
+    record(resolver, diff.after);
+  }
+
+  const names: Record<string, Record<string, string>> = {};
+  await Promise.all(
+    Object.entries(idsByResolver).map(async ([resolver, ids]) => {
+      const resolved = await resolveNames(resolver, [...ids], tenantId);
+      names[resolver] = resolved;
+    }),
+  );
+
+  for (const diff of diffs) {
+    if (!refFields.includes(diff.field)) continue;
+    const resolver = resolverFor(entityType, diff.field);
+    if (!resolver) continue;
+    const lookup = names[resolver] ?? {};
+    diff.before =
+      typeof diff.before === "string" ? (lookup[diff.before] ?? diff.before) : diff.before;
+    diff.after = typeof diff.after === "string" ? (lookup[diff.after] ?? diff.after) : diff.after;
+  }
+}
+
+function resolverFor(entityType: DirectoryEntityKey, field: string): string | null {
+  if (entityType === "ORGANIZATION" && field === "parentId") return "organization";
+  if (entityType === "ORGANIZATION" && field === "typeId") return "organizationType";
+  if (entityType === "PERSON" && field === "memberStateId") return "memberState";
+  if (entityType === "POSITION" && field === "organizationId") return "organization";
+  if (entityType === "POSITION" && field === "typeId") return "positionType";
+  if (entityType === "POSITION" && field === "reportsToId") return "position";
+  if (entityType === "POSITION_ASSIGNMENT" && field === "personId") return "person";
+  if (entityType === "POSITION_ASSIGNMENT" && field === "positionId") return "position";
+  return null;
+}
+
+async function resolveNames(
+  resolver: string,
+  ids: string[],
+  tenantId: string,
+): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+  switch (resolver) {
+    case "organization": {
+      const rows = await prisma.organization.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, name: true, acronym: true },
+      });
+      return Object.fromEntries(
+        rows.map((r) => [r.id, r.acronym ? `${r.name} (${r.acronym})` : r.name]),
+      );
+    }
+    case "organizationType": {
+      const rows = await prisma.organizationType.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, name: true },
+      });
+      return Object.fromEntries(rows.map((r) => [r.id, r.name]));
+    }
+    case "memberState": {
+      const rows = await prisma.memberState.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, fullName: true, abbreviation: true },
+      });
+      return Object.fromEntries(
+        rows.map((r) => [r.id, r.abbreviation ? `${r.fullName} (${r.abbreviation})` : r.fullName]),
+      );
+    }
+    case "positionType": {
+      const rows = await prisma.positionType.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, name: true },
+      });
+      return Object.fromEntries(rows.map((r) => [r.id, r.name]));
+    }
+    case "position": {
+      const rows = await prisma.position.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, title: true },
+      });
+      return Object.fromEntries(rows.map((r) => [r.id, r.title]));
+    }
+    case "person": {
+      const rows = await prisma.person.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      return Object.fromEntries(rows.map((r) => [r.id, `${r.firstName} ${r.lastName}`.trim()]));
+    }
+    default:
+      return {};
+  }
 }
 
 async function fetchLiveEntity(entityType: DirectoryEntityKey, entityId: string, tenantId: string) {

@@ -14,6 +14,8 @@ import { getLayoutMode } from "~/utils/layout-mode.server";
 import { getTheme } from "~/utils/theme.server";
 import type { Route } from "./+types/_layout";
 
+export const handle = { breadcrumb: "Home" };
+
 export async function loader({ request, params }: Route.LoaderArgs) {
   const tenant = await resolveTenant(params.tenant);
   const user = await requireAuth(request);

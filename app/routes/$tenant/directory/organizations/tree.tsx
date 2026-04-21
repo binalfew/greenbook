@@ -61,6 +61,13 @@ export default function OrganizationsTree({ loaderData, params }: Route.Componen
         canMove={canMove}
         searchPlaceholder={t("organizations.searchPlaceholder")}
         emptyMessage={t("organizations.emptyDescription")}
+        labels={{
+          expandAll: t("organizations.tree.expandAll"),
+          collapseAll: t("organizations.tree.collapseAll"),
+          moving: t("organizations.tree.moving"),
+          placeholder: t("organizations.tree.loadingChildren"),
+          resultCount: (count) => t("organizations.tree.resultCount", { count }),
+        }}
       />
 
       {roots.length === 0 && (

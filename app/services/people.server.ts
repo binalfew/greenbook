@@ -352,6 +352,23 @@ export async function publicListPeople(
   return { data: rows.map(stripPII), total };
 }
 
+export type PublicPersonTimelineEntry = {
+  id: string;
+  startDate: Date;
+  endDate: Date | null;
+  isCurrent: boolean;
+  position: {
+    id: string;
+    title: string;
+    organization: { id: string; name: string; acronym: string | null };
+  };
+};
+
+// Detail fetch includes the full assignment history for the timeline UI.
+// Caps at 50 to match `publicGetOrganization`'s positions ceiling; a
+// person with more than 50 recorded posts needs its own pagination route.
+const PUBLIC_PERSON_HISTORY_TAKE = 50;
+
 export async function publicGetPerson(id: string, publicTenantIds: string[]) {
   if (publicTenantIds.length === 0) return null;
   const row = await prisma.person.findFirst({
@@ -370,8 +387,14 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
       showPhone: true,
       memberState: { select: { id: true, fullName: true, abbreviation: true } },
       assignments: {
-        where: { deletedAt: null, isCurrent: true },
+        where: { deletedAt: null },
+        orderBy: [{ isCurrent: "desc" }, { startDate: "desc" }],
+        take: PUBLIC_PERSON_HISTORY_TAKE,
         select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          isCurrent: true,
           position: {
             select: {
               id: true,
@@ -383,5 +406,20 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
       },
     },
   });
-  return row ? stripPII(row) : null;
+  if (!row) return null;
+
+  const stripped = stripPII({
+    ...row,
+    // stripPII's `assignments` param only consumes position; it tolerates
+    // our richer entries without reading the timeline fields.
+    assignments: row.assignments.map((a) => ({ position: a.position })),
+  });
+  const history: PublicPersonTimelineEntry[] = row.assignments.map((a) => ({
+    id: a.id,
+    startDate: a.startDate,
+    endDate: a.endDate,
+    isCurrent: a.isCurrent,
+    position: a.position,
+  }));
+  return { ...stripped, history };
 }

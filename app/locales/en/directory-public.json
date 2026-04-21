@@ -25,7 +25,12 @@
     "viewTree": "Tree",
     "searchPlaceholder": "Filter organizations…",
     "empty": "No public organizations found.",
-    "emptyHelp": "Try adjusting your search, or return to the home page."
+    "emptyHelp": "Try adjusting your search, or return to the home page.",
+    "loadingChildren": "Loading children…",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results"
   },
   "peoplePage": {
     "title": "People",

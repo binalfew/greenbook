@@ -943,13 +943,27 @@ Every mutation flows through `app/services/directory-changes.server.ts`. The rea
 - **Batch approve/reject** via `approveChanges(ids, ...)` / `rejectChanges(ids, ...)` — per-id atomic loop, capped at `MAX_BATCH_SIZE = 100`. NOT_FOUND / NOT_PENDING become `skipped` in the `BatchResult` rather than `failed`.
 - **Domain events** — entity-level events (`organization.created`, etc.) fire **only on approval**; a parallel event stream (`change.submitted`, `change.approved`, `change.rejected`, `change.withdrawn`) drives workflow consumers. Catalog in `app/utils/events/webhook-events.ts`.
 
-### Cross-tenant public tier (stubbed, not yet wired to routes)
+### Cross-tenant public tier (Phase D — shipped)
 
-- Admin is tenant-scoped; the public surface is a single cross-tenant unified directory. Visitors never see the word "tenant."
+- Admin is tenant-scoped; the public surface is a single cross-tenant unified directory at `/public/directory/*` (no tenant slug). Visitors never see the word "tenant."
 - `app/services/public-directory.server.ts#getPublicTenantIds()` — 5-min-cached gate that returns tenant ids where `FF_PUBLIC_DIRECTORY` is on.
-- `public*` helpers on each entity service (e.g. `publicListOrganizationTreeRoots`, `publicListPeople`, `publicGetPerson`) accept the opted-in tenant set as an argument and **never include `tenantId`** in their response shape.
-- PII strip for `Person`: `email` / `phone` are returned only if `showEmail` / `showPhone` is true.
-- **Public routes (`/public/directory/*`) ship in Phase D** — services are ready; no route files yet.
+- `public*` helpers on each entity service (`publicListOrganizationTreeRoots`, `publicListOrganizationChildren`, `publicGetOrganization`, `publicListPeople`, `publicGetPerson`, `publicGetPosition`) accept the opted-in tenant set as an argument and **never include `tenantId`** in their response shape. An integration test asserts this invariant per helper.
+- PII strip for `Person`: `email` / `phone` are returned only when `showEmail` / `showPhone` is true. Same strip applied in list + detail.
+- Shared utility: `app/utils/public-directory.server.ts` exports `getPublicContext()` (one-call gate), `PUBLIC_CACHE_HEADER` (`public, max-age=60, stale-while-revalidate=300`), `publicCacheHeaders()`, and `publicOrgToTreeNode()` (reshapes `PublicOrgNode` into the include-shape the admin tree wrappers expect, so the public tree reuses `OrganizationHierarchyTree` with `canMove={false}`).
+- Public loaders **never** call `requireSession` / `resolveTenant`. Every loader exports a `headers()` returning `Cache-Control: PUBLIC_CACHE_HEADER`. The lazy-load API route uses a shorter TTL (`max-age=30, stale-while-revalidate=120`).
+- `public/robots.txt` allows `/public/directory/*` and disallows auth paths.
+- Detail-page 404s throw a `Response(status: 404)` with the cache header set; each detail route's `ErrorBoundary` renders the shared `~/components/public/not-found.tsx#PublicDetailNotFound` with `kind` in `"org" | "person" | "position"`.
+- Public routes (`app/routes/public.directory/*`): `_layout` (AU chrome + language switcher + nav), `index` (hero + featured principal organs), `organizations/index` (read-only tree), `organizations/$orgId` (detail), `people/index` (search + pagination), `people/$personId` (detail with `AssignmentTimeline` over the person's full history), `positions/$positionId` (current holder + timeline), `api/organizations.children` (lazy-load children, no auth).
+
+### Phase E additions
+
+Post-MVP polish that landed alongside the public tier:
+
+- **Notifications on workflow transitions** (`app/services/directory-notifications.server.ts`). `submitChange` notifies every user in the tenant with `directory-change:approve` (except the submitter — dual-role users don't get pinged for their own submissions). `approveChange` / `rejectChange` notify the submitter with the reviewer's name + reject notes when present. All fire-and-forget: failures are logged, never unwind the approval transaction. Skip when reviewer = submitter (self-approved manager path).
+- **Reference-id hydration in diffs** (`computeDiff` in `directory-changes.server.ts`). Per-field cuid references — `parentId`, `typeId`, `organizationId`, `reportsToId`, `memberStateId`, `personId`, `positionId` — resolve to human-readable names in the approval UI. Uses `REFERENCE_FIELDS` + `resolverFor` tables per `DirectoryEntityKey`; each resolver runs a single `findMany` across all referenced ids.
+- **`AssignmentTimeline` on public pages.** `publicGetPerson` now returns `history: PublicPersonTimelineEntry[]` (capped at 50, same ceiling as `publicGetOrganization.positions`). The public person + position detail pages drop the hand-rolled list renderer and render `AssignmentTimeline` with `mode="byPerson"` / `"byPosition"`.
+- **i18n'd tree toolbar.** `HierarchyTree` accepts a `labels` prop with `expandAll / collapseAll / moving / placeholder / resultCount`. `OrganizationHierarchyTree` threads it through; both the admin (`directory` namespace) and public (`directory-public` namespace) routes pass locale-bound values.
+- **Seed fix.** `FF_DIRECTORY` is now opted into the system tenant in the same post-DEFAULT_FLAGS block as `FF_PUBLIC_DIRECTORY`. Tenant-scoped flags ignore the `enabled` boolean — membership in `enabledForTenants` is the actual gate — so the previous shape blocked every demo user from the admin surface.
 
 ### Routes (admin, `app/routes/$tenant/directory/`)
 
@@ -1025,13 +1039,14 @@ Demo users: `focal@example.com / focal123`, `manager@example.com / manager123`.
 
 ### Deviations + open issues
 
-- **Public routes not wired yet** — services ready, Phase D will add `app/routes/public.directory/*`.
-- **Tree view (`organizations/tree.tsx`) not built** — Phase C will port `react-arborist`-based `HierarchyTree` from `/Users/binalfew/Projects/facilities/app/components/hierarchy-tree.tsx` as a generic engine; Organizations will be the first consumer.
-- **MOVE diff shows raw cuid for `parentId`** — `computeDiff` doesn't resolve the new parent's name. Follow-up: teach the diff builder to hydrate `*Id` fields.
+- **E2E smoke test skipped** — `tests/e2e/directory-flow.spec.ts` contains a working skeleton of the focal → manager → public round trip but is `test.skip`'d: the dev-mode SSR server's first-render latency pushes the three sequential page loads past Playwright's per-test budget. Fix requires running against `npm run build && npm run start` or splitting into three smaller tests with shared fixtures — deferred to Phase F.
 - **CSV bulk import** — deferred to Phase F.
 - **Migration baseline** — still on `db push` like the rest of the template. Apps generate migrations when they lock down for prod.
-- **Assignment timeline pagination** — loads all assignments for the entity. Fine for MVP.
+- **Assignment timeline pagination** — `publicGetPerson.history` capped at 50 (matches `publicGetOrganization.positions`). A person with >50 recorded posts needs a dedicated timeline pagination route.
+- **Tree lazy-load bypasses HTTP cache** — each tree expand is a POST FormData, so `Cache-Control` headers don't apply. The in-component `loadedChildrenRef` prevents duplicate queries within one session; across visitors each expand hits the DB. Fix would require switching the child fetcher to GET with query params.
+- **Tree DnD rollback on backend failure** — optimistic cache update is not reverted when `/api/organizations/move` returns `{ ok: false }`. User sees an error toast and can re-drag.
 - **No `@faker-js/faker` seed data for people** — seed ships starter orgs + types + regions + member states, but not sample people/positions. Populate via the UI.
+- **Public notification + submission chrome missing** — notifications fire but the bell/inbox UI only lives on tenant layouts. Public visitors get nothing (intentional — they're unauthenticated).
 
 ## Docs polish (Phase 15)
 

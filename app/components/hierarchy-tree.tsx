@@ -73,12 +73,15 @@ export interface TreeActionsContextValue {
   readOnly: boolean;
   /** Base URL for detail/edit/delete links inside node renderers. */
   baseUrl: string;
+  /** i18n'd label for lazy-loading placeholder rows. */
+  placeholderLabel: string;
 }
 
 export const TreeActionsContext = createContext<TreeActionsContextValue>({
   moveToRoot: () => {},
   readOnly: true,
   baseUrl: "",
+  placeholderLabel: "Loading children...",
 });
 
 export function useTreeActions() {
@@ -177,14 +180,20 @@ function findParentRawId(nodes: HierarchyNode[], targetRawId: string): string | 
 
 /* ── Shared node row utilities ─────────────────────────────── */
 
-export function PlaceholderRow({ style }: { style: React.CSSProperties }) {
+export function PlaceholderRow({
+  style,
+  label = "Loading children...",
+}: {
+  style: React.CSSProperties;
+  label?: string;
+}) {
   return (
     <div
       style={style}
       className="text-muted-foreground animate-in fade-in-50 flex items-center gap-2 pl-8 text-sm duration-200"
     >
       <div className="border-muted-foreground/30 border-t-primary size-3.5 animate-spin rounded-full border-2" />
-      Loading children...
+      {label}
     </div>
   );
 }
@@ -333,6 +342,15 @@ export interface HierarchyTreeProps<T extends HierarchyNode> {
   extraToolbar?: React.ReactNode;
   /** Read-only tree: disables DnD, context-menu write actions, and the grip handle. */
   readOnly?: boolean;
+  /** Optional i18n'd labels for the toolbar + status text. Each defaults to English. */
+  labels?: {
+    expandAll?: string;
+    collapseAll?: string;
+    moving?: string;
+    placeholder?: string;
+    /** Function form — `labels.resultCount(n)` returns localized plural. */
+    resultCount?: (count: number) => string;
+  };
 }
 
 /* ── Main component ───────────────────────────────────────── */
@@ -352,7 +370,15 @@ export function HierarchyTree<T extends HierarchyNode>({
   renderBreadcrumb,
   extraToolbar,
   readOnly = false,
+  labels,
 }: HierarchyTreeProps<T>) {
+  const l = {
+    expandAll: labels?.expandAll ?? "Expand All",
+    collapseAll: labels?.collapseAll ?? "Collapse All",
+    moving: labels?.moving ?? "Moving...",
+    placeholder: labels?.placeholder ?? "Loading children...",
+    resultCount: labels?.resultCount ?? ((n: number) => `${n} result${n === 1 ? "" : "s"}`),
+  };
   const treeRef = useRef<TreeApi<T> | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -558,7 +584,14 @@ export function HierarchyTree<T extends HierarchyNode>({
   const isMoving = fetcher.state !== "idle" || undoFetcher.state !== "idle";
 
   return (
-    <TreeActionsContext.Provider value={{ moveToRoot: handleMoveToRoot, readOnly, baseUrl }}>
+    <TreeActionsContext.Provider
+      value={{
+        moveToRoot: handleMoveToRoot,
+        readOnly,
+        baseUrl,
+        placeholderLabel: l.placeholder,
+      }}
+    >
       <div className="space-y-3">
         {/* Toolbar */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
@@ -595,12 +628,12 @@ export function HierarchyTree<T extends HierarchyNode>({
           <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
             {search && (
               <span className="text-muted-foreground text-sm whitespace-nowrap">
-                {data.length} result{data.length === 1 ? "" : "s"}
+                {l.resultCount(data.length)}
               </span>
             )}
             {dndEnabled && isMoving && (
               <span className="text-primary animate-pulse text-sm whitespace-nowrap">
-                Moving...
+                {l.moving}
               </span>
             )}
             {extraToolbar}
@@ -611,7 +644,7 @@ export function HierarchyTree<T extends HierarchyNode>({
               onClick={() => treeRef.current?.openAll()}
             >
               <ChevronsUpDown />
-              Expand All
+              {l.expandAll}
             </Button>
             <Button
               variant="outline"
@@ -620,7 +653,7 @@ export function HierarchyTree<T extends HierarchyNode>({
               onClick={() => treeRef.current?.closeAll()}
             >
               <ChevronsDownUp />
-              Collapse All
+              {l.collapseAll}
             </Button>
           </div>
         </div>

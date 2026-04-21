@@ -25,7 +25,12 @@
     "viewTree": "Arbre",
     "searchPlaceholder": "Filtrer les organisations…",
     "empty": "Aucune organisation publique trouvée.",
-    "emptyHelp": "Essayez d'ajuster votre recherche ou revenez à la page d'accueil."
+    "emptyHelp": "Essayez d'ajuster votre recherche ou revenez à la page d'accueil.",
+    "loadingChildren": "Chargement des éléments enfants…",
+    "expandAll": "Tout déplier",
+    "collapseAll": "Tout replier",
+    "resultCount_one": "{{count}} résultat",
+    "resultCount_other": "{{count}} résultats"
   },
   "peoplePage": {
     "title": "Personnes",

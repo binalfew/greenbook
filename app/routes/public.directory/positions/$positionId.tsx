@@ -1,6 +1,7 @@
 import { ArrowLeft, Building2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
+import { AssignmentTimeline, type TimelineEntry } from "~/components/directory/assignment-timeline";
 import { PublicDetailNotFound } from "~/components/public/not-found";
 import { Badge } from "~/components/ui/badge";
 import { publicGetPosition } from "~/services/positions.server";
@@ -26,7 +27,16 @@ export default function PublicPositionDetail({ loaderData }: Route.ComponentProp
   const { position } = loaderData;
 
   const currentHolder = position.assignments.find((a) => a.isCurrent);
-  const previousHolders = position.assignments.filter((a) => !a.isCurrent);
+  // Timeline entries must carry a stable `id`; the service doesn't select one
+  // on assignments (only startDate/person), so we synthesise a local id from
+  // the row index. Safe — entries are never re-ordered client-side.
+  const timelineEntries: TimelineEntry[] = position.assignments.map((a, i) => ({
+    id: `assignment-${i}`,
+    startDate: a.startDate,
+    endDate: a.endDate,
+    isCurrent: a.isCurrent,
+    person: a.person ?? undefined,
+  }));
 
   return (
     <div className="space-y-6">
@@ -76,35 +86,11 @@ export default function PublicPositionDetail({ loaderData }: Route.ComponentProp
 
           <section>
             <h2 className="mb-2 text-sm font-semibold">{t("positionDetail.previousHolders")}</h2>
-            {previousHolders.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                {t("positionDetail.previousHoldersEmpty")}
-              </p>
-            ) : (
-              <ul className="divide-border divide-y rounded-md border">
-                {previousHolders.map((a, i) => (
-                  <li
-                    key={`${a.person?.id ?? "unknown"}-${i}`}
-                    className="flex items-center justify-between px-4 py-3"
-                  >
-                    <Link
-                      to={a.person ? `/public/directory/people/${a.person.id}` : "#"}
-                      className="text-sm hover:underline"
-                    >
-                      {a.person
-                        ? [a.person.honorific, a.person.firstName, a.person.lastName]
-                            .filter(Boolean)
-                            .join(" ")
-                        : "—"}
-                    </Link>
-                    <div className="text-muted-foreground text-xs">
-                      {formatDate(a.startDate)}
-                      {a.endDate ? ` – ${formatDate(a.endDate)}` : ""}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AssignmentTimeline
+              entries={timelineEntries}
+              mode="byPosition"
+              basePrefix="/public/directory/people"
+            />
           </section>
         </div>
 
