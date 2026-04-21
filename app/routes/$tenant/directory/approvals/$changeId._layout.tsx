@@ -35,7 +35,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function ChangeDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { change, diffs, currentUserId, canReview } = loaderData;
-  const base = `/${params.tenant}/directory/changes`;
+  const base = `/${params.tenant}/directory/approvals`;
   const entitySegment = directoryEntitySegment(change.entityType);
   const entityHref = change.entityId
     ? `/${params.tenant}/directory/${entitySegment}/${change.entityId}`

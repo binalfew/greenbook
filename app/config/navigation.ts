@@ -101,14 +101,14 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
             {
               title: "Approvals",
               tKey: "approvals",
-              url: `${basePrefix}/directory/changes`,
+              url: `${basePrefix}/directory/approvals`,
               featureFlag: "FF_DIRECTORY",
               permission: "directory-change:read-all",
             },
             {
               title: "My submissions",
               tKey: "mySubs",
-              url: `${basePrefix}/directory/changes/mine`,
+              url: `${basePrefix}/directory/approvals/mine`,
               featureFlag: "FF_DIRECTORY",
               permission: "directory-change:submit",
             },

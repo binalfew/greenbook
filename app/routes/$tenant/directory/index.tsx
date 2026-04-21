@@ -61,7 +61,7 @@ export default function DirectoryHome({ loaderData, params }: Route.ComponentPro
         />
         {canReview ? (
           <KPI
-            to={`${base}/changes`}
+            to={`${base}/approvals`}
             icon={ScrollText}
             label={t("kpi.pendingChanges")}
             value={counts.pendingCount}
@@ -69,7 +69,7 @@ export default function DirectoryHome({ loaderData, params }: Route.ComponentPro
           />
         ) : canSubmit ? (
           <KPI
-            to={`${base}/changes/mine`}
+            to={`${base}/approvals/mine`}
             icon={Inbox}
             label={t("kpi.mySubmissions")}
             value={counts.myPendingCount}

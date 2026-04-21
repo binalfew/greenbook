@@ -35,7 +35,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     });
   }
   await rejectChange(params.changeId, { notes: submission.value.notes }, ctx);
-  return redirect(`/${params.tenant}/directory/changes/${params.changeId}`);
+  return redirect(`/${params.tenant}/directory/approvals/${params.changeId}`);
 }
 
 export default function RejectChangeDialog({ params, actionData }: Route.ComponentProps) {
@@ -43,7 +43,7 @@ export default function RejectChangeDialog({ params, actionData }: Route.Compone
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
   const { tenant } = useParams();
-  const base = `/${tenant}/directory/changes/${params.changeId}`;
+  const base = `/${tenant}/directory/approvals/${params.changeId}`;
   const handleClose = () => navigate(base, { replace: true });
 
   const { form, fields } = useForm(rejectChangeSchema, {

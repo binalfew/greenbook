@@ -984,8 +984,8 @@ positions/
   $positionId.assign.tsx (dialog),
   $positionId.assignments.$assignmentId.end.tsx (dialog),
   +shared/position-editor.{tsx,server.tsx}
-changes/
-  _layout.tsx (NavTabs: Pending / Mine / History)
+approvals/
+  _layout.tsx (permission gate — tabs now live on the parent directory layout)
   index.tsx (pending queue; selectable + batch dialog for reject notes)
   mine.tsx, history.tsx
   $changeId._layout.tsx (diff + metadata + action buttons)

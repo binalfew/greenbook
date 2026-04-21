@@ -65,11 +65,11 @@ test.skip("focal submits → manager approves → public page renders", async ({
   // detail, reads the diff, and approves. We identify the right row by
   // pulling the most recent PENDING ORGANIZATION + CREATE entry.
   await login(page, "manager@example.com", "manager123");
-  await page.goto("/system/directory/changes");
+  await page.goto("/system/directory/approvals");
   // The first column is a link to the change detail. Click the first row
   // — with a clean seed this is the change we just submitted.
   await Promise.all([
-    page.waitForURL(/\/system\/directory\/changes\/[^/]+$/),
+    page.waitForURL(/\/system\/directory\/approvals\/[^/]+$/),
     page
       .getByRole("link", { name: /organization/i })
       .first()

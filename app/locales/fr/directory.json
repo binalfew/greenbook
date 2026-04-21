@@ -6,8 +6,9 @@
     "organizations": "Organisations",
     "people": "Personnes",
     "positions": "Postes",
-    "changes": "Approbations",
-    "mySubmissions": "Mes soumissions"
+    "approvals": "Approbations",
+    "mySubmissions": "Mes soumissions",
+    "history": "Historique"
   },
   "kpi": {
     "organizations": "Organisations",

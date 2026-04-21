@@ -28,7 +28,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const formData = await request.formData();
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
   await approveChange(params.changeId, { notes }, ctx);
-  return redirect(`/${params.tenant}/directory/changes/${params.changeId}`);
+  return redirect(`/${params.tenant}/directory/approvals/${params.changeId}`);
 }
 
 export default function ApproveChangeDialog({ params }: Route.ComponentProps) {
@@ -36,7 +36,7 @@ export default function ApproveChangeDialog({ params }: Route.ComponentProps) {
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
   const { tenant } = useParams();
-  const base = `/${tenant}/directory/changes/${params.changeId}`;
+  const base = `/${tenant}/directory/approvals/${params.changeId}`;
   const handleClose = () => navigate(base, { replace: true });
 
   return (

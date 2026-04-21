@@ -27,7 +27,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const { tenantId, canReview, canSubmit } = await requireDirectoryAccess(request);
   if (!canReview) {
     // Focal-person-only users land on the "my submissions" view.
-    if (canSubmit) return redirect(`/${params.tenant}/directory/changes/mine`);
+    if (canSubmit) return redirect(`/${params.tenant}/directory/approvals/mine`);
     throw new Response("Forbidden", { status: 403 });
   }
 
@@ -57,7 +57,7 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const { changes, pagination } = loaderData;
-  const base = `/${params.tenant}/directory/changes`;
+  const base = `/${params.tenant}/directory/approvals`;
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [rejectOpen, setRejectOpen] = useState(false);
