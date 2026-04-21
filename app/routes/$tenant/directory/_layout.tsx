@@ -33,7 +33,7 @@ export default function DirectoryLayout({ loaderData, params }: Route.ComponentP
       ? [{ to: `${base}/approvals`, label: t("tabs.approvals"), icon: ListChecks, end: true }]
       : []),
     ...(canSubmit
-      ? [{ to: `${base}/approvals/mine`, label: t("tabs.mySubmissions"), icon: Inbox }]
+      ? [{ to: `${base}/submissions`, label: t("tabs.submissions"), icon: Inbox }]
       : []),
     ...(canReview
       ? [{ to: `${base}/approvals/history`, label: t("tabs.history"), icon: ScrollText }]

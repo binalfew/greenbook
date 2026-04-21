@@ -108,7 +108,7 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
             {
               title: "My submissions",
               tKey: "mySubs",
-              url: `${basePrefix}/directory/approvals/mine`,
+              url: `${basePrefix}/directory/submissions`,
               featureFlag: "FF_DIRECTORY",
               permission: "directory-change:submit",
             },

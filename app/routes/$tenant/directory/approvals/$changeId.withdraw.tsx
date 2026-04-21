@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request, params }: Route.ActionArgs) {
   const { ctx } = await requireSubmitContext(request);
   await withdrawChange(params.changeId, ctx);
-  return redirect(`/${params.tenant}/directory/approvals/mine`);
+  return redirect(`/${params.tenant}/directory/submissions`);
 }
 
 export default function WithdrawChangeDialog({ params }: Route.ComponentProps) {

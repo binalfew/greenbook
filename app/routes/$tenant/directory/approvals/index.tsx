@@ -27,7 +27,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const { tenantId, canReview, canSubmit } = await requireDirectoryAccess(request);
   if (!canReview) {
     // Focal-person-only users land on the "my submissions" view.
-    if (canSubmit) return redirect(`/${params.tenant}/directory/approvals/mine`);
+    if (canSubmit) return redirect(`/${params.tenant}/directory/submissions`);
     throw new Response("Forbidden", { status: 403 });
   }
 

@@ -69,7 +69,7 @@ export default function DirectoryHome({ loaderData, params }: Route.ComponentPro
           />
         ) : canSubmit ? (
           <KPI
-            to={`${base}/approvals/mine`}
+            to={`${base}/submissions`}
             icon={Inbox}
             label={t("kpi.mySubmissions")}
             value={counts.myPendingCount}

@@ -6,9 +6,9 @@ import { DataTable } from "~/components/data-table/data-table";
 import type { FilterDef, PaginationMeta } from "~/components/data-table/data-table-types";
 import { listMyChanges } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
-import type { Route } from "./+types/mine";
+import type { Route } from "./+types/submissions";
 
-export const handle = { breadcrumb: "Mine" };
+export const handle = { breadcrumb: "Submissions" };
 
 const STATUS_VALUES = ["PENDING", "APPROVED", "REJECTED", "WITHDRAWN"] as const;
 
