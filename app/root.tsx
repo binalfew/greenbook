@@ -6,82 +6,208 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteLoaderData,
 } from "react-router";
 
+import { useEffect } from "react";
+import { AuthenticityTokenProvider } from "remix-utils/csrf/react";
+import { HoneypotProvider } from "remix-utils/honeypot/react";
+import { Toaster } from "sonner";
 import type { Route } from "./+types/root";
 import "./app.css";
-import Navbar from "./components/navbar";
-import { getUserEmail, isAdminUser } from "./lib/auth.server";
-import { getUserByEmail } from "./lib/db.server";
+import { ImpersonationBanner } from "./components/impersonation-banner";
+import { InstallPrompt } from "./components/pwa/install-prompt";
+import { SwUpdatePrompt } from "./components/pwa/sw-update-prompt";
+import { useToast } from "./components/toaster";
+import { FEATURE_FLAG_KEYS } from "./utils/config/feature-flag-keys";
+import { isFeatureEnabled } from "./utils/config/feature-flags.server";
+import { initSentryClient } from "./utils/monitoring/sentry.client";
+import { registerServiceWorker } from "./utils/offline/sw-register";
+import { getUser, getUserId, logout } from "./utils/auth/auth.server";
+import { getImpersonationState } from "./utils/auth/session.server";
+import { ClientHintCheck, getHints } from "./utils/client-hints";
+import { csrf } from "./utils/auth/csrf.server";
+import { getEnv } from "./utils/config/env.server";
+import { initI18n } from "./utils/i18n";
+import { pipeHeaders } from "./utils/headers.server";
+import { honeypot } from "./utils/auth/honeypot.server";
+import { useNonce } from "./utils/nonce-provider";
+import { getTheme } from "./utils/theme.server";
+import { makeTimings, time } from "./utils/monitoring/timing.server";
+import { getToast } from "./utils/toast.server";
+import { combineHeaders, getDomainUrl } from "./utils/misc";
+import { prisma } from "./utils/db/db.server";
+import { getLangFromRequest } from "./utils/i18n-cookie.server";
+import { useOptionalTheme, useTheme } from "./routes/resources/theme-switch";
 
-export const links: Route.LinksFunction = () => [
-  { rel: "preconnect", href: "https://fonts.googleapis.com" },
-  {
-    rel: "preconnect",
-    href: "https://fonts.gstatic.com",
-    crossOrigin: "anonymous",
-  },
-  {
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
-  },
-];
+export const meta: Route.MetaFunction = ({ data }) => {
+  return [{ title: data ? "Admin" : "Error | Admin" }, { name: "description", content: `Admin` }];
+};
+
+export const headers: Route.HeadersFunction = pipeHeaders;
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const userEmail = await getUserEmail(request);
+  const timings = makeTimings("root loader");
+  const userId = await time(() => getUserId(request), {
+    timings,
+    type: "getUserId",
+    desc: "getUserId in root",
+  });
+  const user = userId ? await getUser(userId) : null;
 
-  if (!userEmail) {
-    return data({ user: undefined });
+  if (userId && !user) {
+    console.info("something weird happened");
+    // something weird happened... The user is authenticated but we can't find
+    // them in the database. Maybe they were deleted? Let's log them out.
+    throw await logout({ request, redirectTo: "/" });
   }
 
-  const user = await getUserByEmail(userEmail);
+  // When an admin is impersonating another user, surface both identities to the
+  // banner so the admin always knows which account is "live".
+  const impersonationState = await getImpersonationState(request);
+  const originalUser =
+    impersonationState.isImpersonating && impersonationState.originalUserId
+      ? await prisma.user.findUnique({
+          where: { id: impersonationState.originalUserId },
+          select: { email: true },
+        })
+      : null;
+  const impersonation =
+    impersonationState.isImpersonating && user && originalUser
+      ? { impersonatedEmail: user.email, originalEmail: originalUser.email }
+      : null;
 
-  if (!user) {
-    return data({ user: undefined });
-  }
+  const { toast, headers: toastHeaders } = await getToast(request);
+  const [csrfToken, csrfCookieHeader] = await csrf.commitToken(request);
+  const honeyProps = await honeypot.getInputProps();
 
-  // Check if user has admin privileges
-  const isAdmin = await isAdminUser(user.id);
+  // Resolve the UI language for this request. Defaults to `en` when the cookie
+  // is absent or names an unsupported locale.
+  const lang = getLangFromRequest(request) ?? "en";
 
-  const formattedUser = {
-    id: user.id,
-    email: user.email,
-    username: user.name,
-    name: user.name,
-    role: user.role,
-    isAdmin,
-  };
+  // Gate PWA plumbing (service worker + manifest + install/update prompts) on
+  // the global FF_PWA flag. Flag off = template behaves like a plain web app.
+  const pwaEnabled = await isFeatureEnabled(FEATURE_FLAG_KEYS.PWA);
 
-  return data({ user: formattedUser });
+  return data(
+    {
+      user,
+      impersonation,
+      lang,
+      pwaEnabled,
+      requestInfo: {
+        hints: getHints(request),
+        origin: getDomainUrl(request),
+        path: new URL(request.url).pathname,
+        userPrefs: {
+          theme: getTheme(request),
+        },
+      },
+      ENV: getEnv(),
+      toast,
+      honeyProps,
+      csrfToken,
+    },
+    {
+      headers: combineHeaders(
+        { "Server-Timing": timings.toString() },
+        csrfCookieHeader ? { "set-cookie": csrfCookieHeader } : null,
+        toastHeaders,
+      ),
+    },
+  );
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const data = useRouteLoaderData("root") as
+    | { ENV?: Record<string, unknown>; lang?: string; pwaEnabled?: boolean }
+    | undefined;
+  const tenantData = useRouteLoaderData("routes/$tenant/_layout") as
+    | { tenant?: { brandTheme?: string } }
+    | undefined;
+  const nonce = useNonce();
+  const theme = useOptionalTheme();
+  const lang = data?.lang ?? "en";
+  const pwaEnabled = data?.pwaEnabled ?? false;
+  const brandTheme = tenantData?.tenant?.brandTheme || "";
+
+  // Initialise i18n on both the server render and the client hydration so
+  // components resolve translations identically. `initI18n` is idempotent —
+  // subsequent calls only switch the active language when it differs.
+  initI18n(lang);
+
   return (
-    <html lang="en">
+    <html
+      lang={lang}
+      className={`${theme}`}
+      data-brand={brandTheme || undefined}
+      data-pwa={pwaEnabled ? "true" : undefined}
+    >
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {pwaEnabled && (
+          <>
+            <link rel="manifest" href="/manifest.json" />
+            <meta name="theme-color" content="#1e40af" />
+            <meta name="mobile-web-app-capable" content="yes" />
+          </>
+        )}
+        <ClientHintCheck nonce={nonce} />
         <Meta />
         <Links />
       </head>
       <body>
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{
+            __html: `window.ENV = ${JSON.stringify(data?.ENV)}`,
+          }}
+        />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );
 }
 
 export default function App({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
+  const theme = useTheme();
+  useToast(loaderData.toast);
+
+  useEffect(() => {
+    if (loaderData.pwaEnabled) {
+      registerServiceWorker();
+    }
+  }, [loaderData.pwaEnabled]);
+
+  useEffect(() => {
+    // SENTRY_DSN is exposed via getEnv() → window.ENV.
+    initSentryClient(loaderData.ENV?.SENTRY_DSN);
+  }, [loaderData.ENV?.SENTRY_DSN]);
+
   return (
-    <div className="bg-background min-h-screen">
-      <Navbar user={user} />
-      <main className="mx-auto px-1 py-8">
-        <Outlet />
-      </main>
-    </div>
+    <AuthenticityTokenProvider token={loaderData.csrfToken}>
+      <HoneypotProvider {...loaderData.honeyProps}>
+        {loaderData.impersonation && (
+          <ImpersonationBanner
+            impersonatedEmail={loaderData.impersonation.impersonatedEmail}
+            originalEmail={loaderData.impersonation.originalEmail}
+          />
+        )}
+        <div className="min-h-screen">
+          <Outlet />
+          <Toaster position="top-center" theme={theme} />
+        </div>
+        {loaderData.pwaEnabled && (
+          <>
+            <InstallPrompt />
+            <SwUpdatePrompt />
+          </>
+        )}
+      </HoneypotProvider>
+    </AuthenticityTokenProvider>
   );
 }
 
@@ -93,20 +219,18 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   if (isRouteErrorResponse(error)) {
     message = error.status === 404 ? "404" : "Error";
     details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
+      error.status === 404 ? "The requested page could not be found." : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
     stack = error.stack;
   }
 
   return (
-    <main className="pt-16 p-4 container mx-auto">
+    <main className="container mx-auto p-4 pt-16">
       <h1>{message}</h1>
       <p>{details}</p>
       {stack && (
-        <pre className="w-full p-4 overflow-x-auto">
+        <pre className="w-full overflow-x-auto p-4">
           <code>{stack}</code>
         </pre>
       )}

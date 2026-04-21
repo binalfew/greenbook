@@ -1,0 +1,14 @@
+{
+  "offlineBanner": "You are currently offline. Some features may be unavailable.",
+  "offlineTitle": "You're Offline",
+  "offlineBody": "It looks like you've lost your internet connection. Some features may be unavailable until you're back online.",
+  "tryAgain": "Try Again",
+  "installTitle": "Install App",
+  "installSubtitle": "Install for offline support and faster loading.",
+  "install": "Install",
+  "notNow": "Not Now",
+  "updateTitle": "Update Available",
+  "updateSubtitle": "A new version is available. Refresh to get the latest updates.",
+  "updateNow": "Update Now",
+  "later": "Later"
+}

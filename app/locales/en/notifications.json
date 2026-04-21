@@ -1,0 +1,21 @@
+{
+  "title": "Notifications",
+  "empty": "No notifications",
+  "unread": "Unread",
+  "read": "Read",
+  "all": "All",
+  "markAsRead": "Mark as read",
+  "markAllRead": "Mark all as read",
+  "deleteNotification": "Delete notification",
+  "viewAll": "View all",
+  "recent": "Recent",
+  "unreadCount": "{{count}} unread",
+  "justNow": "just now",
+  "minutesAgo": "{{count}} min ago",
+  "hoursAgo": "{{count}} hr ago",
+  "daysAgo": "{{count}} days ago",
+  "type": "Type",
+  "filterByStatus": "Filter by status",
+  "filterByType": "Filter by type",
+  "noRecent": "No recent notifications"
+}

@@ -1,0 +1,5 @@
+{
+  "*.{ts,tsx}": ["prettier --write"],
+  "*.{json,yml,yaml,css,md}": ["prettier --write"],
+  "*.prisma": ["npx prisma format --schema"]
+}

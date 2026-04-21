@@ -1,0 +1,21 @@
+{
+  "dashboard": "Tableau de bord",
+  "settings": "Paramètres",
+  "logs": "Journaux",
+  "notes": "Notes",
+  "notifications": "Notifications",
+  "logOut": "Se déconnecter",
+  "globalAdmin": "Super administrateur",
+  "impersonating": "Usurpation",
+  "stopImpersonating": "Arrêter l'usurpation",
+  "main": "Principal",
+  "tenants": "Organisations",
+  "auditLogs": "Journaux d'audit",
+  "general": "Général",
+  "organization": "Organisation",
+  "featureFlags": "Fonctionnalités",
+  "webhooks": "Webhooks",
+  "sso": "SSO",
+  "security": "Sécurité",
+  "references": "Références"
+}

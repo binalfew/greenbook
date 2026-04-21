@@ -1,0 +1,21 @@
+{
+  "dashboard": "Dashboard",
+  "settings": "Settings",
+  "logs": "Logs",
+  "notes": "Notes",
+  "notifications": "Notifications",
+  "logOut": "Log out",
+  "globalAdmin": "Global admin",
+  "impersonating": "Impersonating",
+  "stopImpersonating": "Stop impersonating",
+  "main": "Main",
+  "tenants": "Tenants",
+  "auditLogs": "Audit logs",
+  "general": "General",
+  "organization": "Organization",
+  "featureFlags": "Features",
+  "webhooks": "Webhooks",
+  "sso": "SSO",
+  "security": "Security",
+  "references": "References"
+}

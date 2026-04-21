@@ -1,185 +1,686 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-model Office {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  staff     Staff[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+model UserStatus {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  code        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+  metadata    Json?
+  order       Int?
 
-model Department {
-  id    String  @id @default(uuid())
-  name  String  @unique
-  staff Staff[]
-}
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-model JobTitle {
-  id    String  @id @default(uuid())
-  title String  @unique
-  staff Staff[]
-}
+  users User[]
 
-model Staff {
-  id                         String    @id @default(uuid())
-  microsoftId                String    @unique // Microsoft Graph user ID
-  displayName                String
-  givenName                  String?
-  surname                    String?
-  userPrincipalName          String    @unique
-  email                      String    @unique
-  jobTitle                   String?
-  department                 String?
-  officeLocation             String?
-  mobilePhone                String?
-  businessPhones             String[] // Array of phone numbers
-  preferredLanguage          String?
-  employeeId                 String?
-  employeeType               String?
-  employeeHireDate           DateTime?
-  usageLocation              String?
-  accountEnabled             Boolean   @default(true)
-  createdDateTime            DateTime?
-  lastPasswordChangeDateTime DateTime?
-  userType                   String?
-
-  // Organizational hierarchy
-  managerId     String?
-  manager       Staff?  @relation("Manager", fields: [managerId], references: [id])
-  directReports Staff[] @relation("Manager")
-
-  // Office relationship
-  officeId String?
-  office   Office? @relation(fields: [officeId], references: [id])
-
-  // Metadata
-  lastSyncAt   DateTime    @default(now())
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  Department   Department? @relation(fields: [departmentId], references: [id])
-  departmentId String?
-  JobTitle     JobTitle?   @relation(fields: [jobTitleId], references: [id])
-  jobTitleId   String?
-
-  @@index([microsoftId])
-  @@index([email])
-  @@index([userPrincipalName])
-  @@index([department])
-  @@index([jobTitle])
-  @@index([officeLocation])
-  @@index([managerId])
-  @@index([officeId])
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  LOCKED
-  DELETED
+  @@index([name])
+  @@index([code])
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
 model User {
-  id        String        @id @default(cuid())
-  email     String        @unique
-  name      String?
-  status    UserStatus    @default(ACTIVE)
-  role      String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  sessions  UserSession[]
-  adminUser AdminUser?
+  id                  String      @id @default(cuid())
+  email               String      @unique @db.VarChar(255)
+  firstName           String      @db.VarChar(100)
+  lastName            String      @db.VarChar(100)
+  userStatusId        String?
+  userStatus          UserStatus? @relation(fields: [userStatusId], references: [id], onUpdate: Cascade, onDelete: SetNull, map: "user_status_fk")
+  tenantId            String?
+  tenant              Tenant?     @relation(fields: [tenantId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  failedLoginAttempts Int         @default(0) @map("failed_login_attempts")
+  lastFailedLoginAt   DateTime?
+  lockedAt            DateTime?
+  lockReason          String?     @db.Text
+  lockCount           Int         @default(0)
+  autoUnlockAt        DateTime?
+  lastLoginAt         DateTime?
+  metadata            Json?
+  version             Int         @default(1)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  userRoles       UserRole[]
+  sessions        Session[]
+  password        Password?
+  recoveryCodes   RecoveryCode[]
+  passwordHistory PasswordHistory[]
+  invitationsSent Invitation[]
+  notifications   Notification[]
+  ssoConnections  SSOConnection[]
+  notesAuthored   Note[]            @relation("NoteAuthor")
+  noteComments    NoteComment[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, email, deletedAt])
+  @@index([userStatusId])
+  @@index([deletedAt])
+  @@index([email])
+  @@index([lastLoginAt])
 }
 
-model AdminUser {
+model Password {
+  id     String @id @default(cuid())
+  hash   String @db.VarChar(255)
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastChanged DateTime  @default(now())
+  version     Int       @default(1)
+
+  @@index([hash])
+}
+
+model Session {
   id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  expiresAt DateTime
+  metadata  Json?
+  version   Int      @default(1)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([userId, expiresAt])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Verification {
+  id        String    @id @default(cuid())
+  type      String    @db.VarChar(50)
+  target    String    @db.VarChar(255)
+  secret    String    @db.VarChar(255)
+  algorithm String    @db.VarChar(50)
+  digits    Int
+  period    Int
+  charSet   String    @db.VarChar(255)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([target, type])
+  @@index([type])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  name        String    @db.VarChar(100)
+  description String?   @db.Text
+  scope       RoleScope @default(TENANT)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String   @db.VarChar(100)
+  action      String   @db.VarChar(100)
+  module      String   @default("system") @db.VarChar(50)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action], name: "resource_action")
+  @@index([module])
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+  access       String @default("any") // "own" | "any"
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id      String  @id @default(cuid())
+  userId  String
+  roleId  String
+  eventId String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, eventId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+enum RoleScope {
+  GLOBAL
+  TENANT
+  EVENT
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum WebhookStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+  SUSPENDED
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  RETRYING
+  DEAD_LETTER
+}
+
+model Tenant {
+  id               String  @id @default(cuid())
+  name             String  @unique @db.VarChar(255)
+  slug             String  @unique @db.VarChar(120)
+  email            String  @unique @db.VarChar(255)
+  phone            String  @db.VarChar(50)
+  city             String  @db.VarChar(100)
+  state            String  @db.VarChar(100)
+  address          String  @db.Text
+  logoUrl          String? @db.VarChar(500)
+  brandTheme       String  @default("") @db.VarChar(50)
+  subscriptionPlan String  @default("free") @db.VarChar(50)
+
+  metadata Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users                User[]
+  roles                Role[]
+  invitations          Invitation[]
+  systemSettings       SystemSetting[]
+  notifications        Notification[]
+  webhookSubscriptions WebhookSubscription[]
+  countries            Country[]
+  titles               Title[]
+  languages            Language[]
+  currencies           Currency[]
+  ssoConfigurations    SSOConfiguration[]
+  ssoConnections       SSOConnection[]
+  notes                Note[]
+  noteCategories       NoteCategory[]
+
+  @@index([name])
+  @@index([slug])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  tenantId       String?
+  userId         String?
+  actingAsUserId String?
+  action         String   @db.VarChar(100)
+  entityType     String   @db.VarChar(100)
+  entityId       String?  @db.VarChar(255)
+  description    String?  @db.Text
+  metadata       Json?
+  ipAddress      String?  @db.VarChar(64)
+  userAgent      String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([tenantId, action, createdAt])
+  @@index([entityType, entityId])
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @db.VarChar(255)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  hash      String   @db.VarChar(255)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Invitation {
+  id          String           @id @default(cuid())
+  email       String           @db.VarChar(255)
+  tenantId    String
+  roleIds     String[]
+  token       String           @unique @db.VarChar(128)
+  status      InvitationStatus @default(PENDING)
+  invitedById String
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invitedBy User   @relation(fields: [invitedById], references: [id])
+
+  @@index([token])
+  @@index([tenantId])
+  @@index([email])
+  @@index([status])
+}
+
+model SystemSetting {
+  id             String    @id @default(cuid())
+  tenantId       String?
+  key            String    @db.VarChar(120)
+  value          String    @db.Text
+  type           String    @default("string") @db.VarChar(20)
+  category       String    @default("general") @db.VarChar(50)
+  scope          String    @default("global") @db.VarChar(20)
+  scopeId        String    @default("") @db.VarChar(120)
+  lastAccessedAt DateTime?
+  accessCount    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([key, scope, scopeId])
+  @@index([tenantId])
+  @@index([category])
+}
+
+model FeatureFlag {
+  id                 String   @id @default(cuid())
+  key                String   @unique @db.VarChar(120)
+  description        String?  @db.Text
+  scope              String   @default("tenant") @db.VarChar(20)
+  enabled            Boolean  @default(false)
+  enabledForTenants  String[] @default([])
+  disabledForTenants String[] @default([])
+  enabledForRoles    String[] @default([])
+  enabledForUsers    String[] @default([])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ─── Events & Jobs ─────────────────────────────────────
+
+model Job {
+  id          String    @id @default(cuid())
+  type        String    @db.VarChar(100)
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  nextRunAt   DateTime  @default(now())
+  lastError   String?   @db.Text
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([status, nextRunAt])
+  @@index([type])
+}
+
+model IdempotencyKey {
+  id           String   @id @default(cuid())
+  key          String   @db.VarChar(255)
+  tenantId     String
+  method       String   @db.VarChar(10)
+  path         String   @db.VarChar(500)
+  statusCode   Int
+  responseBody String   @db.Text
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([key, tenantId])
+  @@index([expiresAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  tenantId  String
+  type      String    @db.VarChar(100)
+  title     String    @db.VarChar(255)
+  message   String    @db.Text
+  data      Json?
+  read      Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+}
+
+model WebhookSubscription {
+  id                    String        @id @default(cuid())
+  tenantId              String
+  url                   String        @db.VarChar(500)
+  description           String?       @db.Text
+  events                String[]
+  secret                String        @db.VarChar(255)
+  status                WebhookStatus @default(ACTIVE)
+  version               String        @default("v1") @db.VarChar(10)
+  maxRetries            Int           @default(5)
+  retryBackoffMs        Int[]         @default([1000, 5000, 30000, 300000, 1800000])
+  timeoutMs             Int           @default(10000)
+  consecutiveFailures   Int           @default(0)
+  circuitBreakerOpen    Boolean       @default(false)
+  circuitBreakerResetAt DateTime?
+  headers               Json?
+  metadata              Json?
+  createdBy             String
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId, status])
+}
+
+model WebhookDelivery {
+  id              String         @id @default(cuid())
+  tenantId        String
+  subscriptionId  String
+  eventType       String         @db.VarChar(100)
+  eventId         String         @db.VarChar(255)
+  payload         Json
+  status          DeliveryStatus @default(PENDING)
+  attempts        Int            @default(0)
+  maxAttempts     Int            @default(5)
+  nextRetryAt     DateTime?
+  responseCode    Int?
+  responseBody    String?        @db.Text
+  responseHeaders Json?
+  latencyMs       Int?
+  errorMessage    String?        @db.Text
+  errorType       String?        @db.VarChar(100)
+  deliveredAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, status])
+  @@index([tenantId, eventType, createdAt])
+  @@index([status, nextRetryAt])
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+// ─── Reference Data ────────────────────────────────────
+
+model Country {
+  id          String   @id @default(cuid())
+  tenantId    String
+  code        String   @db.VarChar(2)
+  name        String   @db.VarChar(100)
+  alpha3      String?  @db.VarChar(3)
+  numericCode String?  @db.VarChar(3)
+  phoneCode   String?  @db.VarChar(10)
+  flag        String?  @db.VarChar(10)
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model Title {
+  id        String   @id @default(cuid())
+  tenantId  String
+  code      String   @db.VarChar(20)
+  name      String   @db.VarChar(100)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model Language {
+  id         String   @id @default(cuid())
+  tenantId   String
+  code       String   @db.VarChar(10)
+  name       String   @db.VarChar(100)
+  nativeName String?  @db.VarChar(100)
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model Currency {
+  id            String   @id @default(cuid())
+  tenantId      String
+  code          String   @db.VarChar(3)
+  name          String   @db.VarChar(100)
+  symbol        String?  @db.VarChar(10)
+  decimalDigits Int      @default(2)
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, sortOrder])
+}
+
+// ─── SSO ─────────────────────────────────────────────
+
+enum SSOProvider {
+  OKTA
+  AZURE_AD
+  GOOGLE
+  CUSTOM_OIDC
+  CUSTOM_SAML
+}
+
+enum SSOProtocol {
+  OIDC
+  SAML
+}
+
+model SSOConfiguration {
+  id              String      @id @default(cuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider        SSOProvider
+  protocol        SSOProtocol @default(OIDC)
+  displayName     String?     @db.VarChar(200)
+  issuerUrl       String?     @db.VarChar(500)
+  clientId        String?     @db.VarChar(255)
+  clientSecret    String?     @db.Text
+  metadataUrl     String?     @db.VarChar(500)
+  callbackUrl     String      @db.VarChar(500)
+  autoProvision   Boolean     @default(false)
+  enforceSSO      Boolean     @default(false)
+  defaultRoleId   String?
+  x509Certificate String?     @db.Text
+  ssoUrl          String?     @db.VarChar(500)
+  spEntityId      String?     @db.VarChar(500)
+  nameIdFormat    String?     @default("urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress") @db.VarChar(255)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([tenantId])
+}
+
+model SSOConnection {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       SSOProvider
+  providerUserId String      @db.VarChar(255)
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email          String      @db.VarChar(255)
+  displayName    String?     @db.VarChar(200)
+  avatarUrl      String?     @db.VarChar(500)
+  lastLoginAt    DateTime    @default(now())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([provider, providerUserId])
+  @@unique([userId, provider, tenantId])
   @@index([userId])
+  @@index([tenantId])
 }
 
-model UserSession {
-  id           String    @id @default(cuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId    String    @unique
-  accessToken  String?
-  refreshToken String?
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+// ─── Notes (demo entity) ─────────────────────────────
+// The Notes module is the template's "living documentation" — it exercises
+// every shipped pattern (shared editor, cascading selects, saved views, custom
+// fields, dialog sub-entities, soft delete, versioning) so apps forked from
+// the template have a working reference to copy from.
 
-  @@index([sessionId])
-  @@index([userId])
+enum NoteStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
-enum SyncType {
-  users
-  hierarchy
-  reference_data
-  link_references
-  full_sync
-  selective_sync
-  incremental_sync
+model NoteCategory {
+  id          String         @id @default(cuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String         @db.VarChar(100)
+  color       String?        @db.VarChar(20)
+  parentId    String?
+  parent      NoteCategory?  @relation("NoteCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    NoteCategory[] @relation("NoteCategoryTree")
+  sortOrder   Int            @default(0)
+  description String?        @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+
+  notes Note[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([parentId])
+  @@index([deletedAt])
 }
 
-enum SyncStatus {
-  running
-  success
-  error
-  partial
-  cancelled
+model Note {
+  id         String        @id @default(cuid())
+  tenantId   String
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title      String        @db.VarChar(255)
+  content    String        @db.Text
+  status     NoteStatus    @default(DRAFT)
+  categoryId String?
+  category   NoteCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags       String[]
+  dueDate    DateTime?
+  authorId   String
+  author     User          @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  version    Int           @default(1)
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  deletedAt  DateTime?
+
+  comments NoteComment[]
+
+  @@index([tenantId])
+  @@index([tenantId, status, deletedAt])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([deletedAt])
 }
 
-enum ScheduleSyncType {
-  incremental
-  full
-  selective
-}
+model NoteComment {
+  id        String    @id @default(cuid())
+  noteId    String
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-model SyncLog {
-  id               String        @id @default(uuid())
-  syncType         SyncType
-  status           SyncStatus
-  message          String?
-  recordsProcessed Int           @default(0)
-  recordsFailed    Int           @default(0)
-  startedAt        DateTime      @default(now())
-  completedAt      DateTime?
-  createdAt        DateTime      @default(now())
-  masterSyncLogId  String? // Reference to master sync log for full syncs
-  scheduleId       String? // Reference to schedule that triggered this sync
-  schedule         SyncSchedule? @relation(fields: [scheduleId], references: [id])
-}
-
-model SyncSchedule {
-  id             String           @id @default(uuid())
-  name           String           @unique
-  description    String?
-  syncType       ScheduleSyncType
-  cronExpression String // Cron expression for scheduling
-  syncOptions    Json // Stored sync options as JSON
-  enabled        Boolean          @default(true)
-  lastRun        DateTime?
-  nextRun        DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  // Relations
-  syncLogs SyncLog[]
+  @@index([noteId, createdAt])
+  @@index([authorId])
+  @@index([deletedAt])
 }

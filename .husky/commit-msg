@@ -1,0 +1,4 @@
+# git invokes this hook with cwd = repo root; $1 is relative to that.
+# Resolve $1 to an absolute path so both normal and merge commits validate.
+MSG_FILE="$PWD/$1"
+npx --no -- commitlint --edit "$MSG_FILE"

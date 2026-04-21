@@ -1,152 +1,111 @@
-import { data, Form, Link, redirect } from "react-router";
-import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
-import { requireUser } from "~/lib/auth.server";
-import {
-  getFilterOptions,
-  getStaffByEmail,
-  getStaffList,
-} from "~/lib/staff.server";
+import { Link, redirect } from "react-router";
+import { getUserId } from "~/utils/auth/auth.server";
+import { prisma } from "~/utils/db/db.server";
 import type { Route } from "./+types/index";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Greenbook" },
-    { name: "description", content: "Greenbook" },
+    { title: "Welcome to Your App" },
+    {
+      name: "description",
+      content:
+        "A modern, full-stack application built with React Router. Get started today and experience the power of our platform.",
+    },
   ];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  try {
-    const user = await requireUser(request);
+  const userId = await getUserId(request);
 
-    // Get current user's profile from database
-    let userProfile = null;
-    try {
-      userProfile = await getStaffByEmail(user.email);
-    } catch (error) {
-      console.error("Failed to fetch user profile:", error);
-      // Continue without profile - user can still use the app
-    }
-
-    const url = new URL(request.url);
-    const searchTerm = url.searchParams.get("search");
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const department = url.searchParams.get("department");
-    const jobTitle = url.searchParams.get("jobTitle");
-    const officeLocation = url.searchParams.get("officeLocation");
-    const clear = url.searchParams.get("clear");
-
-    // If clear is set, redirect to the base page
-    if (clear === "true") {
-      return redirect("/");
-    }
-
-    // Get filter options
-    const filterOptions = await getFilterOptions();
-
-    // Prepare filters - convert "all" values to undefined
-    const filters = {
-      department: department && department !== "all" ? department : undefined,
-      jobTitle: jobTitle && jobTitle !== "all" ? jobTitle : undefined,
-      officeLocation:
-        officeLocation && officeLocation !== "all" ? officeLocation : undefined,
-    };
-
-    // Calculate pagination
-    const take = 50;
-    const skip = (page - 1) * take;
-
-    const result = await getStaffList({
-      skip,
-      take,
-      search: searchTerm || undefined,
-      ...filters,
+  if (userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { tenant: { select: { slug: true } } },
     });
-
-    return data({
-      user,
-      userProfile,
-      users: result.staff,
-      total: result.total,
-      currentPage: page,
-      totalPages: Math.ceil(result.total / take),
-      searchTerm,
-      filters,
-      filterOptions,
-    });
-  } catch {
-    return data({
-      user: null,
-      userProfile: null,
-      users: [],
-      total: 0,
-      currentPage: 1,
-      totalPages: 1,
-      searchTerm: null,
-      filters: {},
-      filterOptions: {
-        departments: [] as Array<{ id: string; name: string }>,
-        jobTitles: [] as Array<{ id: string; title: string }>,
-        officeLocations: [] as string[],
-      },
-    });
+    // Tenant users go to their tenant dashboard; unassigned users fall back
+    // to `/login` so they can pick a tenant (or auth error out cleanly).
+    throw redirect(user?.tenant?.slug ? `/${user.tenant.slug}` : "/login");
   }
+
+  return { message: "Welcome to my app" };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  if (!loaderData.user) {
-    return (
-      <div className="min-h-screen">
-        {/* Hero Section */}
-        <div className="container mx-auto px-4 py-2">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-8">
-              <svg
-                className="w-10 h-10 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      {/* Navigation */}
+      <nav className="relative px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-purple-600">
+              <span className="text-sm font-bold text-white">A</span>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Welcome to{" "}
-              <span className="text-primary">African Union Greenbook</span>
-            </h1>
-            <p className="text-lg text-gray-600 mb-6 max-w-2xl mx-auto leading-relaxed">
-              Connect with your colleagues, discover your organization's
-              network, and build meaningful relationships across departments and
-              offices.
+            <span className="text-xl font-bold text-gray-900 dark:text-white">YourApp</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Link
+              to="/login"
+              className="text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+            >
+              Sign In
+            </Link>
+            <Link
+              to="/signup"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+            >
+              Get Started
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="relative px-6 py-20">
+        <div className="mx-auto max-w-7xl text-center">
+          <h1 className="mb-6 text-5xl font-bold text-gray-900 md:text-6xl dark:text-white">
+            Build Something
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {" "}
+              Amazing
+            </span>
+          </h1>
+          <p className="mx-auto mb-8 max-w-3xl text-xl text-gray-600 dark:text-gray-300">
+            Create powerful applications with our modern, full-stack platform. Everything you need
+            to build, deploy, and scale your next big idea.
+          </p>
+          <div className="flex flex-col justify-center gap-4 sm:flex-row">
+            <Link
+              to="/signup"
+              className="rounded-lg bg-blue-600 px-8 py-4 text-lg font-semibold text-white transition-colors hover:bg-blue-700"
+            >
+              Start Building Today
+            </Link>
+            <Link
+              to="/login"
+              className="rounded-lg border border-gray-300 px-8 py-4 text-lg font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              View Demo
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="bg-white px-6 py-20 dark:bg-gray-900">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-16 text-center">
+            <h2 className="mb-4 text-4xl font-bold text-gray-900 dark:text-white">
+              Why Choose Our Platform?
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300">
+              Everything you need to build modern applications
             </p>
           </div>
-
-          {/* Features Section */}
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+          <div className="grid gap-8 md:grid-cols-3">
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
                 <svg
-                  className="w-6 h-6 text-blue-600"
+                  className="h-8 w-8 text-blue-600 dark:text-blue-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -155,23 +114,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                Find Colleagues
+              <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                Lightning Fast
               </h3>
-              <p className="text-gray-600">
-                Search and discover team members across your organization with
-                advanced filtering by department, role, and location.
+              <p className="text-gray-600 dark:text-gray-300">
+                Built with performance in mind. Your applications will load instantly and run
+                smoothly.
               </p>
             </div>
-
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
                 <svg
-                  className="w-6 h-6 text-primary"
+                  className="h-8 w-8 text-green-600 dark:text-green-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -180,23 +138,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                Build Connections
+              <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                Secure by Default
               </h3>
-              <p className="text-gray-600">
-                Connect with colleagues, understand organizational structure,
-                and foster collaboration across teams and departments.
+              <p className="text-gray-600 dark:text-gray-300">
+                Enterprise-grade security features built-in. Your data and users are always
+                protected.
               </p>
             </div>
-
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900">
                 <svg
-                  className="w-6 h-6 text-purple-600"
+                  className="h-8 w-8 text-purple-600 dark:text-purple-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -205,350 +162,166 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                Organizational Insights
+              <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                Developer Friendly
               </h3>
-              <p className="text-gray-600">
-                Gain insights into your organization's structure, departments,
-                and team dynamics with comprehensive profiles and analytics.
+              <p className="text-gray-600 dark:text-gray-300">
+                Intuitive APIs and comprehensive documentation. Get started in minutes, not hours.
               </p>
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      </section>
 
-  const {
-    user,
-    userProfile,
-    users,
-    total,
-    currentPage,
-    totalPages,
-    searchTerm,
-    filters,
-    filterOptions,
-  } = loaderData;
-
-  return (
-    <div className="container mx-auto">
-      <div className="grid gap-6">
-        {/* Users Directory */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Users Directory</CardTitle>
-            <CardDescription>Find people in your organization</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form method="get" className="space-y-4 mb-6">
-              {/* Search and Filters Row */}
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Left side - Search and filters */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
-                  <Input
-                    type="text"
-                    name="search"
-                    placeholder="Search African Union users by name or email..."
-                    defaultValue={searchTerm || ""}
-                  />
-
-                  <Select
-                    name="department"
-                    defaultValue={filters.department || "all"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Departments" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
-                      {filterOptions.departments.map((dept) => (
-                        <SelectItem key={dept.id} value={dept.name}>
-                          {dept.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select
-                    name="jobTitle"
-                    defaultValue={filters.jobTitle || "all"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Job Titles" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Job Titles</SelectItem>
-                      {filterOptions.jobTitles.map((title) => (
-                        <SelectItem key={title.id} value={title.title}>
-                          {title.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select
-                    name="officeLocation"
-                    defaultValue={filters.officeLocation || "all"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Offices" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Offices</SelectItem>
-                      {filterOptions.officeLocations.map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Right side - Action buttons */}
-                <div className="flex gap-2 lg:flex-shrink-0">
-                  <Button type="submit" className="cursor-pointer">
-                    Search
-                  </Button>
-                  <Button
-                    type="submit"
-                    name="clear"
-                    value="true"
-                    variant="outline"
-                    className="cursor-pointer"
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-            </Form>
-
-            {(searchTerm ||
-              (filters.department && filters.department !== "all") ||
-              (filters.jobTitle && filters.jobTitle !== "all") ||
-              (filters.officeLocation && filters.officeLocation !== "all")) && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-600">
-                  {searchTerm && `Search results for "${searchTerm}"`}
-                  {filters.department &&
-                    filters.department !== "all" &&
-                    ` • Department: ${filters.department}`}
-                  {filters.jobTitle &&
-                    filters.jobTitle !== "all" &&
-                    ` • Job Title: ${filters.jobTitle}`}
-                  {filters.officeLocation &&
-                    filters.officeLocation !== "all" &&
-                    ` • Office: ${filters.officeLocation}`}
-                  {` • ${users.length} users found`}
-                </p>
-              </div>
-            )}
-
-            <div className="grid gap-4">
-              {users.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">
-                    {searchTerm ||
-                    (filters.department && filters.department !== "all") ||
-                    (filters.jobTitle && filters.jobTitle !== "all") ||
-                    (filters.officeLocation && filters.officeLocation !== "all")
-                      ? "No users found matching your criteria."
-                      : "No users available."}
-                  </p>
-                </div>
-              ) : (
-                users.map((userProfile) => (
-                  <Link
-                    to={`/users/${userProfile.id}`}
-                    key={userProfile.id}
-                    className="block"
-                  >
-                    <Card className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-4">
-                          {/* Profile Avatar */}
-                          <div className="flex-shrink-0">
-                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
-                              <span className="text-gray-500 font-semibold text-lg">
-                                {userProfile.displayName
-                                  ?.charAt(0)
-                                  ?.toUpperCase() || "?"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* User Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-lg truncate">
-                                  {userProfile.displayName}
-                                </h3>
-                                <p className="text-gray-600 truncate">
-                                  {userProfile.email ||
-                                    userProfile.userPrincipalName}
-                                </p>
-                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                  {userProfile.jobTitle && (
-                                    <div>
-                                      <span className="font-medium text-gray-500">
-                                        Job Title:
-                                      </span>{" "}
-                                      {userProfile.jobTitle}
-                                    </div>
-                                  )}
-                                  {userProfile.department && (
-                                    <div>
-                                      <span className="font-medium text-gray-500">
-                                        Department:
-                                      </span>{" "}
-                                      {userProfile.department}
-                                    </div>
-                                  )}
-                                  {userProfile.officeLocation && (
-                                    <div>
-                                      <span className="font-medium text-gray-500">
-                                        Office:
-                                      </span>{" "}
-                                      {userProfile.officeLocation}
-                                    </div>
-                                  )}
-                                  {userProfile.employeeId && (
-                                    <div>
-                                      <span className="font-medium text-gray-500">
-                                        Employee ID:
-                                      </span>{" "}
-                                      {userProfile.employeeId}
-                                    </div>
-                                  )}
-                                </div>
-                                {userProfile.businessPhones &&
-                                  userProfile.businessPhones.length > 0 && (
-                                    <div className="mt-2 text-sm">
-                                      <span className="font-medium text-gray-500">
-                                        Phone:
-                                      </span>{" "}
-                                      {userProfile.businessPhones[0]}
-                                    </div>
-                                  )}
-                              </div>
-                              <div className="ml-4 text-right">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    userProfile.accountEnabled
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-red-100 text-red-800"
-                                  }`}
-                                >
-                                  {userProfile.accountEnabled
-                                    ? "Active"
-                                    : "Disabled"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))
-              )}
+      {/* Stats Section */}
+      <section className="bg-gray-50 px-6 py-20 dark:bg-gray-800">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-8 text-center md:grid-cols-4">
+            <div>
+              <div className="mb-2 text-4xl font-bold text-blue-600 dark:text-blue-400">10K+</div>
+              <div className="text-gray-600 dark:text-gray-300">Active Users</div>
             </div>
-
-            {totalPages > 1 && (
-              <div className="flex justify-center mt-6 gap-2">
-                <Form method="get">
-                  {searchTerm && (
-                    <input type="hidden" name="search" value={searchTerm} />
-                  )}
-                  {filters.department && filters.department !== "all" && (
-                    <input
-                      type="hidden"
-                      name="department"
-                      value={filters.department}
-                    />
-                  )}
-                  {filters.jobTitle && filters.jobTitle !== "all" && (
-                    <input
-                      type="hidden"
-                      name="jobTitle"
-                      value={filters.jobTitle}
-                    />
-                  )}
-                  {filters.officeLocation &&
-                    filters.officeLocation !== "all" && (
-                      <input
-                        type="hidden"
-                        name="officeLocation"
-                        value={filters.officeLocation}
-                      />
-                    )}
-                  <input
-                    type="hidden"
-                    name="page"
-                    value={Math.max(1, currentPage - 1)}
-                  />
-                  <Button
-                    type="submit"
-                    className="cursor-pointer"
-                    disabled={currentPage <= 1}
-                  >
-                    Previous
-                  </Button>
-                </Form>
-
-                <span className="flex items-center px-4 text-sm text-gray-600">
-                  Page {currentPage} of {totalPages}
-                </span>
-
-                <Form method="get">
-                  {searchTerm && (
-                    <input type="hidden" name="search" value={searchTerm} />
-                  )}
-                  {filters.department && filters.department !== "all" && (
-                    <input
-                      type="hidden"
-                      name="department"
-                      value={filters.department}
-                    />
-                  )}
-                  {filters.jobTitle && filters.jobTitle !== "all" && (
-                    <input
-                      type="hidden"
-                      name="jobTitle"
-                      value={filters.jobTitle}
-                    />
-                  )}
-                  {filters.officeLocation &&
-                    filters.officeLocation !== "all" && (
-                      <input
-                        type="hidden"
-                        name="officeLocation"
-                        value={filters.officeLocation}
-                      />
-                    )}
-                  <input
-                    type="hidden"
-                    name="page"
-                    value={Math.min(totalPages, currentPage + 1)}
-                  />
-                  <Button
-                    type="submit"
-                    className="cursor-pointer"
-                    disabled={currentPage >= totalPages}
-                  >
-                    Next
-                  </Button>
-                </Form>
+            <div>
+              <div className="mb-2 text-4xl font-bold text-green-600 dark:text-green-400">
+                99.9%
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              <div className="text-gray-600 dark:text-gray-300">Uptime</div>
+            </div>
+            <div>
+              <div className="mb-2 text-4xl font-bold text-purple-600 dark:text-purple-400">
+                50+
+              </div>
+              <div className="text-gray-600 dark:text-gray-300">Countries</div>
+            </div>
+            <div>
+              <div className="mb-2 text-4xl font-bold text-orange-600 dark:text-orange-400">
+                24/7
+              </div>
+              <div className="text-gray-600 dark:text-gray-300">Support</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="px-6 py-20">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="mb-4 text-4xl font-bold text-gray-900 dark:text-white">
+            Ready to Get Started?
+          </h2>
+          <p className="mb-8 text-xl text-gray-600 dark:text-gray-300">
+            Join thousands of developers who are already building amazing applications with our
+            platform.
+          </p>
+          <Link
+            to="/signup"
+            className="transform rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-lg font-semibold text-white transition-all hover:scale-105 hover:from-blue-700 hover:to-purple-700"
+          >
+            Start Your Free Trial
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 px-6 py-12 text-white dark:bg-gray-950">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-8 md:grid-cols-4">
+            <div>
+              <div className="mb-4 flex items-center space-x-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-purple-600">
+                  <span className="text-sm font-bold text-white">A</span>
+                </div>
+                <span className="text-xl font-bold">YourApp</span>
+              </div>
+              <p className="text-gray-400">
+                Building the future of web applications, one line of code at a time.
+              </p>
+            </div>
+            <div>
+              <h3 className="mb-4 font-semibold">Product</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Features
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Pricing
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Documentation
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    API
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="mb-4 font-semibold">Company</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    About
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Blog
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Careers
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Contact
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="mb-4 font-semibold">Support</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Help Center
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Community
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Status
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="transition-colors hover:text-white">
+                    Security
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-8 border-t border-gray-800 pt-8 text-center text-gray-400">
+            <p>&copy; 2024 YourApp. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

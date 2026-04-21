@@ -1,0 +1,11 @@
+{
+  "required": "Required",
+  "emailInvalid": "Invalid email address",
+  "passwordRequired": "Password is required",
+  "passwordTooShort": "Password must be at least 8 characters",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "min": "Must be at least {{min}}",
+  "max": "Must be no more than {{max}}",
+  "invalidCode": "Invalid code",
+  "invalidCodeCheckAgain": "Invalid or expired code. Please try again."
+}

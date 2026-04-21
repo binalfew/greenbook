@@ -1,0 +1,21 @@
+{
+  "title": "Notifications",
+  "empty": "Aucune notification",
+  "unread": "Non lues",
+  "read": "Lues",
+  "all": "Toutes",
+  "markAsRead": "Marquer comme lue",
+  "markAllRead": "Tout marquer comme lu",
+  "deleteNotification": "Supprimer la notification",
+  "viewAll": "Voir tout",
+  "recent": "Récentes",
+  "unreadCount": "{{count}} non lue(s)",
+  "justNow": "à l'instant",
+  "minutesAgo": "il y a {{count}} min",
+  "hoursAgo": "il y a {{count}} h",
+  "daysAgo": "il y a {{count}} j",
+  "type": "Type",
+  "filterByStatus": "Filtrer par statut",
+  "filterByType": "Filtrer par type",
+  "noRecent": "Aucune notification récente"
+}

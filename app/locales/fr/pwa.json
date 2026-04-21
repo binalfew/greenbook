@@ -1,0 +1,14 @@
+{
+  "offlineBanner": "Vous êtes actuellement hors ligne. Certaines fonctionnalités peuvent être indisponibles.",
+  "offlineTitle": "Vous êtes hors ligne",
+  "offlineBody": "Il semble que vous ayez perdu votre connexion Internet. Certaines fonctionnalités peuvent être indisponibles jusqu'à votre retour en ligne.",
+  "tryAgain": "Réessayer",
+  "installTitle": "Installer l'application",
+  "installSubtitle": "Installez pour un support hors ligne et un chargement plus rapide.",
+  "install": "Installer",
+  "notNow": "Plus tard",
+  "updateTitle": "Mise à jour disponible",
+  "updateSubtitle": "Une nouvelle version est disponible. Actualisez pour obtenir les dernières mises à jour.",
+  "updateNow": "Mettre à jour",
+  "later": "Plus tard"
+}
