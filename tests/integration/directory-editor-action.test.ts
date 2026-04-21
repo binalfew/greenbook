@@ -36,7 +36,7 @@ async function arrange(): Promise<Seeded> {
 
   // Two distinct roles per tenant — mirrors the directory seed shape.
   const focalRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "focal_person", scope: "TENANT" },
+    data: { tenantId: tenant.id, name: "focal", scope: "TENANT" },
   });
   const managerRole = await prisma.role.create({
     data: { tenantId: tenant.id, name: "manager", scope: "TENANT" },

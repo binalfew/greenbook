@@ -65,7 +65,7 @@ const UNIQUE_PERMISSIONS = [
   { resource: "note", action: "delete", module: "content", description: "Delete notes" },
   { resource: "two-factor", action: "read", module: "auth", description: "Read 2FA enforcement policy" },
   { resource: "two-factor", action: "update", module: "auth", description: "Update 2FA enforcement policy" },
-  // Directory — focal_person authors submissions, manager reviews
+  // Directory — focal authors submissions, manager reviews
   { resource: "organization", action: "read", module: "directory", description: "Read organizations" },
   { resource: "organization", action: "write", module: "directory", description: "Create or edit organizations (via approval)" },
   { resource: "organization", action: "delete", module: "directory", description: "Delete organizations (via approval)" },
@@ -210,14 +210,14 @@ async function main() {
     });
   }
 
-  // Directory roles — focal_person (authors submissions) + manager (reviewer)
+  // Directory roles — focal (authors submissions) + manager (reviewer)
   console.log("Seeding directory roles...");
-  const focalPersonRole = await prisma.role.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: "focal_person" } },
+  const focalRole = await prisma.role.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: "focal" } },
     update: {},
     create: {
       tenantId: tenant.id,
-      name: "focal_person",
+      name: "focal",
       scope: "TENANT",
       description: "Authors directory submissions; cannot approve",
     },
@@ -233,7 +233,7 @@ async function main() {
     },
   });
 
-  const focalPersonPerms = [
+  const focalPerms = [
     { resource: "organization", action: "read" },
     { resource: "person", action: "read" },
     { resource: "position", action: "read" },
@@ -243,7 +243,7 @@ async function main() {
     { resource: "directory-change", action: "read-own" },
   ];
   const managerPerms = [
-    ...focalPersonPerms,
+    ...focalPerms,
     { resource: "organization", action: "write" },
     { resource: "organization", action: "delete" },
     { resource: "person", action: "write" },
@@ -257,14 +257,14 @@ async function main() {
     { resource: "directory-change", action: "reject" },
   ];
 
-  await prisma.rolePermission.deleteMany({ where: { roleId: focalPersonRole.id } });
-  for (const { resource, action } of focalPersonPerms) {
+  await prisma.rolePermission.deleteMany({ where: { roleId: focalRole.id } });
+  for (const { resource, action } of focalPerms) {
     const perm = await prisma.permission.findUnique({
       where: { resource_action: { resource, action } },
     });
     if (perm) {
       await prisma.rolePermission.create({
-        data: { roleId: focalPersonRole.id, permissionId: perm.id, access: "any" },
+        data: { roleId: focalRole.id, permissionId: perm.id, access: "any" },
       });
     }
   }
@@ -412,7 +412,7 @@ async function main() {
   // Seed directory baseline for the system tenant: org types, position
   // types, regions, member states, starter org tree, demo focal/manager users.
   console.log("Seeding directory baseline...");
-  await seedDirectory(tenant.id, { activeStatusId: activeStatus.id, focalRoleId: focalPersonRole.id, managerRoleId: managerRole.id });
+  await seedDirectory(tenant.id, { activeStatusId: activeStatus.id, focalRoleId: focalRole.id, managerRoleId: managerRole.id });
 
   console.log("✅ Seeding completed!");
   console.log("🔑 Users created:");

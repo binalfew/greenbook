@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
 // FF_PUBLIC_DIRECTORY.
 //
 // Credentials come from prisma/seed.ts:
-//   focal@example.com / focal123    (role: focal_person)
+//   focal@example.com / focal123    (role: focal)
 //   manager@example.com / manager123 (role: manager)
 
 async function login(page: import("@playwright/test").Page, email: string, password: string) {

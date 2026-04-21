@@ -936,7 +936,7 @@ Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 mem
 
 Every mutation flows through `app/services/directory-changes.server.ts`. The real entity tables hold only published state; proposed changes live as `ChangeRequest` rows with status `PENDING → APPROVED | REJECTED | WITHDRAWN`.
 
-- **Focal persons** (role `focal_person`) hold `directory-change:submit`. Their edits `submitChange()` — the record doesn't change until a manager approves.
+- **Focal persons** (role `focal`) hold `directory-change:submit`. Their edits `submitChange()` — the record doesn't change until a manager approves.
 - **Managers** (role `manager`) hold `{organization,person,position,position-assignment}:write`. Their direct edits `submitAndApply()` — creates a self-approved ChangeRequest + applies in one transaction.
 - **One PENDING per `(entityType, entityId)`** enforced in service (future partial unique DB index).
 - **Approval runs in a single `$transaction`** — `_applyCreate/Update/Move/SoftDelete` writers each accept an optional `tx: Prisma.TransactionClient` so guards, writes, and the ChangeRequest update commit atomically.
@@ -1026,8 +1026,8 @@ Under module `directory`:
 
 Seeded roles per tenant (in `prisma/seed.ts`):
 
-- `focal_person` — reads + `directory-change:{submit, withdraw-own, read-own}`
-- `manager` — everything `focal_person` has + entity writes + `directory-change:{read-all, approve, reject}`
+- `focal` — reads + `directory-change:{submit, withdraw-own, read-own}`
+- `manager` — everything `focal` has + entity writes + `directory-change:{read-all, approve, reject}`
 - `admin` (existing) — picks up every permission via the seed's "all permissions" assignment
 
 Demo users: `focal@example.com / focal123`, `manager@example.com / manager123`.
