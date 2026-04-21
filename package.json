@@ -15,6 +15,7 @@
     "docker:up": "docker compose up -d",
     "format": "prettier --write .",
     "lint": "tsc -b --noEmit",
+    "postinstall": "prisma generate",
     "prepare": "husky",
     "start": "node server.js",
     "test": "vitest run",

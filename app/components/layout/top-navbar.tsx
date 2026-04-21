@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Form, Link, NavLink, useLocation, useMatches, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { LogOut, Search, User } from "lucide-react";
+import { Home, LogOut, Search, User } from "lucide-react";
 import { ShortcutHelp } from "~/components/layout/shortcut-help";
 import {
   useKeyboardShortcuts,
@@ -242,6 +242,27 @@ export function TopNavbar({
                 isSuperAdmin={brandIsSuperAdmin}
                 permissions={permissions}
               />
+              <Separator
+                orientation="vertical"
+                className="bg-primary-foreground/30 mr-2 data-[orientation=vertical]:h-4"
+              />
+            </>
+          )}
+          {hideSidebarTrigger && (
+            <>
+              <NavLink
+                to={basePrefix}
+                end
+                className={({ isActive }) =>
+                  cn(
+                    "hover:bg-primary-foreground/10 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                    isActive ? "bg-primary-foreground/10" : "text-primary-foreground/80",
+                  )
+                }
+              >
+                <Home className="size-4" />
+                <span>{tNav("dashboard")}</span>
+              </NavLink>
               <Separator
                 orientation="vertical"
                 className="bg-primary-foreground/30 mr-2 data-[orientation=vertical]:h-4"

@@ -1,6 +1,7 @@
-import { Building2, ChevronsUpDown, ClipboardList, Settings, ShieldCheck } from "lucide-react";
+import { Building2, ChevronsUpDown, ClipboardList, Settings } from "lucide-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
+import defaultLogoUrl from "~/assets/logo.svg";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,22 +106,17 @@ function SidebarVariant({
   const tenantDisplay = (
     <>
       <div
-        className={`text-primary-foreground flex items-center justify-center overflow-hidden rounded-lg ${collapsed ? "size-5" : "aspect-square size-8"}`}
+        className={`text-primary-foreground flex items-center justify-center overflow-hidden rounded-lg ${collapsed ? "size-8" : "aspect-square size-16"}`}
       >
-        {activeTenant.logoUrl ? (
-          <img
-            src={activeTenant.logoUrl}
-            alt={activeTenant.name}
-            className={`${collapsed ? "size-5" : "size-8"} rounded-lg object-contain brightness-0 invert`}
-          />
-        ) : (
-          <ShieldCheck className={collapsed ? "size-5" : "size-8"} />
-        )}
+        <img
+          src={activeTenant.logoUrl || defaultLogoUrl}
+          alt={activeTenant.name}
+          className={`${collapsed ? "size-8" : "size-16"} rounded-lg object-contain brightness-0 invert`}
+        />
       </div>
       {!collapsed && (
         <div className="grid flex-1 text-left text-sm leading-tight">
           <span className="truncate font-semibold">{activeTenant.name}</span>
-          <span className="text-primary-foreground/70 truncate text-xs">{activeTenant.plan}</span>
         </div>
       )}
     </>
@@ -147,7 +143,7 @@ function SidebarVariant({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className={`text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground data-[state=open]:bg-primary-foreground/10 data-[state=open]:text-primary-foreground ${collapsed ? "mx-auto !w-8 justify-center !gap-0 !p-0" : ""}`}
+              className={`text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground data-[state=open]:bg-primary-foreground/10 data-[state=open]:text-primary-foreground ${collapsed ? "mx-auto !w-8 justify-center !gap-0 !p-0" : "!h-20"}`}
             >
               {tenantDisplay}
               {!collapsed && <ChevronsUpDown className="ml-auto" />}
@@ -182,16 +178,12 @@ function NavbarVariant({
 
   const brand = (
     <>
-      <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-        {activeTenant.logoUrl ? (
-          <img
-            src={activeTenant.logoUrl}
-            alt={activeTenant.name}
-            className="size-12 rounded-lg object-contain brightness-0 invert"
-          />
-        ) : (
-          <ShieldCheck className="size-8" />
-        )}
+      <span className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+        <img
+          src={activeTenant.logoUrl || defaultLogoUrl}
+          alt={activeTenant.name}
+          className="size-16 rounded-lg object-contain brightness-0 invert"
+        />
       </span>
       <span className="hidden text-sm leading-none font-medium sm:block">{activeTenant.name}</span>
     </>
