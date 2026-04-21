@@ -49,8 +49,8 @@ export default function PublicOrganizationsIndex({ loaderData }: Route.Component
       ) : (
         <OrganizationHierarchyTree
           roots={trees}
-          baseUrl="/public/directory/organizations"
-          childrenUrl="/public/directory/api/organizations/children"
+          baseUrl="/directory/organizations"
+          childrenUrl="/directory/api/organizations/children"
           moveUrl=""
           canMove={false}
           searchPlaceholder={t("organizationsPage.searchPlaceholder")}

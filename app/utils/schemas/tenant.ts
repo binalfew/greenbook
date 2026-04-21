@@ -24,6 +24,8 @@ const RESERVED_SLUGS = new Set([
   "resources",
   "home",
   "offline",
+  "directory",
+  "public",
 ]);
 
 const slugField = z

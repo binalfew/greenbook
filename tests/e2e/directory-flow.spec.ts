@@ -92,6 +92,6 @@ test.skip("focal submits → manager approves → public page renders", async ({
   await logout(page);
 
   // 3. Public: landing + detail page must render without auth.
-  await page.goto("/public/directory/organizations");
+  await page.goto("/directory/organizations");
   await expect(page.getByText(orgName).first()).toBeVisible({ timeout: 10_000 });
 });

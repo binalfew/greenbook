@@ -43,8 +43,8 @@ export default function PublicPositionDetail({ loaderData }: Route.ComponentProp
       <Link
         to={
           position.organization
-            ? `/public/directory/organizations/${position.organization.id}`
-            : "/public/directory/organizations"
+            ? `/directory/organizations/${position.organization.id}`
+            : "/directory/organizations"
         }
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
       >
@@ -89,7 +89,7 @@ export default function PublicPositionDetail({ loaderData }: Route.ComponentProp
             <AssignmentTimeline
               entries={timelineEntries}
               mode="byPosition"
-              basePrefix="/public/directory/people"
+              basePrefix="/directory/people"
             />
           </section>
         </div>
@@ -101,7 +101,7 @@ export default function PublicPositionDetail({ loaderData }: Route.ComponentProp
             </div>
             {currentHolder?.person ? (
               <Link
-                to={`/public/directory/people/${currentHolder.person.id}`}
+                to={`/directory/people/${currentHolder.person.id}`}
                 className="text-primary font-medium hover:underline"
               >
                 {[

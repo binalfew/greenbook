@@ -3,8 +3,8 @@
 # crawler indexes; the public directory is explicitly welcomed.
 
 User-agent: *
-Allow: /public/directory/
-Allow: /public/directory
+Allow: /directory/
+Allow: /directory
 
 Disallow: /admin/
 Disallow: /login

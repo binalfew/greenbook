@@ -40,14 +40,14 @@ export default function PublicDirectoryLanding({ loaderData }: Route.ComponentPr
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link to="/public/directory/organizations">
+            <Link to="/directory/organizations">
               <Network />
               {t("landing.browseOrgs")}
               <ArrowRight />
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/public/directory/people">
+            <Link to="/directory/people">
               <Users />
               {t("landing.browsePeople")}
             </Link>
@@ -64,7 +64,7 @@ export default function PublicDirectoryLanding({ loaderData }: Route.ComponentPr
             {featuredRoots.map((org) => (
               <Link
                 key={org.id}
-                to={`/public/directory/organizations/${org.id}`}
+                to={`/directory/organizations/${org.id}`}
                 className="bg-card hover:border-primary/60 group border-border relative flex flex-col gap-2 rounded-lg border p-4 transition-colors"
               >
                 <div className="flex items-start gap-3">

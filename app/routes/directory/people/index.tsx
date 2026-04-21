@@ -76,7 +76,7 @@ export default function PublicPeopleIndex({ loaderData }: Route.ComponentProps) 
             return (
               <li key={person.id}>
                 <Link
-                  to={`/public/directory/people/${person.id}`}
+                  to={`/directory/people/${person.id}`}
                   className="hover:bg-muted/60 flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
@@ -136,7 +136,7 @@ function Pagination({
     if (search) params.set("q", search);
     if (next > 1) params.set("page", String(next));
     const qs = params.toString();
-    return qs ? `/public/directory/people?${qs}` : "/public/directory/people";
+    return qs ? `/directory/people?${qs}` : "/directory/people";
   };
 
   return (

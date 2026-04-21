@@ -31,7 +31,7 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
   return (
     <div className="space-y-6">
       <Link
-        to="/public/directory/people"
+        to="/directory/people"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="size-4" />
@@ -92,7 +92,7 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
             <AssignmentTimeline
               entries={person.history}
               mode="byPerson"
-              basePrefix="/public/directory/positions"
+              basePrefix="/directory/positions"
             />
           </section>
         </div>

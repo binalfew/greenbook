@@ -30,7 +30,7 @@ export default function PublicOrganizationDetail({ loaderData }: Route.Component
   return (
     <div className="space-y-6">
       <Link
-        to="/public/directory/organizations"
+        to="/directory/organizations"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="size-4" />
@@ -49,7 +49,7 @@ export default function PublicOrganizationDetail({ loaderData }: Route.Component
               <Badge variant="outline">{org.type.name}</Badge>
               {org.parent && (
                 <Badge variant="secondary">
-                  <Link to={`/public/directory/organizations/${org.parent.id}`}>
+                  <Link to={`/directory/organizations/${org.parent.id}`}>
                     {org.parent.acronym ?? org.parent.name}
                   </Link>
                 </Badge>
@@ -82,7 +82,7 @@ export default function PublicOrganizationDetail({ loaderData }: Route.Component
                 {org.positions.map((pos) => (
                   <li key={pos.id}>
                     <Link
-                      to={`/public/directory/positions/${pos.id}`}
+                      to={`/directory/positions/${pos.id}`}
                       className="hover:bg-muted/60 flex items-center justify-between px-4 py-3"
                     >
                       <div>

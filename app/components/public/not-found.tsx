@@ -8,9 +8,9 @@ import { Link } from "react-router";
 export type PublicDetailKind = "org" | "person" | "position";
 
 const BACK_ROUTES: Record<PublicDetailKind, string> = {
-  org: "/public/directory/organizations",
-  person: "/public/directory/people",
-  position: "/public/directory/organizations",
+  org: "/directory/organizations",
+  person: "/directory/people",
+  position: "/directory/organizations",
 };
 
 const I18N_KEYS: Record<PublicDetailKind, { title: string; help: string; back: string }> = {

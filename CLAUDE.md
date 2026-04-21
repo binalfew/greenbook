@@ -945,15 +945,15 @@ Every mutation flows through `app/services/directory-changes.server.ts`. The rea
 
 ### Cross-tenant public tier (Phase D — shipped)
 
-- Admin is tenant-scoped; the public surface is a single cross-tenant unified directory at `/public/directory/*` (no tenant slug). Visitors never see the word "tenant."
+- Admin is tenant-scoped; the public surface is a single cross-tenant unified directory at `/directory/*` (no tenant slug). Visitors never see the word "tenant." (Slugs `directory` and `public` are both reserved in `app/utils/schemas/tenant.ts` so no tenant can collide.)
 - `app/services/public-directory.server.ts#getPublicTenantIds()` — 5-min-cached gate that returns tenant ids where `FF_PUBLIC_DIRECTORY` is on.
 - `public*` helpers on each entity service (`publicListOrganizationTreeRoots`, `publicListOrganizationChildren`, `publicGetOrganization`, `publicListPeople`, `publicGetPerson`, `publicGetPosition`) accept the opted-in tenant set as an argument and **never include `tenantId`** in their response shape. An integration test asserts this invariant per helper.
 - PII strip for `Person`: `email` / `phone` are returned only when `showEmail` / `showPhone` is true. Same strip applied in list + detail.
 - Shared utility: `app/utils/public-directory.server.ts` exports `getPublicContext()` (one-call gate), `PUBLIC_CACHE_HEADER` (`public, max-age=60, stale-while-revalidate=300`), `publicCacheHeaders()`, and `publicOrgToTreeNode()` (reshapes `PublicOrgNode` into the include-shape the admin tree wrappers expect, so the public tree reuses `OrganizationHierarchyTree` with `canMove={false}`).
 - Public loaders **never** call `requireSession` / `resolveTenant`. Every loader exports a `headers()` returning `Cache-Control: PUBLIC_CACHE_HEADER`. The lazy-load API route uses a shorter TTL (`max-age=30, stale-while-revalidate=120`).
-- `public/robots.txt` allows `/public/directory/*` and disallows auth paths.
+- `public/robots.txt` allows `/directory/*` and disallows auth paths.
 - Detail-page 404s throw a `Response(status: 404)` with the cache header set; each detail route's `ErrorBoundary` renders the shared `~/components/public/not-found.tsx#PublicDetailNotFound` with `kind` in `"org" | "person" | "position"`.
-- Public routes (`app/routes/public.directory/*`): `_layout` (AU chrome + language switcher + nav), `index` (hero + featured principal organs), `organizations/index` (read-only tree), `organizations/$orgId` (detail), `people/index` (search + pagination), `people/$personId` (detail with `AssignmentTimeline` over the person's full history), `positions/$positionId` (current holder + timeline), `api/organizations.children` (lazy-load children, no auth).
+- Public routes (`app/routes/directory/*`): `_layout` (AU chrome + language switcher + nav), `index` (hero + featured principal organs), `organizations/index` (read-only tree), `organizations/$orgId` (detail), `people/index` (search + pagination), `people/$personId` (detail with `AssignmentTimeline` over the person's full history), `positions/$positionId` (current holder + timeline), `api/organizations.children` (lazy-load children, no auth). Static-segment precedence means `/directory/*` wins over `/:tenant/*` at the auto-routes level.
 
 ### Phase E additions
 

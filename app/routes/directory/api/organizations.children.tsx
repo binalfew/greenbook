@@ -10,7 +10,7 @@ import type { Route } from "./+types/organizations.children";
 // are silently filtered out.
 
 export async function loader() {
-  return redirect("/public/directory/organizations");
+  return redirect("/directory/organizations");
 }
 
 export async function action({ request }: Route.ActionArgs) {

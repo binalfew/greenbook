@@ -39,7 +39,7 @@ export default function PublicDirectoryLayout({ loaderData }: Route.ComponentPro
       <header className="border-border/60 bg-card/50 border-b backdrop-blur">
         <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Link to="/public/directory" className="flex items-center gap-3">
+            <Link to="/directory" className="flex items-center gap-3">
               <div className="bg-primary text-primary-foreground grid size-10 place-items-center rounded-md font-bold">
                 AU
               </div>
@@ -51,19 +51,19 @@ export default function PublicDirectoryLayout({ loaderData }: Route.ComponentPro
             <LanguageSwitcher currentLanguage={loaderData.lang} />
           </div>
           <nav className="mt-4 flex flex-wrap gap-6" aria-label={t("siteTitle")}>
-            <NavLink to="/public/directory" end className={navItemClass}>
+            <NavLink to="/directory" end className={navItemClass}>
               {t("home")}
             </NavLink>
-            <NavLink to="/public/directory/organizations" className={navItemClass}>
+            <NavLink to="/directory/organizations" className={navItemClass}>
               <Network className="size-4" />
               {t("organizations")}
             </NavLink>
-            <NavLink to="/public/directory/people" className={navItemClass}>
+            <NavLink to="/directory/people" className={navItemClass}>
               <Users className="size-4" />
               {t("people")}
             </NavLink>
             <NavLink
-              to="/public/directory/organizations?q="
+              to="/directory/organizations?q="
               className={navItemClass}
               aria-label={t("search")}
             >
