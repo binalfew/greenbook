@@ -1,11 +1,12 @@
 {
-  "siteTitle": "Répertoire de l'UA",
+  "siteTitle": "Greenbook",
   "siteTagline": "Organisations, personnes et postes à travers l'Union africaine.",
   "home": "Accueil",
   "organizations": "Organisations",
   "people": "Personnes",
   "search": "Rechercher",
   "searchPlaceholder": "Rechercher des organisations, personnes, postes…",
+  "signIn": "Se connecter",
   "landing": {
     "hero": "Le répertoire de l'Union africaine",
     "heroDescription": "Parcourez la structure officielle de l'Union africaine — organes principaux, commissions, départements, bureaux — et les personnes qui y occupent des postes. Les dossiers approuvés de chaque organisme participant, tenus à jour par les équipes éditoriales de chaque entité.",

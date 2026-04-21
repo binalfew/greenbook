@@ -1,6 +1,7 @@
-import { Network, Search, Users } from "lucide-react";
+import { LogIn, Network, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, Outlet, data } from "react-router";
+import logoUrl from "~/assets/logo.svg";
 import { LanguageSwitcher } from "~/components/language-switcher";
 import { cn } from "~/utils/misc";
 import { getLangFromRequest } from "~/utils/i18n-cookie.server";
@@ -28,51 +29,61 @@ export default function PublicDirectoryLayout({ loaderData }: Route.ComponentPro
   const { t } = useTranslation("directory-public");
   const currentYear = new Date().getFullYear();
 
+  // Primary-colored navbar for visual continuity with the tenant admin
+  // chrome (bg-primary text-primary-foreground). Active links are shown
+  // with an underline bar + brighter foreground; inactive links fade.
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      "inline-flex items-center gap-1.5 border-b-2 px-1 pt-1 pb-3 text-sm font-medium transition-colors",
+      "relative inline-flex items-center gap-1.5 px-1 pt-1 pb-1 text-sm font-medium transition-colors",
+      "after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:rounded-full",
       isActive
-        ? "border-primary text-foreground"
-        : "border-transparent text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground",
+        ? "text-primary-foreground after:bg-primary-foreground"
+        : "text-primary-foreground/80 after:bg-transparent hover:text-primary-foreground",
     );
 
   return (
     <div className="bg-background text-foreground flex min-h-screen flex-col">
-      <header className="border-border/60 bg-card/50 border-b backdrop-blur">
-        <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Link to="/directory" className="flex items-center gap-3">
-              <div className="bg-primary text-primary-foreground grid size-10 place-items-center rounded-md font-bold">
-                AU
-              </div>
-              <div>
-                <div className="text-base font-semibold">{t("siteTitle")}</div>
-                <div className="text-muted-foreground text-xs">{t("siteTagline")}</div>
-              </div>
-            </Link>
+      <header className="bg-primary text-primary-foreground flex h-12 shrink-0 items-center gap-6 border-b pr-4 pl-2 sm:pr-6 sm:pl-3 lg:pr-8">
+        <Link
+          to="/directory"
+          className="flex shrink-0 items-center gap-2 self-stretch pr-3"
+          aria-label={t("siteTitle")}
+        >
+          <span className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+            <img
+              src={logoUrl}
+              alt=""
+              className="size-16 rounded-lg object-contain brightness-0 invert"
+            />
+          </span>
+          <span className="hidden text-sm leading-none font-medium sm:block">{t("siteTitle")}</span>
+        </Link>
+
+        <nav className="flex flex-1 items-center gap-5" aria-label={t("siteTitle")}>
+          <NavLink to="/directory" end className={navItemClass}>
+            {t("home")}
+          </NavLink>
+          <NavLink to="/directory/organizations" className={navItemClass}>
+            <Network className="size-4" />
+            {t("organizations")}
+          </NavLink>
+          <NavLink to="/directory/people" className={navItemClass}>
+            <Users className="size-4" />
+            {t("people")}
+          </NavLink>
+        </nav>
+
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="[&_select]:text-primary-foreground [&_select]:bg-primary/80 [&_select]:border-primary-foreground/30">
             <LanguageSwitcher currentLanguage={loaderData.lang} />
           </div>
-          <nav className="mt-4 flex flex-wrap gap-6" aria-label={t("siteTitle")}>
-            <NavLink to="/directory" end className={navItemClass}>
-              {t("home")}
-            </NavLink>
-            <NavLink to="/directory/organizations" className={navItemClass}>
-              <Network className="size-4" />
-              {t("organizations")}
-            </NavLink>
-            <NavLink to="/directory/people" className={navItemClass}>
-              <Users className="size-4" />
-              {t("people")}
-            </NavLink>
-            <NavLink
-              to="/directory/organizations?q="
-              className={navItemClass}
-              aria-label={t("search")}
-            >
-              <Search className="size-4" />
-              {t("search")}
-            </NavLink>
-          </nav>
+          <Link
+            to="/login"
+            className="border-primary-foreground/30 hover:bg-primary-foreground/10 text-primary-foreground inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors"
+          >
+            <LogIn className="size-4" />
+            {t("signIn")}
+          </Link>
         </div>
       </header>
 

@@ -1,11 +1,12 @@
 {
-  "siteTitle": "AU Directory",
+  "siteTitle": "Greenbook",
   "siteTagline": "Organizations, people, and positions across the African Union.",
   "home": "Home",
   "organizations": "Organizations",
   "people": "People",
   "search": "Search",
   "searchPlaceholder": "Search organizations, people, positions…",
+  "signIn": "Sign in",
   "landing": {
     "hero": "The African Union Directory",
     "heroDescription": "Browse the official structure of the African Union — principal organs, commissions, departments, offices — and the people who hold positions across them. Approved records from every participating body, kept up to date by each tenant's editorial team.",
