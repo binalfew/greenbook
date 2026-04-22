@@ -67,6 +67,8 @@
     "biography": "Biography",
     "currentPositions": "Current position",
     "pastPositions": "Previously",
+    "reportingLine": "Reporting line",
+    "reportingLineVacant": "Vacant",
     "contact": "Contact",
     "contactPrivate": "Contact information is not public.",
     "unknownNationality": "—"

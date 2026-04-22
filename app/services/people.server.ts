@@ -361,24 +361,91 @@ export type PublicPersonTimelineEntry = {
     id: string;
     title: string;
     organization: { id: string; name: string; acronym: string | null };
-    reportsTo: {
-      id: string;
-      title: string;
-      organization: { id: string; name: string; acronym: string | null };
-      currentHolder: {
-        id: string;
-        firstName: string;
-        lastName: string;
-        honorific: string | null;
-      } | null;
-    } | null;
   };
+};
+
+export type PublicReportsChainEntry = {
+  positionId: string;
+  positionTitle: string;
+  organization: { id: string; name: string; acronym: string | null };
+  holder: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    honorific: string | null;
+  } | null;
 };
 
 // Detail fetch includes the full assignment history for the timeline UI.
 // Caps at 50 to match `publicGetOrganization`'s positions ceiling; a
 // person with more than 50 recorded posts needs its own pagination route.
 const PUBLIC_PERSON_HISTORY_TAKE = 50;
+
+// Cap chain depth so a data bug (cycle) can't hang the loader. Realistic
+// AU chains top out around 5-6 hops; 10 is slack.
+const PUBLIC_REPORTS_CHAIN_MAX_DEPTH = 10;
+
+// Walk up Position.reportsToId from the given starting position (exclusive)
+// and collect each ancestor + its current holder. Restricted to
+// `publicTenantIds` so the chain never leaks into a non-public tenant.
+// Returns the chain in top-down order: topmost ancestor first, direct
+// manager last. Empty array if there's no upward hop or starting position
+// can't be resolved within the public tenant set.
+async function buildReportsChain(
+  startingPositionId: string,
+  publicTenantIds: string[],
+): Promise<PublicReportsChainEntry[]> {
+  const start = await prisma.position.findFirst({
+    where: { id: startingPositionId, tenantId: { in: publicTenantIds }, deletedAt: null },
+    select: { reportsToId: true },
+  });
+
+  const collected: PublicReportsChainEntry[] = [];
+  const seen = new Set<string>([startingPositionId]);
+  let nextId: string | null = start?.reportsToId ?? null;
+
+  while (nextId && collected.length < PUBLIC_REPORTS_CHAIN_MAX_DEPTH) {
+    if (seen.has(nextId)) {
+      logger.warn({ nextId, startingPositionId }, "reports-to cycle detected; stopping chain walk");
+      break;
+    }
+    seen.add(nextId);
+
+    const pos = await prisma.position.findFirst({
+      where: { id: nextId, tenantId: { in: publicTenantIds }, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        reportsToId: true,
+        organization: { select: { id: true, name: true, acronym: true } },
+        assignments: {
+          where: { deletedAt: null, isCurrent: true },
+          orderBy: { startDate: "desc" },
+          take: 1,
+          select: {
+            person: {
+              select: { id: true, firstName: true, lastName: true, honorific: true },
+            },
+          },
+        },
+      },
+    });
+    if (!pos) break;
+
+    collected.push({
+      positionId: pos.id,
+      positionTitle: pos.title,
+      organization: pos.organization,
+      holder: pos.assignments[0]?.person ?? null,
+    });
+
+    nextId = pos.reportsToId;
+  }
+
+  // Walk collected bottom-up (direct manager first → topmost last); reverse
+  // so the component gets top-down order for rendering as an org line.
+  return collected.reverse();
+}
 
 export async function publicGetPerson(id: string, publicTenantIds: string[]) {
   if (publicTenantIds.length === 0) return null;
@@ -411,28 +478,6 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
               id: true,
               title: true,
               organization: { select: { id: true, name: true, acronym: true } },
-              reportsTo: {
-                select: {
-                  id: true,
-                  title: true,
-                  organization: { select: { id: true, name: true, acronym: true } },
-                  assignments: {
-                    where: { deletedAt: null, isCurrent: true },
-                    orderBy: { startDate: "desc" },
-                    take: 1,
-                    select: {
-                      person: {
-                        select: {
-                          id: true,
-                          firstName: true,
-                          lastName: true,
-                          honorific: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
             },
           },
         },
@@ -443,8 +488,6 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
 
   const stripped = stripPII({
     ...row,
-    // stripPII's `assignments` param only consumes position; it tolerates
-    // our richer entries without reading the timeline fields.
     assignments: row.assignments.map((a) => ({ position: a.position })),
   });
   const history: PublicPersonTimelineEntry[] = row.assignments.map((a) => ({
@@ -452,19 +495,14 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
     startDate: a.startDate,
     endDate: a.endDate,
     isCurrent: a.isCurrent,
-    position: {
-      id: a.position.id,
-      title: a.position.title,
-      organization: a.position.organization,
-      reportsTo: a.position.reportsTo
-        ? {
-            id: a.position.reportsTo.id,
-            title: a.position.reportsTo.title,
-            organization: a.position.reportsTo.organization,
-            currentHolder: a.position.reportsTo.assignments[0]?.person ?? null,
-          }
-        : null,
-    },
+    position: a.position,
   }));
-  return { ...stripped, history };
+
+  // Build the reporting chain from the current assignment's position, if any.
+  const currentAssignment = row.assignments.find((a) => a.isCurrent);
+  const reportsChain: PublicReportsChainEntry[] = currentAssignment
+    ? await buildReportsChain(currentAssignment.position.id, publicTenantIds)
+    : [];
+
+  return { ...stripped, history, reportsChain };
 }

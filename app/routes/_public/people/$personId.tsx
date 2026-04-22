@@ -1,6 +1,16 @@
-import { Briefcase, Building2, Globe2, Languages, Mail, MapPin, Phone, User } from "lucide-react";
+import {
+  Briefcase,
+  Building2,
+  ChevronDown,
+  Globe2,
+  Languages,
+  Mail,
+  MapPin,
+  Phone,
+  User,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { data } from "react-router";
+import { Link, data } from "react-router";
 import { PublicDetailNotFound } from "~/components/public/not-found";
 import { Badge } from "~/components/ui/badge";
 import { publicGetPerson } from "~/services/people.server";
@@ -23,6 +33,7 @@ export function headers() {
 
 type Person = Route.ComponentProps["loaderData"]["person"];
 type HistoryEntry = Person["history"][number];
+type ReportsChainEntry = Person["reportsChain"][number];
 
 export default function PublicPersonDetail({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation("directory-public");
@@ -84,47 +95,19 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
                 {fullName}
               </h1>
               {current.length > 0 ? (
-                <>
-                  <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                    {current[0].position.title}
-                    {current[0].position.organization ? (
-                      <>
-                        {" "}
-                        ·{" "}
-                        <span className="text-foreground">
-                          {current[0].position.organization.acronym ||
-                            current[0].position.organization.name}
-                        </span>
-                      </>
-                    ) : null}
-                  </p>
-                  {current[0].position.reportsTo ? (
-                    <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
-                      <span className="font-medium">{t("positionDetail.reportsTo")}:</span>{" "}
-                      <span className="text-foreground">{current[0].position.reportsTo.title}</span>
-                      {current[0].position.reportsTo.currentHolder ? (
-                        <>
-                          {" "}
-                          ·{" "}
-                          <span>
-                            {[
-                              current[0].position.reportsTo.currentHolder.honorific,
-                              current[0].position.reportsTo.currentHolder.firstName,
-                              current[0].position.reportsTo.currentHolder.lastName,
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          {" "}
-                          · <span className="italic">{t("positionDetail.vacant")}</span>
-                        </>
-                      )}
-                    </p>
+                <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                  {current[0].position.title}
+                  {current[0].position.organization ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span className="text-foreground">
+                        {current[0].position.organization.acronym ||
+                          current[0].position.organization.name}
+                      </span>
+                    </>
                   ) : null}
-                </>
+                </p>
               ) : null}
             </div>
           </div>
@@ -252,6 +235,26 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
               </div>
             )}
           </div>
+
+          {/* Reporting line — ancestors of the current position, top-down.
+              Omitted when there's no current post or no upward hop. */}
+          {person.reportsChain.length > 0 ? (
+            <div className="border-border mt-8 border-t pt-6">
+              <h2 className="text-muted-foreground mb-4 text-[11px] font-semibold tracking-wider uppercase">
+                {t("personDetail.reportingLine")}
+              </h2>
+              <ol className="space-y-2">
+                {person.reportsChain.map((entry, index) => (
+                  <ReportsChainCard
+                    key={entry.positionId}
+                    entry={entry}
+                    depth={index}
+                    vacantLabel={t("personDetail.reportingLineVacant")}
+                  />
+                ))}
+              </ol>
+            </div>
+          ) : null}
         </div>
       </article>
     </div>
@@ -270,21 +273,75 @@ function CurrentRoleCard({ entry, currentLabel }: { entry: HistoryEntry; current
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-foreground font-semibold">{entry.position.title}</div>
-            <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
-              <Building2 className="size-3" />
-              {entry.position.organization.acronym || entry.position.organization.name}
+            <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+              <span className="inline-flex items-center gap-1">
+                <Building2 className="size-3" />
+                {entry.position.organization.acronym || entry.position.organization.name}
+              </span>
+              <span className="text-muted-foreground/60">·</span>
+              <span>{formatDate(entry.startDate)}</span>
             </div>
           </div>
           <Badge variant="default" className="shrink-0">
             {currentLabel}
           </Badge>
         </div>
-        <div className="text-muted-foreground mt-2 text-xs">
-          {formatDate(entry.startDate)}
-          {" — "}
-          {currentLabel}
+      </div>
+    </li>
+  );
+}
+
+function ReportsChainCard({
+  entry,
+  depth,
+  vacantLabel,
+}: {
+  entry: ReportsChainEntry;
+  depth: number;
+  vacantLabel: string;
+}) {
+  const holderName = entry.holder
+    ? [entry.holder.honorific, entry.holder.firstName, entry.holder.lastName]
+        .filter(Boolean)
+        .join(" ")
+    : null;
+  const orgLabel = entry.organization.acronym || entry.organization.name;
+
+  const body = (
+    <div className="hover:border-primary/40 hover:bg-primary/[0.03] flex items-center gap-3 rounded-lg border p-3 transition-colors">
+      <div className="bg-primary/10 text-primary grid size-9 shrink-0 place-items-center rounded-md">
+        <Briefcase className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-foreground truncate text-sm font-semibold">{entry.positionTitle}</div>
+        <div className="text-muted-foreground mt-0.5 flex items-center gap-1 truncate text-xs">
+          <Building2 className="size-3 shrink-0" />
+          <span className="truncate">{orgLabel}</span>
+          <span className="mx-1">·</span>
+          {holderName ? (
+            <span className="text-foreground truncate">{holderName}</span>
+          ) : (
+            <span className="italic">{vacantLabel}</span>
+          )}
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <li>
+      {depth > 0 ? (
+        <div className="text-primary/40 mb-2 ml-4 flex items-center">
+          <ChevronDown className="size-4" />
+        </div>
+      ) : null}
+      {entry.holder ? (
+        <Link to={`/people/${entry.holder.id}`} className="block">
+          {body}
+        </Link>
+      ) : (
+        body
+      )}
     </li>
   );
 }
