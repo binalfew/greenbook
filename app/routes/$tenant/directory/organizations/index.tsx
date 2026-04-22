@@ -70,13 +70,17 @@ export default function OrganizationsIndex({ loaderData, params }: Route.Compone
       id: "name",
       header: t("organizations.fields.name"),
       cell: (row) => (
-        <div className="min-w-0">
-          <Link to={`${base}/${row.id}`} className="font-medium underline-offset-4 hover:underline">
-            {row.name}
-          </Link>
-          {row.acronym ? <div className="text-muted-foreground text-xs">{row.acronym}</div> : null}
-        </div>
+        <Link to={`${base}/${row.id}`} className="font-medium underline-offset-4 hover:underline">
+          {row.name}
+        </Link>
       ),
+    },
+    {
+      id: "acronym",
+      header: t("organizations.fields.acronym"),
+      cell: (row) => row.acronym ?? "—",
+      cellClassName: "text-muted-foreground font-mono text-xs",
+      hideOnMobile: true,
     },
     {
       id: "type",
@@ -88,20 +92,6 @@ export default function OrganizationsIndex({ loaderData, params }: Route.Compone
       id: "parent",
       header: t("organizations.fields.parent"),
       cell: (row) => row.parent?.name ?? "—",
-      hideOnMobile: true,
-    },
-    {
-      id: "children",
-      header: t("kpi.organizations"),
-      cell: (row) => row._count.children,
-      cellClassName: "text-muted-foreground text-right",
-      hideOnMobile: true,
-    },
-    {
-      id: "positions",
-      header: t("kpi.positions"),
-      cell: (row) => row._count.positions,
-      cellClassName: "text-muted-foreground text-right",
       hideOnMobile: true,
     },
   ];
