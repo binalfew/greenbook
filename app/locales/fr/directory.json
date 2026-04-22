@@ -162,12 +162,16 @@
   },
   "assignments": {
     "assignPerson": "Affecter une personne",
+    "assignToPosition": "Affecter à un poste",
+    "assignToPositionSubtitle": "Créer une nouvelle affectation pour cette personne. Le titulaire actuel du poste (s'il existe) sera clôturé à l'approbation.",
     "assignSubtitle": "Créer une nouvelle affectation. Le titulaire actuel (s'il existe) sera clôturé à l'approbation.",
     "endAssignment": "Clôturer l'affectation",
     "endSubtitle": "Définir la date de fin et les notes. Le poste devient vacant après approbation.",
     "fields": {
       "person": "Personne",
       "personPlaceholder": "Sélectionner une personne",
+      "position": "Poste",
+      "positionPlaceholder": "Sélectionner un poste",
       "startDate": "Date de début",
       "endDate": "Date de fin",
       "notes": "Notes"

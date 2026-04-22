@@ -9,8 +9,10 @@ type Db = Prisma.TransactionClient | typeof prisma;
 // Position Assignments — the temporal link between a Person and a Position.
 //
 // Invariants:
-// - On CREATE, any existing `isCurrent` assignment for the same position is
-//   auto-closed (endDate := startDate of the new assignment, isCurrent := false).
+// - One current assignment per position, one current assignment per person.
+//   On CREATE, any existing `isCurrent` row that collides on either side
+//   (same position OR same person) is auto-closed (endDate := startDate of
+//   the new assignment, isCurrent := false).
 // - On UPDATE, if `endDate` is set, `isCurrent` is auto-flipped to false.
 // - Soft-delete via deletedAt; history survives.
 
@@ -138,13 +140,15 @@ async function createAssignmentInTx(
   const isCurrent = !newEnd;
 
   if (isCurrent) {
-    // Auto-close any existing current assignment on the same position.
+    // Auto-close any existing current assignment that collides — either on
+    // the same position (position already filled) or on the same person (a
+    // person may only hold one current post at a time).
     await tx.positionAssignment.updateMany({
       where: {
         tenantId,
-        positionId: payload.positionId,
         deletedAt: null,
         isCurrent: true,
+        OR: [{ positionId: payload.positionId }, { personId: payload.personId }],
       },
       data: {
         isCurrent: false,

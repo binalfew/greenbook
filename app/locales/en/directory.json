@@ -162,12 +162,16 @@
   },
   "assignments": {
     "assignPerson": "Assign person",
+    "assignToPosition": "Assign to position",
+    "assignToPositionSubtitle": "Create a new assignment for this person. The position's current holder (if any) will be closed on approval.",
     "assignSubtitle": "Create a new assignment. The current holder (if any) will be closed on approval.",
     "endAssignment": "End assignment",
     "endSubtitle": "Set the end date and optional notes. The position becomes vacant after approval.",
     "fields": {
       "person": "Person",
       "personPlaceholder": "Select a person",
+      "position": "Position",
+      "positionPlaceholder": "Select a position",
       "startDate": "Start date",
       "endDate": "End date",
       "notes": "Notes"

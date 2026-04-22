@@ -361,6 +361,17 @@ export type PublicPersonTimelineEntry = {
     id: string;
     title: string;
     organization: { id: string; name: string; acronym: string | null };
+    reportsTo: {
+      id: string;
+      title: string;
+      organization: { id: string; name: string; acronym: string | null };
+      currentHolder: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        honorific: string | null;
+      } | null;
+    } | null;
   };
 };
 
@@ -400,6 +411,28 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
               id: true,
               title: true,
               organization: { select: { id: true, name: true, acronym: true } },
+              reportsTo: {
+                select: {
+                  id: true,
+                  title: true,
+                  organization: { select: { id: true, name: true, acronym: true } },
+                  assignments: {
+                    where: { deletedAt: null, isCurrent: true },
+                    orderBy: { startDate: "desc" },
+                    take: 1,
+                    select: {
+                      person: {
+                        select: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          honorific: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -419,7 +452,19 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
     startDate: a.startDate,
     endDate: a.endDate,
     isCurrent: a.isCurrent,
-    position: a.position,
+    position: {
+      id: a.position.id,
+      title: a.position.title,
+      organization: a.position.organization,
+      reportsTo: a.position.reportsTo
+        ? {
+            id: a.position.reportsTo.id,
+            title: a.position.reportsTo.title,
+            organization: a.position.reportsTo.organization,
+            currentHolder: a.position.reportsTo.assignments[0]?.person ?? null,
+          }
+        : null,
+    },
   }));
   return { ...stripped, history };
 }

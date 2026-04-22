@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, Mail, Pencil, Phone, Trash2 } from "lucide-react";
+import { ArrowLeft, Briefcase, Mail, Pencil, Phone, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, data } from "react-router";
 import { AssignmentTimeline } from "~/components/directory/assignment-timeline";
@@ -22,6 +22,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   });
   const canWrite = canDirect;
   const canDelete = hasPermission(user, "person", "delete");
+  const canAssign = hasPermission(user, "position-assignment", "write") || canSubmit;
 
   const [person, pendingChange] = await Promise.all([
     getPerson(params.personId, tenantId),
@@ -41,6 +42,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     pendingChange,
     canWrite,
     canDelete,
+    canAssign,
     canSubmit,
     currentUserId: user.id,
   });
@@ -49,7 +51,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function PersonDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
-  const { person, pendingChange, canWrite, canDelete, canSubmit, currentUserId } = loaderData;
+  const { person, pendingChange, canWrite, canDelete, canAssign, canSubmit, currentUserId } =
+    loaderData;
   const base = `/${params.tenant}/directory/people`;
   const positionsBase = `/${params.tenant}/directory/positions`;
 
@@ -70,6 +73,14 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
           </Link>
         </Button>
         <div className="flex gap-2">
+          {canAssign ? (
+            <Button asChild size="sm" variant="outline">
+              <Link to={`${base}/${person.id}/assign`}>
+                <UserPlus className="mr-1 size-4" />
+                {t("assignments.assignToPosition")}
+              </Link>
+            </Button>
+          ) : null}
           {canEdit ? (
             <Button asChild size="sm" variant="outline">
               <Link to={`${base}/${person.id}/edit`}>

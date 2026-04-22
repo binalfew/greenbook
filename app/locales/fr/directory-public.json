@@ -61,10 +61,12 @@
     "notFound": "Ce profil n'est pas disponible.",
     "notFoundHelp": "La personne n'est peut-être pas publiée ou a été retirée du répertoire public.",
     "backToPeople": "Retour aux personnes",
+    "profileEyebrow": "Profil",
     "nationality": "Nationalité",
     "languages": "Langues",
     "biography": "Biographie",
-    "currentPositions": "Postes actuels",
+    "currentPositions": "Poste actuel",
+    "pastPositions": "Précédemment",
     "contact": "Contact",
     "contactPrivate": "Les coordonnées ne sont pas publiques.",
     "unknownNationality": "—"
