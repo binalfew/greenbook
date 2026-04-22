@@ -1,13 +1,15 @@
 import { Search, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Form, Link, data, redirect } from "react-router";
+import { Form, Link, data, redirect, useFetcher, useNavigate } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { getUserId } from "~/utils/auth/auth.server";
 import { prisma } from "~/utils/db/db.server";
 import { publicListPeople } from "~/services/people.server";
 import { PUBLIC_CACHE_HEADER, getPublicContext } from "~/utils/public-directory.server";
+import { AUTOCOMPLETE_MIN_LENGTH, type Suggestion } from "~/utils/autocomplete";
 import type { Route } from "./+types/index";
 
 // Public landing at `/` — the only public surface. Search across people
@@ -81,18 +83,7 @@ export default function PublicPeopleIndex({ loaderData }: Route.ComponentProps) 
         <p className="text-muted-foreground text-sm">{t("landing.heroDescription")}</p>
       </header>
 
-      <Form method="get" className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-          <Input
-            name="q"
-            defaultValue={q}
-            placeholder={t("landing.peopleSearchPlaceholder")}
-            className="pl-9"
-          />
-        </div>
-        <Button type="submit">{t("landing.searchSubmit")}</Button>
-      </Form>
+      <SearchBox initialQuery={q} placeholder={t("landing.peopleSearchPlaceholder")} />
 
       {q.length === 0 ? (
         <EmptyState
@@ -211,6 +202,113 @@ function Pagination({
           </Link>
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Debounced type-ahead over /api/search-people. Typing fires a fetch after
+// 250ms of idle; Enter submits the GET form for the full results page; clicks
+// on a suggestion navigate straight to the profile. Escape closes the
+// dropdown without losing input focus.
+function SearchBox({ initialQuery, placeholder }: { initialQuery: string; placeholder: string }) {
+  const { t } = useTranslation("directory-public");
+  const fetcher = useFetcher<{ results: Suggestion[] }>();
+  const navigate = useNavigate();
+  const [value, setValue] = useState(initialQuery);
+  const [open, setOpen] = useState(false);
+  const listboxId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Debounced fetch — only fire when the trimmed value is long enough.
+  useEffect(() => {
+    const trimmed = value.trim();
+    if (trimmed.length < AUTOCOMPLETE_MIN_LENGTH) return;
+    const handle = window.setTimeout(() => {
+      fetcher.load(`/api/search-people?q=${encodeURIComponent(trimmed)}`);
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // fetcher.load identity is stable — intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // Click outside closes the dropdown.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const suggestions = fetcher.data?.results ?? [];
+  const showDropdown =
+    open && value.trim().length >= AUTOCOMPLETE_MIN_LENGTH && suggestions.length > 0;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Form method="get" className="flex gap-2" role="search">
+        <div className="relative flex-1">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+          <Input
+            name="q"
+            value={value}
+            onChange={(e) => {
+              setValue(e.currentTarget.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setOpen(false);
+                e.currentTarget.blur();
+              }
+            }}
+            autoComplete="off"
+            role="combobox"
+            aria-expanded={showDropdown}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            placeholder={placeholder}
+            className="pl-9"
+          />
+        </div>
+        <Button type="submit">{t("landing.searchSubmit")}</Button>
+      </Form>
+
+      {showDropdown ? (
+        <ul
+          id={listboxId}
+          role="listbox"
+          className="bg-popover absolute top-full left-0 z-20 mt-1 w-full overflow-hidden rounded-md border shadow-lg"
+        >
+          {suggestions.map((s) => (
+            <li key={s.id} role="option" aria-selected={false}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setOpen(false);
+                  navigate(`/people/${s.id}`);
+                }}
+                className="hover:bg-accent flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition-colors"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{s.name}</div>
+                  {s.role ? (
+                    <div className="text-muted-foreground truncate text-xs">{s.role}</div>
+                  ) : null}
+                </div>
+                {s.memberState ? (
+                  <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                    {s.memberState}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
