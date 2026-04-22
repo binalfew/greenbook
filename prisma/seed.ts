@@ -124,9 +124,33 @@ async function main() {
     },
   });
 
-  // Resolve or create the default tenant. Prefer a tenant that already
-  // owns slug "system" (including forks that renamed the default), falling
-  // back to creating a fresh "System" tenant on a clean database.
+  // Remove legacy @example.com demo accounts so re-seeding an existing DB
+  // converges to the africanunion.org demo users without duplicates. User
+  // cascade handles sessions/passwords/roles; ChangeRequest references
+  // (submittedBy is required, reviewedBy is nullable) need explicit handling
+  // since their relations have no onDelete Cascade.
+  const legacyUserIds = await prisma.user
+    .findMany({
+      where: { email: { endsWith: "@example.com" } },
+      select: { id: true },
+    })
+    .then((rows) => rows.map((r) => r.id));
+  if (legacyUserIds.length > 0) {
+    await prisma.changeRequest.deleteMany({
+      where: { submittedById: { in: legacyUserIds } },
+    });
+    await prisma.changeRequest.updateMany({
+      where: { reviewedById: { in: legacyUserIds } },
+      data: { reviewedById: null },
+    });
+    const { count } = await prisma.user.deleteMany({
+      where: { id: { in: legacyUserIds } },
+    });
+    console.log(`Removed ${count} legacy @example.com user(s).`);
+  }
+
+  // Resolve or create the AU Commission tenant (slug kept as `system` so
+  // route prefixes and fallbacks stay stable across template + fork).
   console.log("Resolving default tenant...");
   const existingTenant = await prisma.tenant.findFirst({
     where: { slug: "system", deletedAt: null },
@@ -135,15 +159,29 @@ async function main() {
     existingTenant ??
     (await prisma.tenant.create({
       data: {
-        name: "System",
+        name: "African Union Commission",
         slug: "system",
-        email: "system@template.local",
-        phone: "+0000000000",
-        city: "—",
-        state: "—",
-        address: "—",
+        email: "info@africanunion.org",
+        phone: "+251 11 551 7700",
+        city: "Addis Ababa",
+        state: "Addis Ababa",
+        address: "Roosevelt Street (Old Airport Area), P.O. Box 3243, Addis Ababa, Ethiopia",
+        brandTheme: "auc",
       },
     }));
+  // Keep name/contact/brand in sync for forks that already ran an older seed.
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: {
+      name: "African Union Commission",
+      email: "info@africanunion.org",
+      phone: "+251 11 551 7700",
+      city: "Addis Ababa",
+      state: "Addis Ababa",
+      address: "Roosevelt Street (Old Airport Area), P.O. Box 3243, Addis Ababa, Ethiopia",
+      brandTheme: "auc",
+    },
+  });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -282,10 +320,10 @@ async function main() {
   console.log("Creating admin user...");
   const adminPassword = await hash("admin123", 10);
   await prisma.user.upsert({
-    where: { email: "admin@example.com" },
+    where: { email: "admin@africanunion.org" },
     update: {},
     create: {
-      email: "admin@example.com",
+      email: "admin@africanunion.org",
       firstName: "Admin",
       lastName: "User",
       tenantId: tenant.id,
@@ -299,10 +337,10 @@ async function main() {
   console.log("Creating regular user...");
   const userPassword = await hash("user123", 10);
   await prisma.user.upsert({
-    where: { email: "user@example.com" },
+    where: { email: "user@africanunion.org" },
     update: {},
     create: {
-      email: "user@example.com",
+      email: "user@africanunion.org",
       firstName: "Regular",
       lastName: "User",
       tenantId: tenant.id,
@@ -396,6 +434,13 @@ async function main() {
     data: { enabledForTenants: { set: [tenant.id] } },
   });
 
+  // Wipe directory + reference data for the tenant before reseeding so the
+  // DB is deterministic. User-created records, stale change requests, and
+  // old org-tree nodes are all cleared — the rebuild that follows is the
+  // single source of truth for the demo state.
+  console.log("Wiping directory + reference data for tenant...");
+  await wipeDirectoryData(tenant.id);
+
   // Seed default reference data for the system tenant.
   console.log("Seeding default reference data...");
   await seedReferenceData(tenant.id);
@@ -407,10 +452,39 @@ async function main() {
 
   console.log("✅ Seeding completed!");
   console.log("🔑 Users created:");
-  console.log("   Admin:        admin@example.com / admin123");
-  console.log("   User:         user@example.com / user123");
-  console.log("   Focal person: focal@example.com / focal123");
-  console.log("   Manager:      manager@example.com / manager123");
+  console.log("   Admin:        admin@africanunion.org / admin123");
+  console.log("   User:         user@africanunion.org / user123");
+  console.log("   Focal person: focal@africanunion.org / focal123");
+  console.log("   Manager:      manager@africanunion.org / manager123");
+}
+
+/**
+ * Wipe directory + reference data for a tenant. Order respects every FK
+ * so Postgres never complains mid-flight:
+ *   - ChangeRequest first (it references User rows with no cascade).
+ *   - PositionAssignment before Person (personId is onDelete: Restrict).
+ *   - Position before Organization (self-ref SetNull is tolerant, but
+ *     organizations own positions so we delete children first).
+ *   - Organization tree: null every parentId before deleteMany so the
+ *     self-referential Restrict FK doesn't block.
+ *   - Then types + reference data — MemberState deletions cascade the
+ *     join rows in MemberStateRegion.
+ * Tenant, users, roles, permissions, feature flags, settings are all
+ * preserved; the demo auth surface is unaffected.
+ */
+async function wipeDirectoryData(tenantId: string) {
+  await prisma.changeRequest.deleteMany({ where: { tenantId } });
+  await prisma.positionAssignment.deleteMany({ where: { tenantId } });
+  await prisma.position.deleteMany({ where: { tenantId } });
+  await prisma.person.deleteMany({ where: { tenantId } });
+  await prisma.organization.updateMany({ where: { tenantId }, data: { parentId: null } });
+  await prisma.organization.deleteMany({ where: { tenantId } });
+  await prisma.organizationType.deleteMany({ where: { tenantId } });
+  await prisma.positionType.deleteMany({ where: { tenantId } });
+  await prisma.memberState.deleteMany({ where: { tenantId } });
+  await prisma.regionalGroup.deleteMany({ where: { tenantId } });
+  await prisma.title.deleteMany({ where: { tenantId } });
+  await prisma.language.deleteMany({ where: { tenantId } });
 }
 
 /**
@@ -678,10 +752,10 @@ async function seedDirectory(
   // Demo users: focal person + manager. Idempotent on email.
   const focalPassword = await hash("focal123", 10);
   await prisma.user.upsert({
-    where: { email: "focal@example.com" },
+    where: { email: "focal@africanunion.org" },
     update: {},
     create: {
-      email: "focal@example.com",
+      email: "focal@africanunion.org",
       firstName: "Fola",
       lastName: "Adeyemi",
       tenantId,
@@ -692,10 +766,10 @@ async function seedDirectory(
   });
   const managerPassword = await hash("manager123", 10);
   await prisma.user.upsert({
-    where: { email: "manager@example.com" },
+    where: { email: "manager@africanunion.org" },
     update: {},
     create: {
-      email: "manager@example.com",
+      email: "manager@africanunion.org",
       firstName: "Marta",
       lastName: "Okonkwo",
       tenantId,
@@ -704,6 +778,394 @@ async function seedDirectory(
       password: { create: { hash: managerPassword } },
     },
   });
+
+  // Seed realistic AUC positions + people + current assignments so the
+  // demo has a browsable directory out of the box.
+  await seedPositionsPeopleAssignments(tenantId);
+}
+
+// ─── Positions + People + Assignments ────────────────────────────────────
+//
+// Fictional but plausible AUC leadership so the demo directory feels alive.
+// Positions are created first with reporting chains resolved from the title
+// map; people are created with member-state + language links; a current
+// assignment ties each person to their post. All three pass are idempotent:
+// re-seeding simply no-ops or updates in place.
+
+type SeedPosition = {
+  orgAcronym: string;
+  title: string;
+  typeCode: string;
+  reportsToTitle: string | null;
+  sortOrder: number;
+  description?: string;
+};
+
+const SEED_POSITIONS: SeedPosition[] = [
+  {
+    orgAcronym: "OOC",
+    title: "Chairperson of the African Union Commission",
+    typeCode: "CHAIRPERSON",
+    reportsToTitle: null,
+    sortOrder: 0,
+    description:
+      "Chief Executive Officer of the African Union Commission; legal representative of the AU.",
+  },
+  {
+    orgAcronym: "OOC",
+    title: "Chief of Staff, Office of the Chairperson",
+    typeCode: "SENIOR_OFFICER",
+    reportsToTitle: "Chairperson of the African Union Commission",
+    sortOrder: 1,
+  },
+  {
+    orgAcronym: "ODC",
+    title: "Deputy Chairperson of the African Union Commission",
+    typeCode: "DEPUTY_CHAIRPERSON",
+    reportsToTitle: "Chairperson of the African Union Commission",
+    sortOrder: 0,
+    description:
+      "Assists the Chairperson; oversees administrative, financial, and budgetary affairs of the Commission.",
+  },
+  {
+    orgAcronym: "ODC",
+    title: "Chief of Staff, Office of the Deputy Chairperson",
+    typeCode: "SENIOR_OFFICER",
+    reportsToTitle: "Deputy Chairperson of the African Union Commission",
+    sortOrder: 1,
+  },
+  {
+    orgAcronym: "PAPS",
+    title: "Commissioner for Political Affairs, Peace and Security",
+    typeCode: "COMMISSIONER",
+    reportsToTitle: "Chairperson of the African Union Commission",
+    sortOrder: 0,
+  },
+  {
+    orgAcronym: "PAPS",
+    title: "Director of Political Affairs",
+    typeCode: "DIRECTOR",
+    reportsToTitle: "Commissioner for Political Affairs, Peace and Security",
+    sortOrder: 1,
+  },
+  {
+    orgAcronym: "PAPS",
+    title: "Director of Peace and Security",
+    typeCode: "DIRECTOR",
+    reportsToTitle: "Commissioner for Political Affairs, Peace and Security",
+    sortOrder: 2,
+  },
+  {
+    orgAcronym: "ETTIM",
+    title: "Commissioner for Economic Development, Trade, Tourism, Industry and Mining",
+    typeCode: "COMMISSIONER",
+    reportsToTitle: "Chairperson of the African Union Commission",
+    sortOrder: 0,
+  },
+  {
+    orgAcronym: "ETTIM",
+    title: "Director of Trade and Industry",
+    typeCode: "DIRECTOR",
+    reportsToTitle:
+      "Commissioner for Economic Development, Trade, Tourism, Industry and Mining",
+    sortOrder: 1,
+  },
+  {
+    orgAcronym: "ETTIM",
+    title: "Director of Economic Development",
+    typeCode: "DIRECTOR",
+    reportsToTitle:
+      "Commissioner for Economic Development, Trade, Tourism, Industry and Mining",
+    sortOrder: 2,
+  },
+];
+
+type SeedPerson = {
+  positionTitle: string;
+  honorific: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  memberStateAbbr: string;
+  languages: string[];
+  showEmail: boolean;
+  showPhone: boolean;
+  startDate: string; // ISO
+};
+
+const SEED_PEOPLE: SeedPerson[] = [
+  {
+    positionTitle: "Chairperson of the African Union Commission",
+    honorific: "H.E.",
+    firstName: "Fatima",
+    lastName: "N'Diaye",
+    email: "chairperson@africanunion.org",
+    bio: "Career diplomat and former foreign minister. Chairperson of the African Union Commission since 2024.",
+    memberStateAbbr: "SEN",
+    languages: ["fr", "en", "ar"],
+    showEmail: true,
+    showPhone: false,
+    startDate: "2024-02-18",
+  },
+  {
+    positionTitle: "Chief of Staff, Office of the Chairperson",
+    honorific: "Mr.",
+    firstName: "Samuel",
+    lastName: "Tekle",
+    email: "samuel.tekle@africanunion.org",
+    memberStateAbbr: "ERI",
+    languages: ["en", "fr"],
+    showEmail: false,
+    showPhone: false,
+    startDate: "2024-03-01",
+  },
+  {
+    positionTitle: "Deputy Chairperson of the African Union Commission",
+    honorific: "H.E.",
+    firstName: "Kwame",
+    lastName: "Asante",
+    email: "deputy.chairperson@africanunion.org",
+    bio: "Economist and former minister of finance; oversees the administrative and financial operations of the Commission.",
+    memberStateAbbr: "GHA",
+    languages: ["en", "fr"],
+    showEmail: true,
+    showPhone: false,
+    startDate: "2024-02-18",
+  },
+  {
+    positionTitle: "Chief of Staff, Office of the Deputy Chairperson",
+    honorific: "Ms.",
+    firstName: "Grace",
+    lastName: "Mutesi",
+    email: "grace.mutesi@africanunion.org",
+    memberStateAbbr: "RWA",
+    languages: ["en", "fr"],
+    showEmail: false,
+    showPhone: false,
+    startDate: "2024-03-01",
+  },
+  {
+    positionTitle: "Commissioner for Political Affairs, Peace and Security",
+    honorific: "Amb.",
+    firstName: "Tesfaye",
+    lastName: "Desta",
+    email: "paps.commissioner@africanunion.org",
+    bio: "Former permanent representative to the United Nations with two decades of experience in continental security affairs.",
+    memberStateAbbr: "ETH",
+    languages: ["en", "am", "ar"],
+    showEmail: true,
+    showPhone: false,
+    startDate: "2024-03-15",
+  },
+  {
+    positionTitle: "Director of Political Affairs",
+    honorific: "Mr.",
+    firstName: "Ibrahim",
+    lastName: "Keita",
+    email: "ibrahim.keita@africanunion.org",
+    memberStateAbbr: "MLI",
+    languages: ["fr", "en"],
+    showEmail: false,
+    showPhone: false,
+    startDate: "2023-06-01",
+  },
+  {
+    positionTitle: "Director of Peace and Security",
+    honorific: "Ms.",
+    firstName: "Nadia",
+    lastName: "Ben Ahmed",
+    email: "nadia.benahmed@africanunion.org",
+    memberStateAbbr: "TUN",
+    languages: ["ar", "fr", "en"],
+    showEmail: false,
+    showPhone: false,
+    startDate: "2022-09-12",
+  },
+  {
+    positionTitle: "Commissioner for Economic Development, Trade, Tourism, Industry and Mining",
+    honorific: "Dr.",
+    firstName: "Amina",
+    lastName: "Oumar",
+    email: "ettim.commissioner@africanunion.org",
+    bio: "PhD in development economics; led national trade policy reforms before joining the Commission.",
+    memberStateAbbr: "TCD",
+    languages: ["fr", "ar", "en"],
+    showEmail: true,
+    showPhone: false,
+    startDate: "2024-03-15",
+  },
+  {
+    positionTitle: "Director of Trade and Industry",
+    honorific: "Mr.",
+    firstName: "Chukwu",
+    lastName: "Okafor",
+    email: "chukwu.okafor@africanunion.org",
+    memberStateAbbr: "NGA",
+    languages: ["en"],
+    showEmail: false,
+    showPhone: false,
+    startDate: "2023-02-01",
+  },
+  {
+    positionTitle: "Director of Economic Development",
+    honorific: "Dr.",
+    firstName: "Rose",
+    lastName: "Mwangi",
+    email: "rose.mwangi@africanunion.org",
+    memberStateAbbr: "KEN",
+    languages: ["en", "fr"],
+    showEmail: false,
+    showPhone: false,
+    startDate: "2023-02-01",
+  },
+];
+
+async function seedPositionsPeopleAssignments(tenantId: string) {
+  // Resolve lookups: org + position type by code, member state by abbreviation.
+  const orgs = await prisma.organization.findMany({
+    where: { tenantId, deletedAt: null },
+    select: { id: true, acronym: true },
+  });
+  const orgByAcronym = new Map(
+    orgs.filter((o) => o.acronym !== null).map((o) => [o.acronym as string, o.id]),
+  );
+
+  const posTypes = await prisma.positionType.findMany({
+    where: { tenantId, deletedAt: null },
+    select: { id: true, code: true },
+  });
+  const typeByCode = new Map(posTypes.map((t) => [t.code, t.id]));
+
+  const memberStates = await prisma.memberState.findMany({
+    where: { tenantId, deletedAt: null },
+    select: { id: true, abbreviation: true },
+  });
+  const memberStateByAbbr = new Map(memberStates.map((m) => [m.abbreviation, m.id]));
+
+  // Pass 1: create/update positions without reportsToId. Natural key: (tenantId, orgId, title).
+  const positionIdByTitle = new Map<string, string>();
+  for (const p of SEED_POSITIONS) {
+    const organizationId = orgByAcronym.get(p.orgAcronym);
+    const typeId = typeByCode.get(p.typeCode);
+    if (!organizationId || !typeId) continue;
+
+    const existing = await prisma.position.findFirst({
+      where: { tenantId, organizationId, title: p.title, deletedAt: null },
+      select: { id: true },
+    });
+    const row = existing
+      ? await prisma.position.update({
+          where: { id: existing.id },
+          data: {
+            typeId,
+            description: p.description ?? null,
+            sortOrder: p.sortOrder,
+            isActive: true,
+          },
+        })
+      : await prisma.position.create({
+          data: {
+            tenantId,
+            organizationId,
+            typeId,
+            title: p.title,
+            description: p.description ?? null,
+            sortOrder: p.sortOrder,
+            isActive: true,
+          },
+        });
+    positionIdByTitle.set(p.title, row.id);
+  }
+
+  // Pass 2: wire the reporting chain.
+  for (const p of SEED_POSITIONS) {
+    const selfId = positionIdByTitle.get(p.title);
+    if (!selfId) continue;
+    const reportsToId = p.reportsToTitle ? positionIdByTitle.get(p.reportsToTitle) ?? null : null;
+    await prisma.position.update({
+      where: { id: selfId },
+      data: { reportsToId },
+    });
+  }
+
+  // Pass 3: people, keyed on (tenantId, firstName, lastName) since email is optional.
+  const personIdByPositionTitle = new Map<string, string>();
+  for (const person of SEED_PEOPLE) {
+    const memberStateId = memberStateByAbbr.get(person.memberStateAbbr) ?? null;
+    const existing = await prisma.person.findFirst({
+      where: {
+        tenantId,
+        firstName: person.firstName,
+        lastName: person.lastName,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    const row = existing
+      ? await prisma.person.update({
+          where: { id: existing.id },
+          data: {
+            honorific: person.honorific,
+            email: person.email ?? null,
+            phone: person.phone ?? null,
+            bio: person.bio ?? null,
+            memberStateId,
+            languages: person.languages,
+            showEmail: person.showEmail,
+            showPhone: person.showPhone,
+          },
+        })
+      : await prisma.person.create({
+          data: {
+            tenantId,
+            firstName: person.firstName,
+            lastName: person.lastName,
+            honorific: person.honorific,
+            email: person.email ?? null,
+            phone: person.phone ?? null,
+            bio: person.bio ?? null,
+            memberStateId,
+            languages: person.languages,
+            showEmail: person.showEmail,
+            showPhone: person.showPhone,
+          },
+        });
+    personIdByPositionTitle.set(person.positionTitle, row.id);
+  }
+
+  // Pass 4: assignments — one current assignment per (position, person) pair.
+  for (const person of SEED_PEOPLE) {
+    const positionId = positionIdByTitle.get(person.positionTitle);
+    const personId = personIdByPositionTitle.get(person.positionTitle);
+    if (!positionId || !personId) continue;
+
+    const existing = await prisma.positionAssignment.findFirst({
+      where: { tenantId, positionId, personId, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.positionAssignment.update({
+        where: { id: existing.id },
+        data: {
+          startDate: new Date(person.startDate),
+          endDate: null,
+          isCurrent: true,
+        },
+      });
+    } else {
+      await prisma.positionAssignment.create({
+        data: {
+          tenantId,
+          positionId,
+          personId,
+          startDate: new Date(person.startDate),
+          isCurrent: true,
+        },
+      });
+    }
+  }
 }
 
 async function upsertOrg(
