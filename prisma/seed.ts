@@ -60,9 +60,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "sso", action: "read", module: "auth", description: "Read SSO configurations" },
   { resource: "sso", action: "write", module: "auth", description: "Manage SSO configurations" },
   { resource: "sso", action: "delete", module: "auth", description: "Delete SSO configurations" },
-  { resource: "note", action: "read", module: "content", description: "Read notes" },
-  { resource: "note", action: "write", module: "content", description: "Create and edit notes" },
-  { resource: "note", action: "delete", module: "content", description: "Delete notes" },
   { resource: "two-factor", action: "read", module: "auth", description: "Read 2FA enforcement policy" },
   { resource: "two-factor", action: "update", module: "auth", description: "Update 2FA enforcement policy" },
   // Directory — focal authors submissions, manager reviews
@@ -359,12 +356,6 @@ async function main() {
       scope: "tenant",
       enabled: false,
       description: "Export audit log (CSV/JSON)",
-    },
-    {
-      key: "FF_NOTES",
-      scope: "tenant",
-      enabled: true,
-      description: "Notes demo entity — living documentation of every template pattern",
     },
     {
       key: "FF_DIRECTORY",

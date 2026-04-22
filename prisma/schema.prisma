@@ -62,8 +62,6 @@ model User {
   invitationsSent  Invitation[]
   notifications    Notification[]
   ssoConnections   SSOConnection[]
-  notesAuthored    Note[]            @relation("NoteAuthor")
-  noteComments     NoteComment[]
   submittedChanges ChangeRequest[]   @relation("ChangeSubmitter")
   reviewedChanges  ChangeRequest[]   @relation("ChangeReviewer")
 
@@ -254,8 +252,6 @@ model Tenant {
   currencies           Currency[]
   ssoConfigurations    SSOConfiguration[]
   ssoConnections       SSOConnection[]
-  notes                Note[]
-  noteCategories       NoteCategory[]
   organizations        Organization[]
   organizationTypes    OrganizationType[]
   people               Person[]
@@ -615,85 +611,6 @@ model SSOConnection {
   @@unique([userId, provider, tenantId])
   @@index([userId])
   @@index([tenantId])
-}
-
-// ─── Notes (demo entity) ─────────────────────────────
-// The Notes module is the template's "living documentation" — it exercises
-// every shipped pattern (shared editor, cascading selects, saved views, custom
-// fields, dialog sub-entities, soft delete, versioning) so apps forked from
-// the template have a working reference to copy from.
-
-enum NoteStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
-}
-
-model NoteCategory {
-  id          String         @id @default(cuid())
-  tenantId    String
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String         @db.VarChar(100)
-  color       String?        @db.VarChar(20)
-  parentId    String?
-  parent      NoteCategory?  @relation("NoteCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    NoteCategory[] @relation("NoteCategoryTree")
-  sortOrder   Int            @default(0)
-  description String?        @db.Text
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  deletedAt   DateTime?
-
-  notes Note[]
-
-  @@unique([tenantId, name])
-  @@index([tenantId])
-  @@index([parentId])
-  @@index([deletedAt])
-}
-
-model Note {
-  id         String        @id @default(cuid())
-  tenantId   String
-  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  title      String        @db.VarChar(255)
-  content    String        @db.Text
-  status     NoteStatus    @default(DRAFT)
-  categoryId String?
-  category   NoteCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  tags       String[]
-  dueDate    DateTime?
-  authorId   String
-  author     User          @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  version    Int           @default(1)
-  metadata   Json?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  deletedAt  DateTime?
-
-  comments NoteComment[]
-
-  @@index([tenantId])
-  @@index([tenantId, status, deletedAt])
-  @@index([categoryId])
-  @@index([authorId])
-  @@index([deletedAt])
-}
-
-model NoteComment {
-  id        String    @id @default(cuid())
-  noteId    String
-  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  body      String    @db.Text
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  @@index([noteId, createdAt])
-  @@index([authorId])
-  @@index([deletedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

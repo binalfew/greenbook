@@ -25,7 +25,6 @@ The extraction plan that produced this template (`docs/superpowers/specs/2026-04
 | 11    | PWA + offline                                                 | `public/sw.js`, `public/manifest.json`, `app/utils/offline/`, `app/components/{offline-banner,pwa/*}.tsx`                                                                                                                                                   |
 | 12    | Testing harness                                               | `vitest.config.ts`, `vitest.integration.config.ts`, `playwright.config.ts`, `tests/`                                                                                                                                                                        |
 | 13    | Observability (logger/correlation/rate limit/Sentry/shutdown) | `app/utils/monitoring/`, `app/middleware/correlation.server.ts`, `server/{logger,correlation,request-logger,security,rate-limit-audit,sentry,shutdown}.{js,ts}`                                                                                             |
-| 14    | Notes demo entity                                             | `app/services/notes.server.ts`, `app/routes/$tenant/notes/`                                                                                                                                                                                                 |
 | app   | Directory (Greenbook domain — AU Blue Book)                   | `app/services/{organizations,people,positions,position-assignments,directory-changes,public-directory}.server.ts`, `app/routes/$tenant/directory/`, `app/utils/{directory-access,directory-submit,directory-routes}.server.ts`, `app/components/directory/` |
 
 Each phase also appears as its own heading below with the subsystem's shape, conventions, and deviations captured when the code landed.
@@ -94,7 +93,7 @@ See the "Testing harness (Phase 12)" section for setup file layout, runner tiers
   - `app/utils/events/` — job queue, domain event bus, webhook emitter, idempotency
   - `app/utils/monitoring/` — pino logger + Sentry (client + server)
   - `app/utils/offline/` — service-worker registration + IndexedDB sync queue
-  - `app/utils/schemas/` — cross-cutting Zod schemas (privacy, sso, notes)
+  - `app/utils/schemas/` — cross-cutting Zod schemas (privacy, sso, directory, tenant)
   - `app/utils/constants/` — enum key lists + color maps for status badges
 - `app/middleware/` — request-scoped helpers (correlation ID + AsyncLocalStorage)
 - `app/services/` — business logic (one file per domain, `.server.ts`)
@@ -120,19 +119,18 @@ Path alias: `~/*` maps to `./app/*`.
 
 Every pattern the template teaches has a dedicated section below. Quick index for common tasks:
 
-| Task                                | Canonical example                                           | Docs                                             |
-| ----------------------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
-| Add a new CRUD entity               | `app/routes/$tenant/notes/`                                 | "Demo entity — Notes (Phase 14)"                 |
-| Wire a form                         | `app/routes/$tenant/notes/+shared/note-editor.tsx`          | "Components (Phase 5)" + "Action error-handling" |
-| Dialog overlay on a detail page     | `app/routes/$tenant/notes/$noteId.delete.tsx`               | "Dialog route pattern"                           |
-| Trailing-underscore escape          | `app/routes/$tenant/notes/$noteId_/edit.tsx`                | "Entity route structure"                         |
-| Cascading selects                   | `app/hooks/use-cascade.ts` + existing consumers             | "Cascading dropdowns"                            |
-| Tenant-scoped list with filters     | `app/routes/$tenant/notes/index.tsx`                        | "Data patterns (Phase 7)"                        |
-| Background job                      | `app/utils/events/job-handlers.server.ts`                   | "Events & Jobs (Phase 6)"                        |
-| Webhook emission                    | `app/services/webhooks.server.ts`                           | "Events & Jobs (Phase 6)"                        |
-| Gate by feature flag                | `requireFeature(request, "FF_NAME")`                        | "Settings + flags (Phase 3)"                     |
-| RBAC check                          | `requirePermission(request, "resource", "action")`          | "Auth + RBAC (Phase 1)"                          |
-| Structured logging with correlation | `getRequestLogger()` from `~/middleware/correlation.server` | "Server hardening (Phase 13)"                    |
+| Task                                | Canonical example                                                            | Docs                                             |
+| ----------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| Wire a form                         | `app/routes/$tenant/directory/organizations/+shared/organization-editor.tsx` | "Components (Phase 5)" + "Action error-handling" |
+| Dialog overlay on a detail page     | `app/routes/$tenant/directory/organizations/$orgId.delete.tsx`               | "Dialog route pattern"                           |
+| Trailing-underscore escape          | `app/routes/$tenant/directory/organizations/$orgId_/edit.tsx`                | "Entity route structure"                         |
+| Cascading selects                   | `app/hooks/use-cascade.ts` + existing consumers                              | "Cascading dropdowns"                            |
+| Tenant-scoped list with filters     | `app/routes/$tenant/directory/organizations/index.tsx`                       | "Data patterns (Phase 7)"                        |
+| Background job                      | `app/utils/events/job-handlers.server.ts`                                    | "Events & Jobs (Phase 6)"                        |
+| Webhook emission                    | `app/services/webhooks.server.ts`                                            | "Events & Jobs (Phase 6)"                        |
+| Gate by feature flag                | `requireFeature(request, "FF_NAME")`                                         | "Settings + flags (Phase 3)"                     |
+| RBAC check                          | `requirePermission(request, "resource", "action")`                           | "Auth + RBAC (Phase 1)"                          |
+| Structured logging with correlation | `getRequestLogger()` from `~/middleware/correlation.server`                  | "Server hardening (Phase 13)"                    |
 
 The per-phase sections below document each subsystem's shape, conventions, open deviations, and known-tradeoff decisions. The "deviations" bullets at the end of each section are the single most useful thing to skim before starting new work — they flag the places where the template deliberately stopped short and what a fork needs to add.
 
@@ -827,95 +825,6 @@ Files outside `app/` (namely `public/sw.js` and `tests/**`) were deliberately NO
 - **`public/sw.js` keeps `console.*`** — it runs outside the bundler (no `logger` available). Logs still land in browser DevTools; pipe them to Sentry via the client SDK if needed.
 - **Suspicious-request blocker, nonce middleware, permissions-policy header, and a hardened helmet CSP are intentionally NOT shipped** — all valid hardening, but the template leaves CSP/security-header ergonomics to the fork so apps can pick the trade-offs (nonce-vs-hash, `unsafe-inline`, blob:/worker-src) that match their runtime.
 - **No `/api` mutation limiter.** The api-key middleware gates `/api/*`, but an application-level rate limit for mutation-heavy API calls is an app concern.
-
-## Demo entity — Notes (Phase 14)
-
-Phase 14 ships the Notes module — the template's "living documentation." It exists to exercise every pattern the template teaches, so forks have a working reference to copy from.
-
-### What it demonstrates
-
-| Pattern                          | Where                                                                                                            |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Shared-editor upsert             | `notes/+shared/note-editor.tsx` + `.server.tsx`, schema `id` optional                                            |
-| Async `superRefine` domain check | `note-editor.server.tsx` — category must belong to tenant                                                        |
-| Dot-delimited detail layout      | `$noteId._layout.tsx` with 2/3 + 1/3 grid                                                                        |
-| Trailing-underscore escape       | `$noteId_/edit.tsx` — full-page editor outside the detail layout                                                 |
-| Dialog overlay route             | `$noteId.delete.tsx`, `$noteId.comments.new.tsx`, `$noteId.comments.$commentId.delete.tsx`                       |
-| Nested sub-entity CRUD           | NoteComment — list inside detail, add + delete via dialogs                                                       |
-| DataTable with filters           | `index.tsx` — search, status filter, category filter, pagination                                                 |
-| Soft delete                      | `Note.deletedAt`, `NoteCategory.deletedAt`, `NoteComment.deletedAt` — every list query filters `deletedAt: null` |
-| Versioning                       | `Note.version` bumped on update                                                                                  |
-| Feature-flag gating              | `FF_NOTES` (tenant-scoped, default on) — tenant nav link + every loader/action calls `requireFeature`            |
-| Tenant scoping                   | Every service call takes a `tenantId`; the service filters on it                                                 |
-| Per-operation RBAC               | `requirePermission("note", "write"                                                                               | "delete")` on mutation routes |
-| i18n namespace                   | `notes` namespace (en + fr) with pluralization via `commentsCount_one/_other`                                    |
-
-### Schema
-
-- `NoteStatus` enum: `DRAFT` | `PUBLISHED` | `ARCHIVED`.
-- `Note` — `title`, `content` (Text), `status`, `categoryId?` → `NoteCategory`, `tags` (`String[]`), `dueDate?`, `authorId` → `User`, `version`, `metadata` (Json), soft delete.
-- `NoteCategory` — self-referential (`parentId` → `NoteCategory`) with cycle guard in the service, soft delete, unique-per-tenant `(tenantId, name)`.
-- `NoteComment` — belongs to `Note`, soft delete.
-- Back-relations on `Tenant` (`notes`, `noteCategories`) and `User` (`notesAuthored`, `noteComments`).
-
-Schema pushed via `db push --accept-data-loss` (template workflow).
-
-### Service
-
-`~/services/notes.server.ts` (~300 lines):
-
-- `listNotes(tenantId, { where, page, pageSize, orderBy })` — search on title/content, filter on status/category, include author + category + comment count. Returns `{ data, total }`.
-- `getNote(id, tenantId)` — includes full comment list (each with author) plus category + author + comment count.
-- `createNote` / `updateNote` — shared schema shape. Update increments `version`.
-- `deleteNote` — soft delete (`deletedAt = now`). Apps hard-delete by calling `prisma.note.delete()` directly once they've confirmed retention policy.
-- `addComment` / `deleteComment` — nested sub-entity CRUD; `deleteComment` is soft.
-- `listCategories` / `getCategory` / `createCategory` / `updateCategory` / `deleteCategory` — with a cycle-detection pass on `updateCategory` that walks the parent chain up to depth 32 before rejecting.
-
-### Routes
-
-```
-$tenant/notes/
-  +shared/
-    note-editor.tsx              — Form component (shared by new + edit)
-    note-editor.server.tsx       — Upsert action (id present → update, absent → create)
-  index.tsx                      — DataTable with search, status + category filters
-  new.tsx                        — Thin wrapper: loader fetches categories, re-exports shared action
-  $noteId._layout.tsx            — Detail layout (2/3 content + comments, 1/3 metadata) with <Outlet />
-  $noteId.delete.tsx             — Dialog (inside layout, uses <Dialog>)
-  $noteId.comments.new.tsx       — Dialog (add comment)
-  $noteId.comments.$commentId.delete.tsx — Dialog (delete comment)
-  $noteId_/
-    edit.tsx                     — Standalone full-page edit form (escapes the layout)
-```
-
-### Permissions
-
-`UNIQUE_PERMISSIONS` gained `note:{read,write,delete}` under module `content`. Admin role picks them up automatically on seed. The `requirePermission` helper enforces them on mutation routes; `requireFeature("FF_NOTES")` gates the whole surface.
-
-### Feature flag
-
-`FF_NOTES` — tenant-scoped, defaults to **enabled** (so the demo renders out-of-the-box). Apps that don't want Notes in their fork can flip it off in the feature-flags admin, delete the routes + service + schema entirely, or keep the code as a reference with the flag off.
-
-### Navigation
-
-Tenant top nav conditionally renders a "Notes" `NavLink` when `FF_NOTES` is on — resolved via the same `enabledFeatures` map that gates `NotificationBell` and `LanguageSwitcher`.
-
-### Deviations
-
-- **Content is not markdown-rendered.** The schema stores markdown text but the detail page renders it inside `<pre>` with `whitespace-pre-wrap`. Apps wire a markdown renderer (e.g. `react-markdown`) in `$noteId._layout.tsx` when they need it.
-- **Tags are `String[]` on Postgres.** Works for small tag counts. For tag management (rename across all notes, tag browser), add a `Tag` model later with a join table.
-- **Custom fields NOT wired.** Phase 7 shipped the `CustomFieldDefinition` model but the Notes service doesn't render/persist note-specific custom field values. Adding it means (a) a join table mapping `noteId` → `definitionId` → value, (b) dynamic form fields in the editor. Left out as an exercise.
-- **Saved views NOT wired.** Phase 7b shipped `ViewSwitcher` + `resolveViewContext`. The Notes list could be the template's first consumer — a natural follow-up. For now it's a plain DataTable with URL-param filters.
-- **Kanban / Calendar / Gallery renderers NOT wired.** Status would be a good kanban lane field, `dueDate` a good calendar field — but the alternate view renderers are still stubs per Phase 5's deviations.
-- **Category admin NOT shipped.** Service has full CRUD; no `/settings/notes/categories` UI. Apps wanting a category editor follow the reference-data admin pattern from Phase 8b.
-- **Cycle detection on category parent is depth-capped at 32** — pathological trees deeper than that would silently pass the guard. Good enough for a demo; apps that allow deep hierarchies should swap in a recursive CTE walk.
-- **Comments don't paginate.** The detail page loads every comment. Apps that expect high comment volume add pagination / virtualization.
-- **Version is incrementing-only.** No history table, no diff view. Adding `NoteVersion` with snapshot-on-write is a follow-up for apps that need audit.
-- **Seed data not shipped.** No sample notes so apps see a genuine empty-state first run. A three-note seed block is a one-line copy into `prisma/seed.ts` if a fork wants one.
-- **No unit/integration/E2E tests shipped** for Notes. Phase 12 shipped the harness with example tests; adding real coverage for the demo entity is in-scope for apps that want it as ground truth.
-- **Content editor is a plain `<Textarea>`.** No WYSIWYG, no slash commands, no /blocks. Intentional — this is the template pattern for a text field, not a content platform.
-- **No draft autosave.** Apps wanting draft-as-you-type add fetcher-based persistence on blur or interval.
-- **No "add category" inline.** The category SelectField shows existing categories only. Apps add a "+ new category" option that opens a side-drawer or navigates to a create flow.
 
 ## Directory + editorial workflow (Greenbook)
 

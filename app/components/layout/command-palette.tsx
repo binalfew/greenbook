@@ -6,7 +6,6 @@ import {
   Clock,
   KeyRound,
   Loader2,
-  Plus,
   Search,
   Settings,
   Shield,
@@ -134,15 +133,6 @@ export function buildTemplateCommandPaletteActions(
       description: "Settings",
       href: child.url,
       icon: <Settings className="size-4" />,
-    });
-  }
-
-  if (enabledFeatures?.FF_NOTES) {
-    actions.push({
-      id: "create-note",
-      label: "Create note",
-      href: `${basePrefix}/notes/new`,
-      icon: <Plus className="size-4" />,
     });
   }
 

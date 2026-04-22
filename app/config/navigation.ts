@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, FileText, ClipboardList, Bell, Network } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Bell, Network } from "lucide-react";
 
 export type Permission = { resource: string; action: string };
 
@@ -113,14 +113,6 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
               permission: "directory-change:submit",
             },
           ],
-        },
-        {
-          title: "Notes",
-          tKey: "notes",
-          description: "Team-shared notes with categories and comments.",
-          url: `${basePrefix}/notes`,
-          icon: FileText,
-          featureFlag: "FF_NOTES",
         },
         {
           title: "Logs",
