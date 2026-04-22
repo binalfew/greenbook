@@ -1,10 +1,10 @@
-import { ArrowLeft, Mail, Phone, User } from "lucide-react";
+import { ArrowLeft, Briefcase, Mail, Phone, User } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
-import { AssignmentTimeline } from "~/components/directory/assignment-timeline";
 import { PublicDetailNotFound } from "~/components/public/not-found";
 import { Badge } from "~/components/ui/badge";
 import { publicGetPerson } from "~/services/people.server";
+import { formatDate } from "~/utils/format-date";
 import { PUBLIC_CACHE_HEADER, getPublicContext } from "~/utils/public-directory.server";
 import type { Route } from "./+types/$personId";
 
@@ -29,9 +29,9 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
     .join(" ");
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <Link
-        to="/directory/people"
+        to="/"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="size-4" />
@@ -89,11 +89,35 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
 
           <section>
             <h2 className="mb-2 text-sm font-semibold">{t("personDetail.currentPositions")}</h2>
-            <AssignmentTimeline
-              entries={person.history}
-              mode="byPerson"
-              basePrefix="/directory/positions"
-            />
+            {person.history.length === 0 ? (
+              <p className="text-muted-foreground text-sm">{t("landing.noCurrentRole")}</p>
+            ) : (
+              <ol className="relative space-y-4 border-l pl-4">
+                {person.history.map((entry) => (
+                  <li key={entry.id} className="relative">
+                    <span className="bg-muted border-background absolute top-1.5 -left-[0.9rem] flex size-4 items-center justify-center rounded-full border-2">
+                      <Briefcase className="text-muted-foreground size-2.5" />
+                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="font-medium">{entry.position.title}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {entry.position.organization.acronym || entry.position.organization.name}
+                        </div>
+                        <div className="text-muted-foreground text-xs">
+                          {formatDate(entry.startDate)}
+                          {" — "}
+                          {entry.endDate ? formatDate(entry.endDate) : t("landing.currentRole")}
+                        </div>
+                      </div>
+                      {entry.isCurrent ? (
+                        <Badge variant="default">{t("landing.currentRole")}</Badge>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
           </section>
         </div>
 

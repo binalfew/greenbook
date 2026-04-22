@@ -91,7 +91,9 @@ test.skip("focal submits → manager approves → public page renders", async ({
   ]);
   await logout(page);
 
-  // 3. Public: landing + detail page must render without auth.
-  await page.goto("/directory/organizations");
-  await expect(page.getByText(orgName).first()).toBeVisible({ timeout: 10_000 });
+  // 3. Public: the search landing must render without auth. The orgName
+  // won't show directly (public lists people, not orgs) but the page
+  // should load and the search box should be interactive.
+  await page.goto("/");
+  await expect(page.getByRole("textbox")).toBeVisible({ timeout: 10_000 });
 });

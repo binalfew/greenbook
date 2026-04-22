@@ -125,13 +125,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const tenantData = useRouteLoaderData("routes/$tenant/_layout") as
     | { tenant?: { brandTheme?: string } }
     | undefined;
-  // Tenant-less routes (login, signup, /directory/*) surface their own
-  // brandTheme resolved from the `brand` cookie so the AU look carries
-  // across the whole site.
+  // Tenant-less routes (login, signup, /people, /organizations) surface
+  // their own brandTheme resolved from the `brand` cookie so the AU look
+  // carries across the whole site.
   const authData = useRouteLoaderData("routes/_auth/_layout") as
     | { brandTheme?: string }
     | undefined;
-  const publicDirectoryData = useRouteLoaderData("routes/directory/_layout") as
+  const publicDirectoryData = useRouteLoaderData("routes/_public/_layout") as
     | { brandTheme?: string }
     | undefined;
   const nonce = useNonce();

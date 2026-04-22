@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 import { logout } from "~/utils/auth/auth.server";
 import { getImpersonationState, stopImpersonating } from "~/utils/auth/session.server";
-import type { Route } from "../+types";
+import type { Route } from "./+types/logout";
 
 export async function loader() {
   return redirect("/");

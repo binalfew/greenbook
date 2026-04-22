@@ -1,10 +1,10 @@
-# Public directory aggregates approved records from participating bodies.
-# Admin surfaces under /login, /signup, and tenant-scoped paths stay out of
-# crawler indexes; the public directory is explicitly welcomed.
+# Greenbook public directory aggregates approved records from participating
+# AU bodies. Admin surfaces under /login, /signup, and tenant-scoped paths
+# stay out of crawler indexes; public surfaces are explicitly welcomed.
 
 User-agent: *
-Allow: /directory/
-Allow: /directory
+Allow: /
+Allow: /people/
 
 Disallow: /admin/
 Disallow: /login
