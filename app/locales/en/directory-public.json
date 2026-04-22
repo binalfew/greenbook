@@ -18,6 +18,8 @@
     "peopleSearchPlaceholder": "Search people by name…",
     "peopleEmpty": "No people match this search.",
     "peopleEmptyHelp": "Try a different name or clear the filters.",
+    "searchPrompt": "Search the directory",
+    "searchPromptHelp": "Start typing a name above to find profiles.",
     "orgsSearchPlaceholder": "Filter organizations…",
     "orgsEmpty": "No public organizations found.",
     "orgsEmptyHelp": "Try adjusting your search, or switch to the People tab.",

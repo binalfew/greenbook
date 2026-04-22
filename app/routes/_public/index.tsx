@@ -1,4 +1,5 @@
 import { Search, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, Link, data, redirect } from "react-router";
 import { Button } from "~/components/ui/button";
@@ -36,6 +37,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (isEmpty) {
     return data(
       { isEmpty: true as const, people: [], q, page, totalPages: 1 },
+      { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } },
+    );
+  }
+  // Search-driven UX: no query → show the search prompt, don't list everyone.
+  if (q.length === 0) {
+    return data(
+      { isEmpty: false as const, people: [], q, page: 1, totalPages: 1 },
       { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } },
     );
   }
@@ -86,7 +94,13 @@ export default function PublicPeopleIndex({ loaderData }: Route.ComponentProps) 
         <Button type="submit">{t("landing.searchSubmit")}</Button>
       </Form>
 
-      {people.length === 0 ? (
+      {q.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title={t("landing.searchPrompt")}
+          body={t("landing.searchPromptHelp")}
+        />
+      ) : people.length === 0 ? (
         <EmptyState
           icon={Users}
           title={t("landing.peopleEmpty")}
@@ -206,7 +220,7 @@ function EmptyState({
   title,
   body,
 }: {
-  icon: typeof Users;
+  icon: LucideIcon;
   title: string;
   body: string;
 }) {

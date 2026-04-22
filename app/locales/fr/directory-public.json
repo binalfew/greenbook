@@ -18,6 +18,8 @@
     "peopleSearchPlaceholder": "Rechercher par nom…",
     "peopleEmpty": "Aucune personne ne correspond à cette recherche.",
     "peopleEmptyHelp": "Essayez un autre nom ou réinitialisez les filtres.",
+    "searchPrompt": "Rechercher dans l'annuaire",
+    "searchPromptHelp": "Commencez à saisir un nom ci-dessus pour trouver un profil.",
     "orgsSearchPlaceholder": "Filtrer les organisations…",
     "orgsEmpty": "Aucune organisation publique trouvée.",
     "orgsEmptyHelp": "Essayez d'ajuster votre recherche ou basculez sur l'onglet Personnes.",
