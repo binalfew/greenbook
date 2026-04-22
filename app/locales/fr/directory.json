@@ -94,8 +94,8 @@
     "fields": {
       "firstName": "Prénom",
       "lastName": "Nom",
-      "honorific": "Titre honorifique",
-      "honorificPlaceholder": "S.E., Dr, Prof., …",
+      "honorific": "Titre",
+      "honorificPlaceholder": "Sélectionner un titre",
       "email": "E-mail",
       "phone": "Téléphone",
       "bio": "Biographie",
@@ -111,7 +111,9 @@
       "basics": "Informations",
       "contact": "Contact",
       "assignments": "Postes occupés",
-      "metadata": "Métadonnées"
+      "metadata": "Métadonnées",
+      "initialAssignment": "Poste initial (optionnel)",
+      "initialAssignmentHelp": "Associer un poste (optionnel). L'affectation est créée en même temps que la personne — un seul cycle d'approbation."
     },
     "currentPosition": "Poste actuel",
     "noCurrentAssignments": "Aucun poste actuel.",

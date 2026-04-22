@@ -12,13 +12,30 @@ export const handle = { breadcrumb: "New" };
 export async function loader({ request }: Route.LoaderArgs) {
   const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "person");
 
-  const memberStates = await prisma.memberState.findMany({
-    where: { tenantId, deletedAt: null, isActive: true },
-    orderBy: { fullName: "asc" },
-    select: { id: true, fullName: true, abbreviation: true },
-  });
+  const [memberStates, positions, titles] = await Promise.all([
+    prisma.memberState.findMany({
+      where: { tenantId, deletedAt: null, isActive: true },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true, abbreviation: true },
+    }),
+    prisma.position.findMany({
+      where: { tenantId, deletedAt: null, isActive: true },
+      orderBy: [{ title: "asc" }],
+      take: 500,
+      select: {
+        id: true,
+        title: true,
+        organization: { select: { name: true, acronym: true } },
+      },
+    }),
+    prisma.title.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true },
+    }),
+  ]);
 
-  return data({ memberStates, canDirect });
+  return data({ memberStates, positions, titles, canDirect });
 }
 
 export default function NewPerson({ loaderData, params, actionData }: Route.ComponentProps) {
@@ -33,6 +50,8 @@ export default function NewPerson({ loaderData, params, actionData }: Route.Comp
       </header>
       <PersonEditor
         memberStates={loaderData.memberStates}
+        positions={loaderData.positions}
+        titles={loaderData.titles}
         canDirectApply={loaderData.canDirect}
         basePrefix={base}
         actionData={actionData}

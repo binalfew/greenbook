@@ -13,22 +13,27 @@ export const handle = { breadcrumb: "Edit" };
 export async function loader({ request, params }: Route.LoaderArgs) {
   const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "person");
 
-  const [person, memberStates] = await Promise.all([
+  const [person, memberStates, titles] = await Promise.all([
     getPerson(params.personId, tenantId),
     prisma.memberState.findMany({
       where: { tenantId, deletedAt: null, isActive: true },
       orderBy: { fullName: "asc" },
       select: { id: true, fullName: true, abbreviation: true },
     }),
+    prisma.title.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true },
+    }),
   ]);
 
-  return data({ person, memberStates, canDirect });
+  return data({ person, memberStates, titles, canDirect });
 }
 
 export default function EditPerson({ loaderData, params, actionData }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const base = `/${params.tenant}/directory/people`;
-  const { person, memberStates, canDirect } = loaderData;
+  const { person, memberStates, titles, canDirect } = loaderData;
 
   return (
     <div className="space-y-4">
@@ -39,6 +44,7 @@ export default function EditPerson({ loaderData, params, actionData }: Route.Com
       <PersonEditor
         person={person}
         memberStates={memberStates}
+        titles={titles}
         canDirectApply={canDirect}
         basePrefix={base}
         actionData={actionData}

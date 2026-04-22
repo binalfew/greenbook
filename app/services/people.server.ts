@@ -1,4 +1,5 @@
 import type { Prisma } from "~/generated/prisma/client.js";
+import { _applyCreateAssignment } from "~/services/position-assignments.server";
 import { prisma } from "~/utils/db/db.server";
 import { normaliseSearchTerm } from "~/utils/db/search.server";
 import { logger } from "~/utils/monitoring/logger.server";
@@ -162,10 +163,32 @@ export async function _applyCreatePerson(
     "applying CREATE person",
   );
 
-  return db.person.create({
+  const created = await db.person.create({
     data: { tenantId, ...personDataFromPayload(payload) },
     select: personSelect,
   });
+
+  // If the payload carries an initial-assignment block, create the
+  // PositionAssignment inside the same transaction. _applyCreateAssignment
+  // handles the one-current-per-position + one-current-per-person auto-close
+  // invariants; if the position isn't reachable, it throws and the outer
+  // transaction rolls back — the person doesn't get created alone.
+  if (payload.initialAssignment) {
+    await _applyCreateAssignment(
+      tenantId,
+      {
+        positionId: payload.initialAssignment.positionId,
+        personId: created.id,
+        startDate: payload.initialAssignment.startDate,
+        endDate: null,
+        notes: payload.initialAssignment.notes ?? null,
+      },
+      ctx,
+      tx,
+    );
+  }
+
+  return created;
 }
 
 export async function _applyUpdatePerson(

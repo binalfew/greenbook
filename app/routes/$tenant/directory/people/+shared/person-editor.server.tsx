@@ -14,8 +14,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
-  const { id, ...payload } = submission.value;
+  const { id, initialPositionId, initialStartDate, initialNotes, ...rest } = submission.value;
   const hasId = typeof id === "string" && id.length > 0;
+
+  // Initial-assignment block is a CREATE-only convenience: on UPDATE we drop
+  // the fields to avoid leaking them into an update payload.
+  const initialAssignment =
+    !hasId && initialPositionId && initialPositionId.length > 0
+      ? {
+          positionId: initialPositionId,
+          startDate:
+            initialStartDate && initialStartDate.length > 0
+              ? initialStartDate
+              : new Date().toISOString().slice(0, 10),
+          notes: initialNotes && initialNotes.length > 0 ? initialNotes : null,
+        }
+      : undefined;
+
+  const payload = initialAssignment ? { ...rest, initialAssignment } : rest;
 
   const outcome = await dispatchDirectoryChange(request, "person", {
     entityType: "PERSON",

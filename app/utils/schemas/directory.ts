@@ -61,6 +61,20 @@ export const organizationPayloadSchema = z.object({
 });
 export type OrganizationPayload = z.infer<typeof organizationPayloadSchema>;
 
+// Optional initial-assignment block carried on Person CREATE payloads so a
+// person can be provisioned together with their first position in a single
+// approval cycle. Ignored on UPDATE. When present on CREATE, the apply path
+// creates the person AND the assignment inside the same transaction.
+const initialAssignmentSchema = z.object({
+  positionId: z.string().trim().min(1, "Position is required"),
+  startDate: z
+    .string()
+    .trim()
+    .min(1, "Start date is required")
+    .refine((v) => !Number.isNaN(Date.parse(v)), { message: "Invalid start date" }),
+  notes: nullableString(2000),
+});
+
 export const personPayloadSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(100),
   lastName: z.string().trim().min(1, "Last name is required").max(100),
@@ -73,6 +87,7 @@ export const personPayloadSchema = z.object({
   languages: z.array(z.string().length(2).max(10)).default([]),
   showEmail: z.coerce.boolean().default(false),
   showPhone: z.coerce.boolean().default(false),
+  initialAssignment: initialAssignmentSchema.optional(),
 });
 export type PersonPayload = z.infer<typeof personPayloadSchema>;
 
@@ -205,6 +220,12 @@ export const personFormSchema = z.object({
   languages: z.array(z.string().length(2).max(10)).default([]),
   showEmail: z.coerce.boolean().default(false),
   showPhone: z.coerce.boolean().default(false),
+  // Optional initial-assignment fields — only meaningful on CREATE. Kept
+  // flat because Conform doesn't bind nested objects cleanly; the action
+  // hoists them into `initialAssignment` before dispatching.
+  initialPositionId: z.string().optional(),
+  initialStartDate: z.string().optional(),
+  initialNotes: formText(2000),
 });
 export type PersonFormInput = z.infer<typeof personFormSchema>;
 

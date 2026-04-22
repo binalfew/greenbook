@@ -34,6 +34,17 @@ type PersonLike = {
 export interface PersonEditorProps {
   person?: PersonLike;
   memberStates: Array<{ id: string; fullName: string; abbreviation: string }>;
+  /** Active titles (Mr., Mrs., Dr., …) for the honorific dropdown. */
+  titles: Array<{ id: string; name: string }>;
+  /**
+   * Active positions for the optional "Initial position" card. Only
+   * consumed in CREATE mode; omit for edit pages.
+   */
+  positions?: Array<{
+    id: string;
+    title: string;
+    organization: { name: string; acronym: string | null };
+  }>;
   canDirectApply: boolean;
   basePrefix: string;
   actionData?: Route.ComponentProps["actionData"];
@@ -70,12 +81,15 @@ function FieldRow({
 export function PersonEditor({
   person,
   memberStates,
+  titles,
+  positions,
   canDirectApply,
   basePrefix,
   actionData,
 }: PersonEditorProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
+  const isCreate = !person;
 
   const { form, fields } = useForm(personFormSchema, {
     lastResult: actionData,
@@ -92,6 +106,9 @@ export function PersonEditor({
       languages: person?.languages ?? [],
       showEmail: person?.showEmail ?? false,
       showPhone: person?.showPhone ?? false,
+      initialPositionId: "",
+      initialStartDate: isCreate ? new Date().toISOString().slice(0, 10) : "",
+      initialNotes: "",
     },
   });
 
@@ -119,9 +136,9 @@ export function PersonEditor({
               label={t("people.fields.honorific")}
               errors={fields.honorific.errors}
             >
-              <Input
-                {...getInputProps(fields.honorific, { type: "text" })}
-                key={fields.honorific.key}
+              <SelectField
+                meta={fields.honorific}
+                options={titles.map((ti) => ({ value: ti.name, label: ti.name }))}
                 placeholder={t("people.fields.honorificPlaceholder")}
               />
             </FieldRow>
@@ -217,6 +234,57 @@ export function PersonEditor({
           </div>
         </CardContent>
       </Card>
+
+      {isCreate && positions && positions.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              {t("people.cards.initialAssignment")}
+            </CardTitle>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {t("people.cards.initialAssignmentHelp")}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FieldRow
+              id={fields.initialPositionId.id}
+              label={t("assignments.fields.position")}
+              errors={fields.initialPositionId.errors}
+            >
+              <SelectField
+                meta={fields.initialPositionId}
+                options={positions.map((p) => ({
+                  value: p.id,
+                  label: `${p.title} — ${p.organization.acronym || p.organization.name}`,
+                }))}
+                placeholder={t("assignments.fields.positionPlaceholder")}
+              />
+            </FieldRow>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FieldRow
+                id={fields.initialStartDate.id}
+                label={t("assignments.fields.startDate")}
+                errors={fields.initialStartDate.errors}
+              >
+                <Input
+                  {...getInputProps(fields.initialStartDate, { type: "date" })}
+                  key={fields.initialStartDate.key}
+                />
+              </FieldRow>
+              <FieldRow
+                id={fields.initialNotes.id}
+                label={t("assignments.fields.notes")}
+                errors={fields.initialNotes.errors}
+              >
+                <Input
+                  {...getInputProps(fields.initialNotes, { type: "text" })}
+                  key={fields.initialNotes.key}
+                />
+              </FieldRow>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button type="submit" className="w-full sm:w-auto">

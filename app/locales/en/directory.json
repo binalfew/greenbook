@@ -94,8 +94,8 @@
     "fields": {
       "firstName": "First name",
       "lastName": "Last name",
-      "honorific": "Honorific",
-      "honorificPlaceholder": "H.E., Dr., Prof., …",
+      "honorific": "Title",
+      "honorificPlaceholder": "Select a title",
       "email": "Email",
       "phone": "Phone",
       "bio": "Biography",
@@ -111,7 +111,9 @@
       "basics": "Basics",
       "contact": "Contact",
       "assignments": "Positions held",
-      "metadata": "Metadata"
+      "metadata": "Metadata",
+      "initialAssignment": "Initial position (optional)",
+      "initialAssignmentHelp": "Optionally associate a position. The assignment is created together with the person — no separate approval cycle."
     },
     "currentPosition": "Current position",
     "noCurrentAssignments": "Not currently holding a position.",
