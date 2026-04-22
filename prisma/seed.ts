@@ -418,24 +418,6 @@ async function main() {
  * row upserts on `(tenantId, code)`.
  */
 async function seedReferenceData(tenantId: string) {
-  const countries = [
-    { code: "US", name: "United States", alpha3: "USA", numericCode: "840", phoneCode: "+1", flag: "🇺🇸" },
-    { code: "GB", name: "United Kingdom", alpha3: "GBR", numericCode: "826", phoneCode: "+44", flag: "🇬🇧" },
-    { code: "FR", name: "France", alpha3: "FRA", numericCode: "250", phoneCode: "+33", flag: "🇫🇷" },
-    { code: "DE", name: "Germany", alpha3: "DEU", numericCode: "276", phoneCode: "+49", flag: "🇩🇪" },
-    { code: "ET", name: "Ethiopia", alpha3: "ETH", numericCode: "231", phoneCode: "+251", flag: "🇪🇹" },
-    { code: "CA", name: "Canada", alpha3: "CAN", numericCode: "124", phoneCode: "+1", flag: "🇨🇦" },
-    { code: "JP", name: "Japan", alpha3: "JPN", numericCode: "392", phoneCode: "+81", flag: "🇯🇵" },
-    { code: "AU", name: "Australia", alpha3: "AUS", numericCode: "036", phoneCode: "+61", flag: "🇦🇺" },
-  ];
-  for (const [i, c] of countries.entries()) {
-    await prisma.country.upsert({
-      where: { tenantId_code: { tenantId, code: c.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...c },
-    });
-  }
-
   const titles = [
     { code: "MR", name: "Mr." },
     { code: "MRS", name: "Mrs." },
@@ -465,23 +447,6 @@ async function seedReferenceData(tenantId: string) {
       where: { tenantId_code: { tenantId, code: l.code } },
       update: {},
       create: { tenantId, sortOrder: i, ...l },
-    });
-  }
-
-  const currencies = [
-    { code: "USD", name: "US Dollar", symbol: "$", decimalDigits: 2 },
-    { code: "EUR", name: "Euro", symbol: "€", decimalDigits: 2 },
-    { code: "GBP", name: "British Pound", symbol: "£", decimalDigits: 2 },
-    { code: "JPY", name: "Japanese Yen", symbol: "¥", decimalDigits: 0 },
-    { code: "ETB", name: "Ethiopian Birr", symbol: "Br", decimalDigits: 2 },
-    { code: "CAD", name: "Canadian Dollar", symbol: "$", decimalDigits: 2 },
-    { code: "AUD", name: "Australian Dollar", symbol: "$", decimalDigits: 2 },
-  ];
-  for (const [i, c] of currencies.entries()) {
-    await prisma.currency.upsert({
-      where: { tenantId_code: { tenantId, code: c.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...c },
     });
   }
 }

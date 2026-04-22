@@ -1,4 +1,4 @@
-import { ChevronRight, CircleDollarSign, CircleUser, Globe, Languages } from "lucide-react";
+import { Briefcase, ChevronRight, CircleUser, Languages, Map, Network, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
@@ -73,14 +73,6 @@ export default function ReferencesIndex({ loaderData, params }: Route.ComponentP
         </h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <SurfaceCard
-            icon={Globe}
-            title={t("countries")}
-            value={counts.countries}
-            description={t("countriesDescription")}
-            to={`${base}/countries`}
-            accent="bg-sky-500/10 text-sky-600 dark:text-sky-400"
-          />
-          <SurfaceCard
             icon={CircleUser}
             title={t("titles")}
             value={counts.titles}
@@ -97,12 +89,36 @@ export default function ReferencesIndex({ loaderData, params }: Route.ComponentP
             accent="bg-amber-500/10 text-amber-600 dark:text-amber-400"
           />
           <SurfaceCard
-            icon={CircleDollarSign}
-            title={t("currencies")}
-            value={counts.currencies}
-            description={t("currenciesDescription")}
-            to={`${base}/currencies`}
-            accent="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            icon={Network}
+            title={t("organizationTypes")}
+            value={counts.organizationTypes}
+            description={t("organizationTypesDescription")}
+            to={`${base}/organization-types`}
+            accent="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+          />
+          <SurfaceCard
+            icon={Briefcase}
+            title={t("positionTypes")}
+            value={counts.positionTypes}
+            description={t("positionTypesDescription")}
+            to={`${base}/position-types`}
+            accent="bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400"
+          />
+          <SurfaceCard
+            icon={Map}
+            title={t("regionalGroups")}
+            value={counts.regionalGroups}
+            description={t("regionalGroupsDescription")}
+            to={`${base}/regional-groups`}
+            accent="bg-rose-500/10 text-rose-600 dark:text-rose-400"
+          />
+          <SurfaceCard
+            icon={Users}
+            title={t("memberStates")}
+            value={counts.memberStates}
+            description={t("memberStatesDescription")}
+            to={`${base}/member-states`}
+            accent="bg-teal-500/10 text-teal-600 dark:text-teal-400"
           />
         </div>
       </div>

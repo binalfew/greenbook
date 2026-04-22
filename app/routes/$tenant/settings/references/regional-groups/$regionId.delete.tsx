@@ -3,10 +3,14 @@ import { data, Form, Link, redirect } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
-import { deleteCountry, getCountry, ReferenceDataError } from "~/services/reference-data.server";
+import {
+  deleteRegionalGroup,
+  getRegionalGroup,
+  ReferenceDataError,
+} from "~/services/reference-data.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import type { Route } from "./+types/$countryId.delete";
+import type { Route } from "./+types/$regionId.delete";
 
 export const handle = { breadcrumb: "Delete" };
 
@@ -17,8 +21,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw data({ error: "Missing tenant context" }, { status: 403 });
   }
   try {
-    const country = await getCountry(params.countryId, tenantId);
-    return data({ country });
+    const regionalGroup = await getRegionalGroup(params.regionId, tenantId);
+    return data({ regionalGroup });
   } catch (err) {
     if (err instanceof ReferenceDataError) {
       throw data({ error: err.message }, { status: err.status });
@@ -34,47 +38,36 @@ export async function action({ request, params }: Route.ActionArgs) {
     throw data({ error: "Missing tenant context" }, { status: 403 });
   }
   const ctx = buildServiceContext(request, user, tenantId);
-  await deleteCountry(params.countryId, ctx);
-  return redirect(`/${params.tenant}/settings/references/countries`);
+  await deleteRegionalGroup(params.regionId, ctx);
+  return redirect(`/${params.tenant}/settings/references/regional-groups`);
 }
 
-export default function DeleteCountry({ loaderData, params }: Route.ComponentProps) {
+export default function DeleteRegionalGroup({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("references");
   const { t: tc } = useTranslation("common");
-  const base = `/${params.tenant}/settings/references/countries`;
-  const c = loaderData.country;
+  const base = `/${params.tenant}/settings/references/regional-groups`;
+  const d = loaderData.regionalGroup;
 
   return (
     <div className="space-y-4">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">{tc("delete")}</h1>
       </header>
-
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            {c.flag && <span className="text-lg">{c.flag}</span>}
-            {c.name}
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold">{d.name}</CardTitle>
         </CardHeader>
         <CardContent className="divide-y">
           <InfoRow label={t("code")}>
-            <span className="font-mono text-xs">{c.code}</span>
+            <span className="font-mono text-xs">{d.code}</span>
           </InfoRow>
-          {c.alpha3 && (
-            <InfoRow label={t("alpha3")}>
-              <span className="font-mono text-xs">{c.alpha3}</span>
-            </InfoRow>
-          )}
         </CardContent>
       </Card>
-
       <Card className="border-destructive">
         <CardContent className="pt-6">
           <p className="text-sm">{t("deleteConfirm")}</p>
         </CardContent>
       </Card>
-
       <Form method="post" className="flex flex-col gap-3 sm:flex-row">
         <Button type="submit" variant="destructive" className="w-full sm:w-auto">
           {tc("delete")}

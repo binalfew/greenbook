@@ -1,24 +1,24 @@
 import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
+import { getFormProps, getInputProps, getTextareaProps, useForm } from "~/components/form";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { SwitchField, getFormProps, getInputProps, useForm } from "~/components/form";
-import { currencyFormSchema } from "./currency-schema";
+import { Textarea } from "~/components/ui/textarea";
+import { organizationTypeFormSchema } from "./organization-type-schema";
 
-type CurrencyLike = {
+type OrganizationTypeLike = {
   id: string;
   code: string;
   name: string;
-  symbol: string | null;
-  decimalDigits: number;
+  level: number;
+  description: string | null;
   sortOrder: number;
-  isActive: boolean;
 };
 
-export interface CurrencyEditorProps {
-  currency?: CurrencyLike;
+export interface OrganizationTypeEditorProps {
+  organizationType?: OrganizationTypeLike;
   actionData?: unknown;
   basePrefix: string;
 }
@@ -48,40 +48,37 @@ function FieldRow({
   );
 }
 
-export function CurrencyEditor({ currency, actionData, basePrefix }: CurrencyEditorProps) {
+export function OrganizationTypeEditor({
+  organizationType,
+  actionData,
+  basePrefix,
+}: OrganizationTypeEditorProps) {
   const { t } = useTranslation("references");
   const { t: tc } = useTranslation("common");
 
-  const { form, fields } = useForm(currencyFormSchema, {
-    id: "currency-editor",
+  const { form, fields } = useForm(organizationTypeFormSchema, {
+    id: "organization-type-editor",
     lastResult: actionData,
-    defaultValue: currency
+    defaultValue: organizationType
       ? {
-          id: currency.id,
-          code: currency.code,
-          name: currency.name,
-          symbol: currency.symbol ?? "",
-          decimalDigits: currency.decimalDigits,
-          sortOrder: currency.sortOrder,
-          isActive: currency.isActive,
+          id: organizationType.id,
+          code: organizationType.code,
+          name: organizationType.name,
+          level: organizationType.level,
+          description: organizationType.description ?? "",
+          sortOrder: organizationType.sortOrder,
         }
-      : {
-          id: "",
-          code: "",
-          name: "",
-          symbol: "",
-          decimalDigits: 2,
-          sortOrder: 0,
-          isActive: true,
-        },
+      : { id: "", code: "", name: "", level: 0, description: "", sortOrder: 0 },
   });
 
   return (
     <Form method="post" {...getFormProps(form)} className="space-y-6">
-      {currency && <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />}
+      {organizationType && (
+        <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+      )}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">{t("currencies")}</CardTitle>
+          <CardTitle className="text-sm font-semibold">{t("organizationTypes")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -89,33 +86,25 @@ export function CurrencyEditor({ currency, actionData, basePrefix }: CurrencyEdi
               <Input
                 {...getInputProps(fields.code, { type: "text" })}
                 key={fields.code.key}
-                maxLength={3}
-                placeholder="USD"
+                maxLength={50}
+                placeholder="DEPARTMENT"
                 className="uppercase"
               />
             </FieldRow>
             <FieldRow id={fields.name.id} label={t("name")} required errors={fields.name.errors}>
-              <Input {...getInputProps(fields.name, { type: "text" })} key={fields.name.key} />
-            </FieldRow>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <FieldRow id={fields.symbol.id} label={t("symbol")} errors={fields.symbol.errors}>
               <Input
-                {...getInputProps(fields.symbol, { type: "text" })}
-                key={fields.symbol.key}
-                placeholder="$"
+                {...getInputProps(fields.name, { type: "text" })}
+                key={fields.name.key}
+                placeholder="Department"
               />
             </FieldRow>
-            <FieldRow
-              id={fields.decimalDigits.id}
-              label={t("decimalDigits")}
-              errors={fields.decimalDigits.errors}
-            >
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow id={fields.level.id} label={t("level")} required errors={fields.level.errors}>
               <Input
-                {...getInputProps(fields.decimalDigits, { type: "number" })}
-                key={fields.decimalDigits.key}
+                {...getInputProps(fields.level, { type: "number" })}
+                key={fields.level.key}
                 min={0}
-                max={10}
               />
             </FieldRow>
             <FieldRow
@@ -130,10 +119,17 @@ export function CurrencyEditor({ currency, actionData, basePrefix }: CurrencyEdi
               />
             </FieldRow>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <SwitchField meta={fields.isActive} />
-            {t("isActive")}
-          </label>
+          <FieldRow
+            id={fields.description.id}
+            label={t("description")}
+            errors={fields.description.errors}
+          >
+            <Textarea
+              {...getTextareaProps(fields.description)}
+              key={fields.description.key}
+              rows={3}
+            />
+          </FieldRow>
         </CardContent>
       </Card>
       <div className="flex flex-col gap-3 sm:flex-row">

@@ -1,10 +1,14 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import { data, redirect } from "react-router";
 import type { ActionFunctionArgs } from "react-router";
-import { createCountry, updateCountry, ReferenceDataError } from "~/services/reference-data.server";
+import {
+  createRegionalGroup,
+  updateRegionalGroup,
+  ReferenceDataError,
+} from "~/services/reference-data.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import { countryFormSchema } from "./country-schema";
+import { regionalGroupFormSchema } from "./regional-group-schema";
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -16,7 +20,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     throw data({ error: "Missing tenant context" }, { status: 403 });
   }
 
-  const submission = parseWithZod(formData, { schema: countryFormSchema });
+  const submission = parseWithZod(formData, { schema: regionalGroupFormSchema });
   if (submission.status !== "success") {
     return data(submission.reply(), { status: 400 });
   }
@@ -25,19 +29,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const input = {
     code: submission.value.code,
     name: submission.value.name,
-    alpha3: submission.value.alpha3 || null,
-    numericCode: submission.value.numericCode || null,
-    phoneCode: submission.value.phoneCode || null,
-    flag: submission.value.flag || null,
-    sortOrder: submission.value.sortOrder,
-    isActive: submission.value.isActive,
+    description: submission.value.description ?? null,
   };
 
   try {
     if (hasId && submission.value.id) {
-      await updateCountry(submission.value.id, input, ctx);
+      await updateRegionalGroup(submission.value.id, input, ctx);
     } else {
-      await createCountry(input, ctx);
+      await createRegionalGroup(input, ctx);
     }
   } catch (err) {
     if (err instanceof ReferenceDataError) {
@@ -51,5 +50,5 @@ export async function action({ request, params }: ActionFunctionArgs) {
     throw err;
   }
 
-  return redirect(`/${params.tenant}/settings/references/countries`);
+  return redirect(`/${params.tenant}/settings/references/regional-groups`);
 }

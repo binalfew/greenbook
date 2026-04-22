@@ -3,12 +3,11 @@ import { useTranslation } from "react-i18next";
 import { data } from "react-router";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef } from "~/components/data-table/data-table-types";
-import { Badge } from "~/components/ui/badge";
-import { listCountriesPaginated } from "~/services/reference-data.server";
+import { listPositionTypesPaginated } from "~/services/reference-data.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import type { Route } from "./+types/index";
 
-export const handle = { breadcrumb: "Countries" };
+export const handle = { breadcrumb: "Position types" };
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requirePermission(request, "reference-data", "read");
@@ -21,7 +20,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = Number(url.searchParams.get("page") ?? "1");
   const search = url.searchParams.get("q") ?? undefined;
 
-  const result = await listCountriesPaginated(tenantId, {
+  const result = await listPositionTypesPaginated(tenantId, {
     page,
     pageSize: 25,
     where: { ...(search && { search }) },
@@ -38,25 +37,22 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 type Row = Route.ComponentProps["loaderData"]["items"][number];
 
-export default function CountriesIndex({ loaderData, params }: Route.ComponentProps) {
+export default function PositionTypesIndex({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("references");
   const { t: tc } = useTranslation("common");
-  const base = `/${params.tenant}/settings/references/countries`;
+  const base = `/${params.tenant}/settings/references/position-types`;
 
   const columns: ColumnDef<Row>[] = [
     {
       id: "name",
       header: t("name"),
       cell: (row) => (
-        <div className="flex items-center gap-2">
-          {row.flag && <span className="text-lg">{row.flag}</span>}
-          <a
-            href={`${base}/${row.id}/edit`}
-            className="text-sm font-medium underline-offset-4 hover:underline"
-          >
-            {row.name}
-          </a>
-        </div>
+        <a
+          href={`${base}/${row.id}/edit`}
+          className="text-sm font-medium underline-offset-4 hover:underline"
+        >
+          {row.name}
+        </a>
       ),
     },
     {
@@ -65,33 +61,17 @@ export default function CountriesIndex({ loaderData, params }: Route.ComponentPr
       cell: (row) => <span className="font-mono text-xs">{row.code}</span>,
     },
     {
-      id: "alpha3",
-      header: t("alpha3"),
-      cell: (row) => <span className="font-mono text-xs">{row.alpha3 ?? ""}</span>,
+      id: "hierarchyLevel",
+      header: t("hierarchyLevel"),
+      cell: (row) => row.hierarchyLevel ?? "—",
       hideOnMobile: true,
-    },
-    {
-      id: "phoneCode",
-      header: t("phoneCode"),
-      cell: (row) => row.phoneCode ?? "",
-      hideOnMobile: true,
-    },
-    {
-      id: "isActive",
-      header: t("isActive"),
-      cell: (row) =>
-        row.isActive ? (
-          <Badge variant="default">{tc("yes")}</Badge>
-        ) : (
-          <Badge variant="outline">{tc("no")}</Badge>
-        ),
     },
   ];
 
   return (
     <div className="space-y-4">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">{t("countries")}</h1>
+        <h1 className="text-2xl font-semibold">{t("positionTypes")}</h1>
       </header>
 
       <DataTable

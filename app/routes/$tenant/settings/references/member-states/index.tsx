@@ -4,11 +4,11 @@ import { data } from "react-router";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef } from "~/components/data-table/data-table-types";
 import { Badge } from "~/components/ui/badge";
-import { listCurrenciesPaginated } from "~/services/reference-data.server";
+import { listMemberStatesPaginated } from "~/services/reference-data.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import type { Route } from "./+types/index";
 
-export const handle = { breadcrumb: "Currencies" };
+export const handle = { breadcrumb: "Member states" };
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requirePermission(request, "reference-data", "read");
@@ -21,7 +21,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = Number(url.searchParams.get("page") ?? "1");
   const search = url.searchParams.get("q") ?? undefined;
 
-  const result = await listCurrenciesPaginated(tenantId, {
+  const result = await listMemberStatesPaginated(tenantId, {
     page,
     pageSize: 25,
     where: { ...(search && { search }) },
@@ -38,36 +38,41 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 type Row = Route.ComponentProps["loaderData"]["items"][number];
 
-export default function CurrenciesIndex({ loaderData, params }: Route.ComponentProps) {
+export default function MemberStatesIndex({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("references");
   const { t: tc } = useTranslation("common");
-  const base = `/${params.tenant}/settings/references/currencies`;
+  const base = `/${params.tenant}/settings/references/member-states`;
 
   const columns: ColumnDef<Row>[] = [
     {
-      id: "name",
-      header: t("name"),
+      id: "fullName",
+      header: t("fullName"),
       cell: (row) => (
-        <div className="flex items-center gap-2">
-          {row.symbol && <span className="text-sm font-semibold">{row.symbol}</span>}
-          <a
-            href={`${base}/${row.id}/edit`}
-            className="text-sm font-medium underline-offset-4 hover:underline"
-          >
-            {row.name}
-          </a>
-        </div>
+        <a
+          href={`${base}/${row.id}/edit`}
+          className="text-sm font-medium underline-offset-4 hover:underline"
+        >
+          {row.fullName}
+        </a>
       ),
     },
     {
-      id: "code",
-      header: t("code"),
-      cell: (row) => <span className="font-mono text-xs">{row.code}</span>,
+      id: "abbreviation",
+      header: t("abbreviation"),
+      cell: (row) => <span className="font-mono text-xs">{row.abbreviation}</span>,
     },
     {
-      id: "decimalDigits",
-      header: t("decimalDigits"),
-      cell: (row) => row.decimalDigits,
+      id: "regions",
+      header: t("regions"),
+      cell: (row) => (
+        <div className="flex flex-wrap gap-1">
+          {row.regions.map((r) => (
+            <Badge key={r.regionalGroup.id} variant="outline" className="text-[10px]">
+              {r.regionalGroup.code}
+            </Badge>
+          ))}
+        </div>
+      ),
       hideOnMobile: true,
     },
     {
@@ -85,14 +90,14 @@ export default function CurrenciesIndex({ loaderData, params }: Route.ComponentP
   return (
     <div className="space-y-4">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">{t("currencies")}</h1>
+        <h1 className="text-2xl font-semibold">{t("memberStates")}</h1>
       </header>
 
       <DataTable
         data={loaderData.items}
         columns={columns}
         rowKey="id"
-        searchConfig={{ paramKey: "q", placeholder: t("name") }}
+        searchConfig={{ paramKey: "q", placeholder: t("fullName") }}
         toolbarActions={[{ label: t("new"), icon: Plus, href: `${base}/new` }]}
         rowActions={[
           { label: tc("edit"), icon: Pencil, href: (row) => `${base}/${row.id}/edit` },

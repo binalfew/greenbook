@@ -3,10 +3,14 @@ import { data, Form, Link, redirect } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
-import { deleteCurrency, getCurrency, ReferenceDataError } from "~/services/reference-data.server";
+import {
+  deletePositionType,
+  getPositionType,
+  ReferenceDataError,
+} from "~/services/reference-data.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import type { Route } from "./+types/$currencyId.delete";
+import type { Route } from "./+types/$posTypeId.delete";
 
 export const handle = { breadcrumb: "Delete" };
 
@@ -17,8 +21,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw data({ error: "Missing tenant context" }, { status: 403 });
   }
   try {
-    const currency = await getCurrency(params.currencyId, tenantId);
-    return data({ currency });
+    const positionType = await getPositionType(params.posTypeId, tenantId);
+    return data({ positionType });
   } catch (err) {
     if (err instanceof ReferenceDataError) {
       throw data({ error: err.message }, { status: err.status });
@@ -34,15 +38,15 @@ export async function action({ request, params }: Route.ActionArgs) {
     throw data({ error: "Missing tenant context" }, { status: 403 });
   }
   const ctx = buildServiceContext(request, user, tenantId);
-  await deleteCurrency(params.currencyId, ctx);
-  return redirect(`/${params.tenant}/settings/references/currencies`);
+  await deletePositionType(params.posTypeId, ctx);
+  return redirect(`/${params.tenant}/settings/references/position-types`);
 }
 
-export default function DeleteCurrency({ loaderData, params }: Route.ComponentProps) {
+export default function DeletePositionType({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("references");
   const { t: tc } = useTranslation("common");
-  const base = `/${params.tenant}/settings/references/currencies`;
-  const d = loaderData.currency;
+  const base = `/${params.tenant}/settings/references/position-types`;
+  const d = loaderData.positionType;
 
   return (
     <div className="space-y-4">
@@ -51,16 +55,15 @@ export default function DeleteCurrency({ loaderData, params }: Route.ComponentPr
       </header>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            {d.symbol && <span className="font-semibold">{d.symbol}</span>}
-            {d.name}
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold">{d.name}</CardTitle>
         </CardHeader>
         <CardContent className="divide-y">
           <InfoRow label={t("code")}>
             <span className="font-mono text-xs">{d.code}</span>
           </InfoRow>
-          <InfoRow label={t("decimalDigits")}>{d.decimalDigits}</InfoRow>
+          {d.hierarchyLevel !== null ? (
+            <InfoRow label={t("hierarchyLevel")}>{d.hierarchyLevel}</InfoRow>
+          ) : null}
         </CardContent>
       </Card>
       <Card className="border-destructive">

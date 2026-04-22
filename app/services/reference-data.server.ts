@@ -21,18 +21,6 @@ function handleDuplicate(entity: string): never {
 
 // ─── Input types ──────────────────────────────────────────
 
-export interface CreateCountryInput {
-  code: string;
-  name: string;
-  alpha3?: string | null;
-  numericCode?: string | null;
-  phoneCode?: string | null;
-  flag?: string | null;
-  sortOrder?: number;
-  isActive?: boolean;
-}
-export type UpdateCountryInput = CreateCountryInput;
-
 export interface CreateTitleInput {
   code: string;
   name: string;
@@ -50,110 +38,40 @@ export interface CreateLanguageInput {
 }
 export type UpdateLanguageInput = CreateLanguageInput;
 
-export interface CreateCurrencyInput {
+export interface CreateOrganizationTypeInput {
   code: string;
   name: string;
-  symbol?: string | null;
-  decimalDigits?: number;
+  level: number;
+  description?: string | null;
   sortOrder?: number;
+}
+export type UpdateOrganizationTypeInput = CreateOrganizationTypeInput;
+
+export interface CreatePositionTypeInput {
+  code: string;
+  name: string;
+  description?: string | null;
+  hierarchyLevel?: number | null;
+}
+export type UpdatePositionTypeInput = CreatePositionTypeInput;
+
+export interface CreateRegionalGroupInput {
+  code: string;
+  name: string;
+  description?: string | null;
+}
+export type UpdateRegionalGroupInput = CreateRegionalGroupInput;
+
+export interface CreateMemberStateInput {
+  fullName: string;
+  abbreviation: string;
+  dateJoined: string; // ISO date
   isActive?: boolean;
+  predecessorOrg?: string | null;
+  notes?: string | null;
+  regionIds?: string[];
 }
-export type UpdateCurrencyInput = CreateCurrencyInput;
-
-// ─── Countries ────────────────────────────────────────────
-
-export async function listCountries(tenantId: string, filter?: { isActive?: boolean }) {
-  return prisma.country.findMany({
-    where: { tenantId, ...(filter?.isActive !== undefined && { isActive: filter.isActive }) },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
-}
-
-export async function listCountriesPaginated(tenantId: string, options: PaginatedQueryOptions) {
-  const { page, pageSize, where = {}, orderBy } = options;
-  const skip = (page - 1) * pageSize;
-  const search = where.search as string | undefined;
-  const filter: Prisma.CountryWhereInput = {
-    tenantId,
-    ...(search && {
-      OR: [
-        { code: { contains: search, mode: "insensitive" } },
-        { name: { contains: search, mode: "insensitive" } },
-      ],
-    }),
-  };
-  const [data, total] = await Promise.all([
-    prisma.country.findMany({
-      where: filter,
-      orderBy: (orderBy as Prisma.CountryOrderByWithRelationInput[] | undefined) ?? [
-        { sortOrder: "asc" },
-        { name: "asc" },
-      ],
-      skip,
-      take: pageSize,
-    }),
-    prisma.country.count({ where: filter }),
-  ]);
-  return { data, total };
-}
-
-export async function getCountry(id: string, tenantId: string) {
-  const country = await prisma.country.findFirst({ where: { id, tenantId } });
-  if (!country) throw new ReferenceDataError("Country not found", 404, "NOT_FOUND");
-  return country;
-}
-
-export async function createCountry(input: CreateCountryInput, ctx: TenantServiceContext) {
-  try {
-    return await prisma.country.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code: input.code.toUpperCase(),
-        name: input.name,
-        alpha3: input.alpha3 ?? null,
-        numericCode: input.numericCode ?? null,
-        phoneCode: input.phoneCode ?? null,
-        flag: input.flag ?? null,
-        sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("country");
-    throw err;
-  }
-}
-
-export async function updateCountry(
-  id: string,
-  input: UpdateCountryInput,
-  ctx: TenantServiceContext,
-) {
-  await getCountry(id, ctx.tenantId);
-  try {
-    return await prisma.country.update({
-      where: { id },
-      data: {
-        code: input.code.toUpperCase(),
-        name: input.name,
-        alpha3: input.alpha3 ?? null,
-        numericCode: input.numericCode ?? null,
-        phoneCode: input.phoneCode ?? null,
-        flag: input.flag ?? null,
-        sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("country");
-    throw err;
-  }
-}
-
-export async function deleteCountry(id: string, ctx: TenantServiceContext) {
-  await getCountry(id, ctx.tenantId);
-  return prisma.country.delete({ where: { id } });
-}
+export type UpdateMemberStateInput = CreateMemberStateInput;
 
 // ─── Titles ───────────────────────────────────────────────
 
@@ -327,21 +245,18 @@ export async function deleteLanguage(id: string, ctx: TenantServiceContext) {
   return prisma.language.delete({ where: { id } });
 }
 
-// ─── Currencies ───────────────────────────────────────────
+// ─── Organization Types ───────────────────────────────────
 
-export async function listCurrencies(tenantId: string, filter?: { isActive?: boolean }) {
-  return prisma.currency.findMany({
-    where: { tenantId, ...(filter?.isActive !== undefined && { isActive: filter.isActive }) },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
-}
-
-export async function listCurrenciesPaginated(tenantId: string, options: PaginatedQueryOptions) {
+export async function listOrganizationTypesPaginated(
+  tenantId: string,
+  options: PaginatedQueryOptions,
+) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
   const search = where.search as string | undefined;
-  const filter: Prisma.CurrencyWhereInput = {
+  const filter: Prisma.OrganizationTypeWhereInput = {
     tenantId,
+    deletedAt: null,
     ...(search && {
       OR: [
         { code: { contains: search, mode: "insensitive" } },
@@ -350,82 +265,395 @@ export async function listCurrenciesPaginated(tenantId: string, options: Paginat
     }),
   };
   const [data, total] = await Promise.all([
-    prisma.currency.findMany({
+    prisma.organizationType.findMany({
       where: filter,
-      orderBy: (orderBy as Prisma.CurrencyOrderByWithRelationInput[] | undefined) ?? [
+      orderBy: (orderBy as Prisma.OrganizationTypeOrderByWithRelationInput[] | undefined) ?? [
+        { level: "asc" },
         { sortOrder: "asc" },
         { name: "asc" },
       ],
       skip,
       take: pageSize,
     }),
-    prisma.currency.count({ where: filter }),
+    prisma.organizationType.count({ where: filter }),
   ]);
   return { data, total };
 }
 
-export async function getCurrency(id: string, tenantId: string) {
-  const currency = await prisma.currency.findFirst({ where: { id, tenantId } });
-  if (!currency) throw new ReferenceDataError("Currency not found", 404, "NOT_FOUND");
-  return currency;
+export async function getOrganizationType(id: string, tenantId: string) {
+  const row = await prisma.organizationType.findFirst({
+    where: { id, tenantId, deletedAt: null },
+  });
+  if (!row) throw new ReferenceDataError("Organization type not found", 404, "NOT_FOUND");
+  return row;
 }
 
-export async function createCurrency(input: CreateCurrencyInput, ctx: TenantServiceContext) {
+export async function createOrganizationType(
+  input: CreateOrganizationTypeInput,
+  ctx: TenantServiceContext,
+) {
   try {
-    return await prisma.currency.create({
+    return await prisma.organizationType.create({
       data: {
         tenantId: ctx.tenantId,
         code: input.code.toUpperCase(),
         name: input.name,
-        symbol: input.symbol ?? null,
-        decimalDigits: input.decimalDigits ?? 2,
+        level: input.level,
+        description: input.description ?? null,
         sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
       },
     });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("currency");
+    if (err instanceof Error && err.message.includes("Unique"))
+      handleDuplicate("organization type");
     throw err;
   }
 }
 
-export async function updateCurrency(
+export async function updateOrganizationType(
   id: string,
-  input: UpdateCurrencyInput,
+  input: UpdateOrganizationTypeInput,
   ctx: TenantServiceContext,
 ) {
-  await getCurrency(id, ctx.tenantId);
+  await getOrganizationType(id, ctx.tenantId);
   try {
-    return await prisma.currency.update({
+    return await prisma.organizationType.update({
       where: { id },
       data: {
         code: input.code.toUpperCase(),
         name: input.name,
-        symbol: input.symbol ?? null,
-        decimalDigits: input.decimalDigits ?? 2,
+        level: input.level,
+        description: input.description ?? null,
         sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
       },
     });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("currency");
+    if (err instanceof Error && err.message.includes("Unique"))
+      handleDuplicate("organization type");
     throw err;
   }
 }
 
-export async function deleteCurrency(id: string, ctx: TenantServiceContext) {
-  await getCurrency(id, ctx.tenantId);
-  return prisma.currency.delete({ where: { id } });
+export async function deleteOrganizationType(id: string, ctx: TenantServiceContext) {
+  await getOrganizationType(id, ctx.tenantId);
+  return prisma.organizationType.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+}
+
+// ─── Position Types ───────────────────────────────────────
+
+export async function listPositionTypesPaginated(tenantId: string, options: PaginatedQueryOptions) {
+  const { page, pageSize, where = {}, orderBy } = options;
+  const skip = (page - 1) * pageSize;
+  const search = where.search as string | undefined;
+  const filter: Prisma.PositionTypeWhereInput = {
+    tenantId,
+    deletedAt: null,
+    ...(search && {
+      OR: [
+        { code: { contains: search, mode: "insensitive" } },
+        { name: { contains: search, mode: "insensitive" } },
+      ],
+    }),
+  };
+  const [data, total] = await Promise.all([
+    prisma.positionType.findMany({
+      where: filter,
+      orderBy: (orderBy as Prisma.PositionTypeOrderByWithRelationInput[] | undefined) ?? [
+        { hierarchyLevel: "asc" },
+        { name: "asc" },
+      ],
+      skip,
+      take: pageSize,
+    }),
+    prisma.positionType.count({ where: filter }),
+  ]);
+  return { data, total };
+}
+
+export async function getPositionType(id: string, tenantId: string) {
+  const row = await prisma.positionType.findFirst({
+    where: { id, tenantId, deletedAt: null },
+  });
+  if (!row) throw new ReferenceDataError("Position type not found", 404, "NOT_FOUND");
+  return row;
+}
+
+export async function createPositionType(
+  input: CreatePositionTypeInput,
+  ctx: TenantServiceContext,
+) {
+  try {
+    return await prisma.positionType.create({
+      data: {
+        tenantId: ctx.tenantId,
+        code: input.code.toUpperCase(),
+        name: input.name,
+        description: input.description ?? null,
+        hierarchyLevel: input.hierarchyLevel ?? null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("position type");
+    throw err;
+  }
+}
+
+export async function updatePositionType(
+  id: string,
+  input: UpdatePositionTypeInput,
+  ctx: TenantServiceContext,
+) {
+  await getPositionType(id, ctx.tenantId);
+  try {
+    return await prisma.positionType.update({
+      where: { id },
+      data: {
+        code: input.code.toUpperCase(),
+        name: input.name,
+        description: input.description ?? null,
+        hierarchyLevel: input.hierarchyLevel ?? null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("position type");
+    throw err;
+  }
+}
+
+export async function deletePositionType(id: string, ctx: TenantServiceContext) {
+  await getPositionType(id, ctx.tenantId);
+  return prisma.positionType.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+}
+
+// ─── Regional Groups ──────────────────────────────────────
+
+export async function listRegionalGroups(tenantId: string) {
+  return prisma.regionalGroup.findMany({
+    where: { tenantId, deletedAt: null },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function listRegionalGroupsPaginated(
+  tenantId: string,
+  options: PaginatedQueryOptions,
+) {
+  const { page, pageSize, where = {}, orderBy } = options;
+  const skip = (page - 1) * pageSize;
+  const search = where.search as string | undefined;
+  const filter: Prisma.RegionalGroupWhereInput = {
+    tenantId,
+    deletedAt: null,
+    ...(search && {
+      OR: [
+        { code: { contains: search, mode: "insensitive" } },
+        { name: { contains: search, mode: "insensitive" } },
+      ],
+    }),
+  };
+  const [data, total] = await Promise.all([
+    prisma.regionalGroup.findMany({
+      where: filter,
+      orderBy: (orderBy as Prisma.RegionalGroupOrderByWithRelationInput[] | undefined) ?? [
+        { name: "asc" },
+      ],
+      skip,
+      take: pageSize,
+    }),
+    prisma.regionalGroup.count({ where: filter }),
+  ]);
+  return { data, total };
+}
+
+export async function getRegionalGroup(id: string, tenantId: string) {
+  const row = await prisma.regionalGroup.findFirst({
+    where: { id, tenantId, deletedAt: null },
+  });
+  if (!row) throw new ReferenceDataError("Regional group not found", 404, "NOT_FOUND");
+  return row;
+}
+
+export async function createRegionalGroup(
+  input: CreateRegionalGroupInput,
+  ctx: TenantServiceContext,
+) {
+  try {
+    return await prisma.regionalGroup.create({
+      data: {
+        tenantId: ctx.tenantId,
+        code: input.code.toUpperCase(),
+        name: input.name,
+        description: input.description ?? null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("regional group");
+    throw err;
+  }
+}
+
+export async function updateRegionalGroup(
+  id: string,
+  input: UpdateRegionalGroupInput,
+  ctx: TenantServiceContext,
+) {
+  await getRegionalGroup(id, ctx.tenantId);
+  try {
+    return await prisma.regionalGroup.update({
+      where: { id },
+      data: {
+        code: input.code.toUpperCase(),
+        name: input.name,
+        description: input.description ?? null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("regional group");
+    throw err;
+  }
+}
+
+export async function deleteRegionalGroup(id: string, ctx: TenantServiceContext) {
+  await getRegionalGroup(id, ctx.tenantId);
+  return prisma.regionalGroup.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+}
+
+// ─── Member States ────────────────────────────────────────
+
+export async function listMemberStatesPaginated(tenantId: string, options: PaginatedQueryOptions) {
+  const { page, pageSize, where = {}, orderBy } = options;
+  const skip = (page - 1) * pageSize;
+  const search = where.search as string | undefined;
+  const filter: Prisma.MemberStateWhereInput = {
+    tenantId,
+    deletedAt: null,
+    ...(search && {
+      OR: [
+        { fullName: { contains: search, mode: "insensitive" } },
+        { abbreviation: { contains: search, mode: "insensitive" } },
+      ],
+    }),
+  };
+  const [data, total] = await Promise.all([
+    prisma.memberState.findMany({
+      where: filter,
+      include: {
+        regions: {
+          include: { regionalGroup: { select: { id: true, name: true, code: true } } },
+        },
+      },
+      orderBy: (orderBy as Prisma.MemberStateOrderByWithRelationInput[] | undefined) ?? [
+        { fullName: "asc" },
+      ],
+      skip,
+      take: pageSize,
+    }),
+    prisma.memberState.count({ where: filter }),
+  ]);
+  return { data, total };
+}
+
+export async function getMemberState(id: string, tenantId: string) {
+  const row = await prisma.memberState.findFirst({
+    where: { id, tenantId, deletedAt: null },
+    include: {
+      regions: {
+        include: { regionalGroup: { select: { id: true, name: true, code: true } } },
+      },
+    },
+  });
+  if (!row) throw new ReferenceDataError("Member state not found", 404, "NOT_FOUND");
+  return row;
+}
+
+export async function createMemberState(input: CreateMemberStateInput, ctx: TenantServiceContext) {
+  try {
+    return await prisma.memberState.create({
+      data: {
+        tenantId: ctx.tenantId,
+        fullName: input.fullName,
+        abbreviation: input.abbreviation.toUpperCase(),
+        dateJoined: new Date(input.dateJoined),
+        isActive: input.isActive ?? true,
+        predecessorOrg: input.predecessorOrg ?? null,
+        notes: input.notes ?? null,
+        regions: input.regionIds?.length
+          ? { create: input.regionIds.map((regionalGroupId) => ({ regionalGroupId })) }
+          : undefined,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("member state");
+    throw err;
+  }
+}
+
+export async function updateMemberState(
+  id: string,
+  input: UpdateMemberStateInput,
+  ctx: TenantServiceContext,
+) {
+  await getMemberState(id, ctx.tenantId);
+  try {
+    // Replace regions wholesale — simpler than diffing and keeps the UI honest.
+    return await prisma.$transaction(async (tx) => {
+      await tx.memberStateRegion.deleteMany({ where: { memberStateId: id } });
+      return tx.memberState.update({
+        where: { id },
+        data: {
+          fullName: input.fullName,
+          abbreviation: input.abbreviation.toUpperCase(),
+          dateJoined: new Date(input.dateJoined),
+          isActive: input.isActive ?? true,
+          predecessorOrg: input.predecessorOrg ?? null,
+          notes: input.notes ?? null,
+          regions: input.regionIds?.length
+            ? { create: input.regionIds.map((regionalGroupId) => ({ regionalGroupId })) }
+            : undefined,
+        },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("member state");
+    throw err;
+  }
+}
+
+export async function deleteMemberState(id: string, ctx: TenantServiceContext) {
+  await getMemberState(id, ctx.tenantId);
+  return prisma.memberState.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
 }
 
 // ─── Counts for dashboard ─────────────────────────────────
 
 export async function getReferenceDataCounts(tenantId: string) {
-  const [countries, titles, languages, currencies] = await Promise.all([
-    prisma.country.count({ where: { tenantId } }),
-    prisma.title.count({ where: { tenantId } }),
-    prisma.language.count({ where: { tenantId } }),
-    prisma.currency.count({ where: { tenantId } }),
-  ]);
-  return { countries, titles, languages, currencies };
+  const [titles, languages, organizationTypes, positionTypes, regionalGroups, memberStates] =
+    await Promise.all([
+      prisma.title.count({ where: { tenantId } }),
+      prisma.language.count({ where: { tenantId } }),
+      prisma.organizationType.count({ where: { tenantId, deletedAt: null } }),
+      prisma.positionType.count({ where: { tenantId, deletedAt: null } }),
+      prisma.regionalGroup.count({ where: { tenantId, deletedAt: null } }),
+      prisma.memberState.count({ where: { tenantId, deletedAt: null } }),
+    ]);
+  return {
+    titles,
+    languages,
+    organizationTypes,
+    positionTypes,
+    regionalGroups,
+    memberStates,
+  };
 }

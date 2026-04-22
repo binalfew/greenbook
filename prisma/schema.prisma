@@ -246,10 +246,8 @@ model Tenant {
   systemSettings       SystemSetting[]
   notifications        Notification[]
   webhookSubscriptions WebhookSubscription[]
-  countries            Country[]
   titles               Title[]
   languages            Language[]
-  currencies           Currency[]
   ssoConfigurations    SSOConfiguration[]
   ssoConnections       SSOConnection[]
   organizations        Organization[]
@@ -480,26 +478,6 @@ model WebhookDelivery {
 
 // ─── Reference Data ────────────────────────────────────
 
-model Country {
-  id          String   @id @default(cuid())
-  tenantId    String
-  code        String   @db.VarChar(2)
-  name        String   @db.VarChar(100)
-  alpha3      String?  @db.VarChar(3)
-  numericCode String?  @db.VarChar(3)
-  phoneCode   String?  @db.VarChar(10)
-  flag        String?  @db.VarChar(10)
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, code])
-  @@index([tenantId, isActive, sortOrder])
-}
-
 model Title {
   id        String   @id @default(cuid())
   tenantId  String
@@ -526,24 +504,6 @@ model Language {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, code])
-  @@index([tenantId, isActive, sortOrder])
-}
-
-model Currency {
-  id            String   @id @default(cuid())
-  tenantId      String
-  code          String   @db.VarChar(3)
-  name          String   @db.VarChar(100)
-  symbol        String?  @db.VarChar(10)
-  decimalDigits Int      @default(2)
-  sortOrder     Int      @default(0)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
