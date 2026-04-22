@@ -72,18 +72,28 @@ export default function PeopleIndex({ loaderData, params }: Route.ComponentProps
       cell: (row) => {
         const name = `${row.firstName} ${row.lastName}`.trim();
         return (
-          <div className="min-w-0">
-            <Link
-              to={`${base}/${row.id}`}
-              className="font-medium underline-offset-4 hover:underline"
-            >
-              {row.honorific ? `${row.honorific} ` : ""}
-              {name}
-            </Link>
-            {row.email ? <div className="text-muted-foreground text-xs">{row.email}</div> : null}
-          </div>
+          <Link to={`${base}/${row.id}`} className="font-medium underline-offset-4 hover:underline">
+            {row.honorific ? `${row.honorific} ` : ""}
+            {name}
+          </Link>
         );
       },
+    },
+    {
+      id: "email",
+      header: t("people.fields.email"),
+      cell: (row) =>
+        row.email ? (
+          <a
+            href={`mailto:${row.email}`}
+            className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+          >
+            {row.email}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      hideOnMobile: true,
     },
     {
       id: "memberState",
