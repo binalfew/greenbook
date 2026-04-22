@@ -1,30 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Globe, Shield, Users, Zap } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, Languages, Network, ShieldCheck, Users } from "lucide-react";
+import logoUrl from "~/assets/logo.svg";
 import { LanguageSwitcher } from "~/components/language-switcher";
 import type { SupportedLanguage } from "~/utils/i18n";
 
-// Rotating quotes — edit freely, the component picks a new one every 6s.
-const TESTIMONIALS = [
+// Rotating editorial highlights — what a visitor will find inside Greenbook.
+// Rewrite freely; the panel advances every 6s and supports click-to-select.
+const HIGHLIGHTS = [
   {
-    quote:
-      "Streamlined our operations across 12 offices. The multi-tenant architecture is exactly what we needed.",
-    initials: "JD",
-    name: "Jane Doe",
-    role: "CTO, Acme Corp",
+    icon: BookOpenCheck,
+    title: "A living directory of the African Union",
+    body: "Organizations, people, and positions — searchable, verified, and kept current by each participating body's editorial team.",
   },
   {
-    quote:
-      "Cut our onboarding time by 60%. The role-based access and team management are incredibly intuitive.",
-    initials: "MK",
-    name: "Michael Kim",
-    role: "VP Engineering, Globex",
+    icon: ShieldCheck,
+    title: "Editorial workflow, end to end",
+    body: "Focal persons submit changes, managers review and approve, and every entry carries a full audit trail before it publishes.",
   },
   {
-    quote:
-      "The best admin platform we've used. 2FA, audit logs, and multi-language support out of the box.",
-    initials: "SL",
-    name: "Sarah Lee",
-    role: "CISO, Initech",
+    icon: Network,
+    title: "Reporting lines made visible",
+    body: "Walk the chain from any post up to its principal organ. Successions, transitions, and acting roles are all tracked.",
   },
 ];
 
@@ -78,32 +74,25 @@ function useParallax() {
   return { offset, panelRef, handleMouseMove, handleMouseLeave };
 }
 
-function StarIcon() {
-  return (
-    <svg className="size-5 fill-amber-400" viewBox="0 0 20 20">
-      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-    </svg>
-  );
-}
-
 /**
- * Branded left panel — only visible on large screens. Rotates testimonials,
- * animates stats on scroll-in, and tracks the cursor for a subtle parallax
- * effect. Pure marketing surface; no props — fork the file to rebrand.
+ * Branded left panel — only visible on large screens. Rotates editorial
+ * highlights, animates stats on scroll-in, and tracks the cursor for a subtle
+ * parallax effect. Greenbook-branded (African Union directory).
  */
 export function BrandedPanel() {
-  const [testimonialIdx, setTestimonialIdx] = useState(0);
+  const [highlightIdx, setHighlightIdx] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => {
-      setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length);
+      setHighlightIdx((i) => (i + 1) % HIGHLIGHTS.length);
     }, 6000);
     return () => clearInterval(timer);
   }, []);
-  const testimonial = TESTIMONIALS[testimonialIdx];
+  const highlight = HIGHLIGHTS[highlightIdx];
+  const HighlightIcon = highlight.icon;
 
-  const stat1 = useCountUp(10000);
-  const stat2 = useCountUp(999);
-  const stat3 = useCountUp(50);
+  const stat1 = useCountUp(55);
+  const stat2 = useCountUp(5);
+  const stat3 = useCountUp(100);
 
   const { offset, panelRef, handleMouseMove, handleMouseLeave } = useParallax();
 
@@ -147,52 +136,44 @@ export function BrandedPanel() {
       <div className="text-primary-foreground relative z-10 flex flex-col justify-between p-12">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="bg-primary-foreground/15 flex size-11 items-center justify-center rounded-xl shadow-lg shadow-black/10 backdrop-blur-sm">
-            <Shield className="size-6" />
+          <div className="bg-primary-foreground/15 flex size-28 items-center justify-center rounded-3xl shadow-xl shadow-black/10 backdrop-blur-sm">
+            <img src={logoUrl} alt="" className="size-20 object-contain brightness-0 invert" />
           </div>
           <div>
-            <span className="text-xl font-bold tracking-tight">Admin Platform</span>
+            <span className="text-xl font-bold tracking-tight">Greenbook</span>
             <p className="text-primary-foreground/50 text-[11px] tracking-widest uppercase">
-              Enterprise Suite
+              African Union Directory
             </p>
           </div>
         </div>
 
-        {/* Rotating testimonial */}
+        {/* Rotating editorial highlight */}
         <div className="max-w-lg space-y-10">
-          <div key={testimonialIdx} className="animate-[testimonialIn_0.6s_ease-out] space-y-6">
-            <div className="flex gap-1">
-              {[...Array(5)].map((_, i) => (
-                <StarIcon key={i} />
-              ))}
+          <div key={highlightIdx} className="animate-[testimonialIn_0.6s_ease-out] space-y-6">
+            <div className="bg-primary-foreground/15 flex size-12 items-center justify-center rounded-xl backdrop-blur-sm">
+              <HighlightIcon className="size-6" />
             </div>
-            <blockquote className="space-y-4">
+            <div className="space-y-4">
               <p className="text-[1.7rem] leading-snug font-semibold tracking-tight">
-                &ldquo;{testimonial.quote}&rdquo;
+                {highlight.title}
               </p>
-              <footer className="flex items-center gap-3">
-                <div className="bg-primary-foreground/15 flex size-10 items-center justify-center rounded-full text-sm font-bold">
-                  {testimonial.initials}
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{testimonial.name}</p>
-                  <p className="text-primary-foreground/60 text-xs">{testimonial.role}</p>
-                </div>
-              </footer>
-            </blockquote>
+              <p className="text-primary-foreground/70 max-w-md text-base leading-relaxed">
+                {highlight.body}
+              </p>
+            </div>
 
             <div className="flex gap-2">
-              {TESTIMONIALS.map((_, i) => (
+              {HIGHLIGHTS.map((_, i) => (
                 <button
                   key={i}
                   type="button"
-                  onClick={() => setTestimonialIdx(i)}
+                  onClick={() => setHighlightIdx(i)}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i === testimonialIdx
+                    i === highlightIdx
                       ? "bg-primary-foreground/70 w-6"
                       : "bg-primary-foreground/25 hover:bg-primary-foreground/40 w-1.5"
                   }`}
-                  aria-label={`Testimonial ${i + 1}`}
+                  aria-label={`Highlight ${i + 1}`}
                 />
               ))}
             </div>
@@ -201,10 +182,10 @@ export function BrandedPanel() {
           {/* Feature pills */}
           <div className="flex flex-wrap gap-3">
             {[
-              { icon: Shield, label: "Enterprise Security" },
-              { icon: Zap, label: "Real-time Sync" },
-              { icon: Globe, label: "Multi-language" },
-              { icon: Users, label: "Team Management" },
+              { icon: ShieldCheck, label: "Editorial workflow" },
+              { icon: Network, label: "Reporting hierarchy" },
+              { icon: Languages, label: "English & French" },
+              { icon: Users, label: "Focal-person roles" },
             ].map(({ icon: Icon, label }) => (
               <div
                 key={label}
@@ -221,28 +202,26 @@ export function BrandedPanel() {
         <div className="space-y-6">
           <div className="flex gap-8">
             <div ref={stat1.ref}>
-              <p className="animate-[countUp_0.8s_ease-out] text-2xl font-bold">
-                {stat1.value.toLocaleString()}+
-              </p>
-              <p className="text-primary-foreground/50 text-xs">Active users</p>
+              <p className="animate-[countUp_0.8s_ease-out] text-2xl font-bold">{stat1.value}</p>
+              <p className="text-primary-foreground/50 text-xs">Member states</p>
             </div>
             <div className="bg-primary-foreground/10 h-10 w-px" />
             <div ref={stat2.ref}>
               <p className="animate-[countUp_0.8s_ease-out_0.2s_both] text-2xl font-bold">
-                {(stat2.value / 10).toFixed(1)}%
+                {stat2.value}
               </p>
-              <p className="text-primary-foreground/50 text-xs">Uptime</p>
+              <p className="text-primary-foreground/50 text-xs">Regional groups</p>
             </div>
             <div className="bg-primary-foreground/10 h-10 w-px" />
             <div ref={stat3.ref}>
               <p className="animate-[countUp_0.8s_ease-out_0.4s_both] text-2xl font-bold">
-                {stat3.value}+
+                {stat3.value}%
               </p>
-              <p className="text-primary-foreground/50 text-xs">Organizations</p>
+              <p className="text-primary-foreground/50 text-xs">Reviewed before publish</p>
             </div>
           </div>
           <p className="text-primary-foreground/30 text-xs">
-            &copy; {new Date().getFullYear()} Admin Platform. All rights reserved.
+            &copy; {new Date().getFullYear()} African Union Commission. Greenbook directory.
           </p>
         </div>
       </div>
@@ -273,13 +252,13 @@ export function RightPanel({ children, currentLanguage, allowedLanguages }: Righ
 
       <div className="flex flex-1 flex-col justify-center px-6 pb-12 lg:px-16 xl:px-24">
         <div className="mb-10 flex items-center gap-3 lg:hidden">
-          <div className="bg-primary text-primary-foreground shadow-primary/25 flex size-11 items-center justify-center rounded-xl shadow-lg">
-            <Shield className="size-6" />
+          <div className="bg-primary text-primary-foreground shadow-primary/25 flex size-20 items-center justify-center rounded-3xl shadow-xl">
+            <img src={logoUrl} alt="" className="size-14 object-contain brightness-0 invert" />
           </div>
           <div>
-            <span className="text-xl font-bold tracking-tight">Admin Platform</span>
+            <span className="text-xl font-bold tracking-tight">Greenbook</span>
             <p className="text-muted-foreground text-[11px] tracking-widest uppercase">
-              Enterprise Suite
+              African Union Directory
             </p>
           </div>
         </div>
@@ -289,13 +268,13 @@ export function RightPanel({ children, currentLanguage, allowedLanguages }: Righ
         <div className="mt-10 flex flex-col items-center gap-3">
           <div className="text-muted-foreground/50 flex items-center gap-4">
             <div className="flex items-center gap-1.5 text-xs">
-              <Shield className="size-3" />
-              <span>SSL Secured</span>
+              <ShieldCheck className="size-3" />
+              <span>Editorial workflow</span>
             </div>
             <div className="bg-muted-foreground/20 size-1 rounded-full" />
             <div className="flex items-center gap-1.5 text-xs">
               <CheckCircle2 className="size-3" />
-              <span>SOC 2 Compliant</span>
+              <span>Verified records</span>
             </div>
           </div>
         </div>

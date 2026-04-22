@@ -25,7 +25,14 @@ import { shouldRequestTwoFA, verifySessionStorage } from "~/utils/auth/verificat
 import type { Route } from "./+types/login";
 
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "Log in" }, { name: "description", content: "Log in to your account" }];
+  return [
+    { title: "Sign in · Greenbook" },
+    {
+      name: "description",
+      content:
+        "Editorial access to the Greenbook — the African Union's directory of organizations, people, and positions.",
+    },
+  ];
 }
 
 export const LoginFormSchema = z.object({
