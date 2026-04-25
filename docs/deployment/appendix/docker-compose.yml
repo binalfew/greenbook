@@ -1,0 +1,147 @@
+# /opt/greenbook/docker-compose.yml
+# ─────────────────────────────────────────────────────────────────────
+# Greenbook PRODUCTION compose file.
+#
+# This file is meant for the app VM only. Do NOT confuse with the
+# repo-root docker-compose.yml, which spins up a local Postgres on
+# ports 5432/5433 for development.
+#
+# Install:
+#   scp appendix/docker-compose.yml deployer@10.111.11.51:/opt/greenbook/docker-compose.yml
+#
+# Reference: see deployment guide 07 §8.2.3 for the rationale behind every
+# field below; this file is the verbatim copy of that section.
+# ─────────────────────────────────────────────────────────────────────
+#
+# Compose V2 format. Do not include a top-level 'version:' key — it is
+# ignored by Compose V2 and triggers a deprecation warning.
+
+services:
+  app:
+    image: greenbook:${APP_VERSION:-latest}
+    # ${VAR:-DEFAULT}    substitute VAR if set, otherwise DEFAULT.
+    # ${APP_VERSION}     set via /opt/greenbook/.env (deploy.sh writes it).
+    #                     "latest" is a safety fallback — normally the .env
+    #                     file pins the exact dated tag.
+
+    container_name: greenbook
+    # Fixed container name so operations commands (logs, exec) don't need
+    # to discover the ID. Means only one instance can run at a time —
+    # fine for a single-VM deployment.
+
+    restart: unless-stopped
+    # Automatically restart the container if it exits, UNLESS a human
+    # explicitly ran "docker compose stop". Survives VM reboots.
+
+    init: true
+    # Belt-and-braces with the dumb-init ENTRYPOINT in the Dockerfile.
+    # Compose's init: true runs docker-init (tini) as PID 1 if ENTRYPOINT
+    # is absent. With our explicit dumb-init ENTRYPOINT this is redundant
+    # but harmless and makes the behaviour visible to anyone skim-reading
+    # the compose file.
+
+    stop_grace_period: 30s
+    # Docker's default is 10s, which can be tight: on SIGTERM greenbook
+    # drains the in-process job queue (app/utils/events/job-queue.server.ts),
+    # flushes the rate-limit audit buffer, and (if SENTRY_DSN is set) flushes
+    # pending Sentry events. Under heavy load those can exceed 10s. 30s
+    # gives the shutdown hooks room without surprising operators.
+
+    env_file:
+      - /etc/greenbook.env
+    # Loads VAR=value pairs from the file into the container's environment.
+    # Variables here do NOT appear in compose.yml, keeping this file safe
+    # to commit to git. See deployment guide §6.3 for the full env matrix.
+
+    environment:
+      APP_VERSION: ${APP_VERSION:-dev}
+    # The /etc/greenbook.env file leaves APP_VERSION blank; deploy.sh writes
+    # the release timestamp into /opt/greenbook/.env which compose reads.
+    # Injecting it here surfaces the version in pino logs and Sentry tags.
+
+    ports:
+      - "127.0.0.1:3000:3000"
+    # "HOST_IP:HOST_PORT:CONTAINER_PORT"
+    # Binding to 127.0.0.1 (NOT 0.0.0.0) is critical — Nginx on the host
+    # reaches us here, and no outside machine can. UFW rules don't need
+    # to cover 127.0.0.1.
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3000/healthz'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" || exit 1',
+        ]
+      # Runs INSIDE the container. The node:22-alpine image doesn't ship
+      # curl, so we use Node itself (global fetch is available since v18).
+      # Node exits 0 on healthy, 1 on unhealthy; Docker reads the exit
+      # code to set the "healthy" / "unhealthy" state.
+      #
+      # REQUIRES greenbook to expose GET /healthz returning 200. The
+      # `/healthz` and `/up` paths are already marked "skip rate-limit"
+      # in server/security.ts; deployment guide §6.7 includes the
+      # drop-in resource route at app/routes/healthz.tsx that you MUST
+      # add before rolling this compose file — otherwise the healthcheck
+      # will permanently fail and the container will be marked unhealthy.
+      interval: 30s # time between checks after the container is running
+      timeout: 5s # fail a check that takes longer than this
+      retries: 3 # consecutive failures before marking unhealthy
+      start_period:
+        45s # grace window after start — greenbook does a
+        # Prisma client probe on first query, which adds a
+        # few hundred ms; 45s gives comfortable headroom for
+        # slow boots.
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+        tag: "greenbook"
+    # json-file is Docker's default log driver. Without rotation settings,
+    # logs grow unbounded and eventually fill the disk. 10m per file × 5
+    # files = 50 MB cap per container.
+    #
+    # Greenbook's server/logger.js already emits line-delimited JSON in
+    # production — a log shipper reading /var/lib/docker/containers/*/*.log
+    # can forward each line to Graylog / ELK with zero re-structuring.
+
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+    # Hard limits. If the container exceeds memory: 1g, it's killed (OOM).
+    # 1.0 CPUs means it can use one full core at 100%.
+    # The in-process job queue runs in the same Node event loop as request
+    # handling — if you add heavy job handlers (PDF generation, image
+    # processing), bump memory to 2g and consider dedicating a core.
+
+    read_only: true
+    # Root filesystem is read-only. Any write attempt returns EACCES.
+    # Defence in depth: even if an attacker achieves code execution, they
+    # can't drop persistent malware into the image.
+
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    # Overlay a writable tmpfs at /tmp. Required because some libraries
+    # need scratch space (uploads, sessions, node's JIT caches, the
+    # @mjackson/form-data-parser working dir for multipart uploads).
+    #   rw         read/write for the container user.
+    #   noexec     files in /tmp can't be executed.
+    #   nosuid     setuid bits on /tmp files are ignored.
+    #   size=64m   cap the tmpfs at 64 MB so a bug can't fill RAM.
+
+    security_opt:
+      - no-new-privileges:true
+    # Prevents any process in the container from gaining more privileges
+    # via setuid binaries or file capabilities. A defense against a whole
+    # class of privilege escalation bugs.
+
+    cap_drop:
+      - ALL
+    # Drop ALL Linux capabilities (CAP_NET_RAW, CAP_SYS_ADMIN, etc.).
+    # A Node web app needs none of them — network IO uses unprivileged
+    # sockets (bound to port 3000 > 1024), file access uses normal uid
+    # permissions. If the app later needs something specific (e.g. bind
+    # to port 80 directly), add it back with cap_add:.

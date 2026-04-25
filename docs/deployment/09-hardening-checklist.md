@@ -179,7 +179,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Why: short or reused passwords are crackable / leakable.
   Verify with: there's no on-host check (Postgres stores hashes only). Confirm in your password manager that the prod password is unique and was generated, not chosen.
 
-  Set in: [05-app-vm-container.md §6.3 → "Generate the secrets first"](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.2 → "Generate the secrets first"](07-deploy-workflow.md)
 
 - **Backups: nightly `pg_dump` AND continuous pgBackRest WAL archiving.**
   Why: `pg_dump` recovers from logical corruption (bad app deploy, accidental DELETE); pgBackRest recovers from physical corruption (disk failure) AND supports point-in-time recovery.
@@ -288,7 +288,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   # Pass: succeeds (writable tmpfs at /tmp)
   ```
 
-  Set in: [05-app-vm-container.md §6.4](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.3](07-deploy-workflow.md)
 
 - **`cap_drop: ALL` and `no-new-privileges:true` are set.**
   Why: drops every Linux capability except those explicitly added back; prevents setuid escalation inside the container.
@@ -299,7 +299,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   # Pass: "[ALL] | [no-new-privileges:true]"
   ```
 
-  Set in: [05-app-vm-container.md §6.4](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.3](07-deploy-workflow.md)
 
 - **Resource limits (memory, CPU) are set.**
   Why: an OOM in one process shouldn't take down the whole VM.
@@ -310,7 +310,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   # Pass: non-zero values (e.g. "1073741824 1000000000" = 1 GiB / 1 CPU)
   ```
 
-  Set in: [05-app-vm-container.md §6.4](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.3](07-deploy-workflow.md)
 
 - **Port 3000 is published to `127.0.0.1`, never `0.0.0.0`.**
   Why: a `0.0.0.0` publish bypasses Nginx and exposes the unauthenticated container directly to the network.
@@ -323,7 +323,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   # Pass: only "127.0.0.1:3000". 0.0.0.0:3000 = fail.
   ```
 
-  Set in: [05-app-vm-container.md §6.4](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.3](07-deploy-workflow.md)
 
 - **Image is tagged by timestamp/commit, not just `latest`.**
   Why: `latest` defeats rollback — you can't deterministically point at "the version we ran yesterday" if `latest` keeps moving.
@@ -336,7 +336,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   # Pass: "greenbook:<the timestamp>", not "greenbook:latest".
   ```
 
-  Set in: [07-deploy-workflow.md §8.2.3](07-deploy-workflow.md)
+  Set in: [07-deploy-workflow.md §8.3.3](07-deploy-workflow.md)
 
 - **Old images pruned; disk usage trended.**
   Why: each deploy leaves a ~700 MB image behind. Without pruning, you eventually fill `/var/lib/docker` and Docker stops working.
@@ -454,7 +454,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   # Pass: "640 root deployer /etc/greenbook.env"
   ```
 
-  Set in: [05-app-vm-container.md §6.3](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.2](07-deploy-workflow.md)
 
 - **No secret has been committed to git history. `.env` and `.env.*` are in `.gitignore`.**
   Why: anything ever committed to a repo, even briefly, is in clones / forks / CI build caches forever. Rotation is required, but git-history removal is also required.
@@ -475,13 +475,13 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Why: long-lived secrets are eventually leaked through accumulated touch points (CI logs, screen-share captures, support tickets).
   Verify with: there's no on-host check; track the last rotation date in your password manager. ≥ 12 months ago = fail.
 
-  Set in: [05-app-vm-container.md §6.3 → "SESSION_SECRET rotation (zero-downtime)"](05-app-vm-container.md)
+  Set in: [07-deploy-workflow.md §8.2.2 → "SESSION_SECRET rotation (zero-downtime)"](07-deploy-workflow.md)
 
 - **For higher-assurance environments: secrets moved out of `/etc/greenbook.env` into Docker secrets or a real secret manager (Vault, AWS Secrets Manager).**
   Why: `/etc/greenbook.env` is readable by anyone in the docker group via `docker inspect`. For internal AU intranet that's typically acceptable; for anything regulated (PII at scale, financial), it's not.
   Verify with: this is a posture question — does your threat model accept "any docker-group member can read prod secrets"? If yes, OK; if no, the upgrade path is tracked in the runbook.
 
-  Set in: [05-app-vm-container.md §6.3](05-app-vm-container.md) (the "secrets visible to docker group" callout).
+  Set in: [07-deploy-workflow.md §8.2.2](07-deploy-workflow.md) ("Secrets in /etc/greenbook.env are visible to the docker group" callout).
 
 ### 11.6 Observability
 

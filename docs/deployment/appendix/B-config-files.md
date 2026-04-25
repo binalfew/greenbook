@@ -90,7 +90,16 @@ $ RATE_LIMIT_MAX_REQUESTS=300
 
 ### B.5 /opt/greenbook/docker-compose.yml
 
+The production compose file is shipped as a standalone file in this directory: **[docker-compose.yml](docker-compose.yml)**. Copy it to the app VM with:
+
+```bash
+$ scp docs/deployment/appendix/docker-compose.yml \
+      deployer@10.111.11.51:/opt/greenbook/docker-compose.yml
 ```
+
+Stripped (no annotations) form for at-a-glance reference:
+
+```yaml
 services:
   app:
     image: greenbook:${APP_VERSION:-latest}
@@ -105,7 +114,11 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\" || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3000/healthz'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" || exit 1',
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -129,6 +142,8 @@ services:
     cap_drop:
       - ALL
 ```
+
+Rationale for every field is in [07-deploy-workflow.md §8.2.3](../07-deploy-workflow.md).
 
 ### B.6 /etc/pgbackrest.conf
 

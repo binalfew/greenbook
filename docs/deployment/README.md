@@ -24,27 +24,28 @@ Version 1.3 · April 2026 · Greenbook-specific · Multi-file edition
 
 ## File index
 
-| #   | File                                             | What's in it                                                                                                             | Where it runs         |
-| --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | --------------------- |
-| 01  | [Pre-flight](01-pre-flight.md)                   | Ubuntu hardening, SSH key-only auth, UFW, fail2ban, deploy user                                                          | BOTH VMs              |
-| 02  | [Database VM setup](02-db-vm-setup.md)           | PostgreSQL 16, SCRAM-SHA-256, `greenbook` DB + `appuser`, pg_hba, tuning                                                 | DB VM                 |
-| 03  | [Database VM backups](03-db-vm-backups.md)       | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                                            | DB VM                 |
-| 04  | [App VM Docker setup](04-app-vm-docker.md)       | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                                          | App VM                |
-| 05  | [Application container](05-app-vm-container.md)  | Hardened Dockerfile, `.dockerignore`, `/etc/greenbook.env`, compose, `/healthz`, checkpoint, common-failures playbook    | App VM                |
-| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)          | Nginx reverse proxy, streaming SSR / SSE / PWA tuning, Let's Encrypt or internal CA                                      | App VM                |
-| 07  | [Deploy workflow](07-deploy-workflow.md)         | First-deploy linear walkthrough, build path A/B, schema (`db push` vs `migrate`), env files, `deploy.sh`, rollback, seed | App VM (+ build host) |
-| 08  | [Day-2 operations](08-day-2-operations.md)       | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates                       | BOTH VMs              |
-| 09  | [Hardening checklist](09-hardening-checklist.md) | Pre-go-live audit and quarterly review                                                                                   | BOTH VMs              |
-| 10  | [Troubleshooting](10-troubleshooting.md)         | 502 / restart loop / DB unreachable / cert / disk / latency                                                              | BOTH VMs              |
-| 11  | [Future Graylog](11-future-graylog.md)           | Architecture + sizing + install outline (planning only)                                                                  | future 3rd VM         |
+| #   | File                                             | What's in it                                                                                                                                                                                            | Where it runs         |
+| --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| 01  | [Pre-flight](01-pre-flight.md)                   | Ubuntu hardening, SSH key-only auth, UFW, fail2ban, deploy user                                                                                                                                         | BOTH VMs              |
+| 02  | [Database VM setup](02-db-vm-setup.md)           | PostgreSQL 16, SCRAM-SHA-256, `greenbook` DB + `appuser`, pg_hba, tuning                                                                                                                                | DB VM                 |
+| 03  | [Database VM backups](03-db-vm-backups.md)       | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                                                                                                                           | DB VM                 |
+| 04  | [App VM Docker setup](04-app-vm-docker.md)       | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                                                                                                                         | App VM                |
+| 05  | [Application container](05-app-vm-container.md)  | **Source-tree artefacts**: hardened Dockerfile, `.dockerignore`, `/healthz` route, post-build checkpoint, common build-failures playbook                                                                | Repo (laptop)         |
+| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)          | Nginx reverse proxy, streaming SSR / SSE / PWA tuning, Let's Encrypt or internal CA                                                                                                                     | App VM                |
+| 07  | [Deploy workflow](07-deploy-workflow.md)         | **App-VM-side**: initial setup (`/etc/greenbook.env`, `docker-compose.yml`), first-deploy walkthrough, build path A/B, schema (`db push` vs `migrate`), env-file lifecycle, `deploy.sh`, rollback, seed | App VM (+ build host) |
+| 08  | [Day-2 operations](08-day-2-operations.md)       | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates                                                                                                      | BOTH VMs              |
+| 09  | [Hardening checklist](09-hardening-checklist.md) | Pre-go-live audit and quarterly review                                                                                                                                                                  | BOTH VMs              |
+| 10  | [Troubleshooting](10-troubleshooting.md)         | 502 / restart loop / DB unreachable / cert / disk / latency                                                                                                                                             | BOTH VMs              |
+| 11  | [Future Graylog](11-future-graylog.md)           | Architecture + sizing + install outline (planning only)                                                                                                                                                 | future 3rd VM         |
 
 ### Appendices
 
-|     | File                                                    | What's in it                                    |
-| --- | ------------------------------------------------------- | ----------------------------------------------- |
-| A   | [Command cheat sheet](appendix/A-command-cheatsheet.md) | The one-liners you'll repeat most often         |
-| B   | [Config files reference](appendix/B-config-files.md)    | Every config file in full, no surrounding prose |
-| C   | [References](appendix/C-references.md)                  | Authoritative external sources                  |
+|     | File                                                           | What's in it                                                           |
+| --- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| A   | [Command cheat sheet](appendix/A-command-cheatsheet.md)        | The one-liners you'll repeat most often                                |
+| B   | [Config files reference](appendix/B-config-files.md)           | Every config file in full, no surrounding prose                        |
+| —   | [Production `docker-compose.yml`](appendix/docker-compose.yml) | scp-able compose file template for `/opt/greenbook/docker-compose.yml` |
+| C   | [References](appendix/C-references.md)                         | Authoritative external sources                                         |
 
 ---
 
@@ -222,8 +223,8 @@ Version 1.2 took the generic v1.1 single-file document and validated every comma
 - **Entrypoint**: v1.1 assumed `react-router-serve` (the default React Router framework server). Greenbook ships a custom Express server at `server.js` that wires correlation IDs, pino logging, rate limiting (3 tiers), CORS, Sentry, and an in-process Postgres-backed job queue. The Dockerfile `CMD` is `npm run start` → `node server.js`. [§6.1 in 05 — Application container](05-app-vm-container.md) is rewritten.
 - **Node version**: `node:22-alpine` matches `CLAUDE.md`'s recommendation.
 - **Environment variables**: greenbook's `app/utils/config/env.server.ts` validates five required (`NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `HONEYPOT_SECRET`, `RESEND_API_KEY`) plus ten optional via a Zod schema. [§6.3](05-app-vm-container.md) lists all of them with provenance and guidance.
-- **Schema workflow**: greenbook currently runs on `prisma db push` (no `prisma/migrations/` directory). [§8.2.1](07-deploy-workflow.md) presents both `db push` and `migrate deploy` paths.
-- **Seed / bootstrap**: greenbook's first-run requires `npm run db:seed`. [§8.6](07-deploy-workflow.md) covers it.
+- **Schema workflow**: greenbook currently runs on `prisma db push` (no `prisma/migrations/` directory). [§8.3.1](07-deploy-workflow.md) presents both `db push` and `migrate deploy` paths.
+- **Seed / bootstrap**: greenbook's first-run requires `npm run db:seed`. [§8.7](07-deploy-workflow.md) covers it.
 - **Healthcheck route**: `server/security.ts` skips `/up` and `/healthz` from rate limiting, but no route file exists. [§6.7](05-app-vm-container.md) contains a greenbook-compatible resource route.
 - **SESSION_SECRET rotation**: greenbook parses it as a comma-separated list (`new,old`). [§6.3](05-app-vm-container.md) explains the rotation semantics.
 - **Trust proxy**: `server/app.ts` calls `app.set("trust proxy", 1)` — keep nginx as the only hop or update the count.

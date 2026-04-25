@@ -63,7 +63,7 @@ Replace the default Nginx site with a config that proxies to the greenbook conta
 upstream greenbook_upstream {
     server 127.0.0.1:3000;
     #  Where Nginx forwards requests. 127.0.0.1:3000 is the host-side
-    #  mapping of the container's :3000 (see §6.4 ports: line).
+    #  mapping of the container's :3000 (see 07 §8.2.3 ports: line).
 
     keepalive 32;
     #  Maintain up to 32 idle TCP connections to the backend, avoiding the
