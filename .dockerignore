@@ -1,0 +1,67 @@
+# .dockerignore — lives at the root of the project, next to Dockerfile.
+# Keeps the build context small (everything not excluded is sent to the
+# Docker daemon on every build) and prevents secrets from leaking into images.
+
+# ─── Build-time generated / installed artefacts ─────────────
+node_modules
+# Huge. We re-install inside the image via `npm ci` in the deps stage.
+
+build
+# Stale local build output from `npm run build` on the host.
+# We rebuild inside the image.
+
+app/generated
+# Prisma 7 embeds absolute-path metadata into the generated client.
+# A locally-generated client built on macOS (`/Users/...`) and shipped to
+# a Linux container produces obscure ENOENT errors on first query.
+# Always let `prisma generate` run inside the deps stage (it does, via
+# greenbook's postinstall hook on `npm ci`).
+
+# ─── Git history ─────────────────────────────────────────────
+.git
+.gitignore
+# Don't leak commit history into the image.
+
+# ─── Local secrets — MUST not reach the image ───────────────
+.env
+.env.*
+# Production secrets live on the host in /etc/greenbook.env and enter via
+# `env_file:` in docker-compose.yml. Local dev .env files would be a
+# silent secret-leak channel into every shipped image — keep them out.
+
+# ─── Docker / compose meta ──────────────────────────────────
+.dockerignore
+Dockerfile
+docker-compose.yml
+# Used by the build but don't need to be IN the image.
+# Note: prisma.config.ts is NOT excluded — the Dockerfile COPYs it explicitly.
+
+# ─── Tests, mocks, build-info cruft ─────────────────────────
+tests
+playwright.config.ts
+vitest.config.ts
+vitest.integration.config.ts
+tsconfig.vite.tsbuildinfo
+tsconfig.node.tsbuildinfo
+mocks
+coverage
+.nyc_output
+test-results
+playwright-report
+
+# ─── Docs (live in git, no need at runtime) ─────────────────
+docs
+*.md
+
+# ─── Editor / IDE / local tooling ───────────────────────────
+.vscode
+.idea
+.cursor
+.claude
+.husky
+tmp
+npm-debug.log*
+
+# ─── OS noise ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
