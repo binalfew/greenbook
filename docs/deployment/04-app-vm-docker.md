@@ -14,9 +14,9 @@ This section installs Docker CE from Docker’s official apt repository. Ubuntu 
 
 ### 5.1 Remove any pre-installed Docker packages
 
-```
+```bash
 # [auishqosrgbwbs01]
-for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
+$ for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
   sudo apt remove -y $pkg 2>/dev/null || true
 done
 #   for VAR in LIST; do CMD; done
@@ -32,17 +32,17 @@ done
 
 ### 5.2 Add the Docker apt repository
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo apt update
-sudo apt install -y ca-certificates curl gnupg
+$ sudo apt update
+$ sudo apt install -y ca-certificates curl gnupg
 # Already installed in pre-flight; repeating is a no-op.
 
-sudo install -m 0755 -d /etc/apt/keyrings
+$ sudo install -m 0755 -d /etc/apt/keyrings
 #   install -m MODE -d DIR    create DIR with mode MODE. 0755 is rwxr-xr-x —
 #                             the standard mode for apt keyring dirs.
 
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+$ sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
   -o /etc/apt/keyrings/docker.asc
 #   curl flags:
 #     -f      fail on HTTP errors (don't save error pages as if they were the key).
@@ -51,12 +51,12 @@ sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
 #     -L      follow redirects.
 #   -o PATH   write the body to PATH.
 
-sudo chmod a+r /etc/apt/keyrings/docker.asc
+$ sudo chmod a+r /etc/apt/keyrings/docker.asc
 #   a+r      ADD (+) read permission for ALL (a = user, group, other).
 #            apt reads this file as _apt user; world-readable is safe for
 #            a public signing key.
 
-echo \
+$ echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
 https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -76,15 +76,15 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
 #                              (with sudo's privileges). Redirect tee's own
 #                              stdout to /dev/null so we don't double-print.
 
-sudo apt update
+$ sudo apt update
 # Refresh package lists so apt learns about the Docker repo contents.
 ```
 
 ### 5.3 Install Docker Engine, CLI, Compose, and Buildx
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo apt install -y \
+$ sudo apt install -y \
   docker-ce \
   docker-ce-cli \
   containerd.io \
@@ -97,10 +97,10 @@ sudo apt install -y \
 #                           advanced Dockerfile features.
 #   docker-compose-plugin  v2 compose, invoked as 'docker compose' (no hyphen).
 
-docker --version
+$ docker --version
 # Expected: Docker version 29.x.x or newer.
 
-docker compose version
+$ docker compose version
 # Expected: Docker Compose version v2.x.x.
 ```
 
@@ -110,16 +110,16 @@ docker compose version
 
 ### 5.4 Enable the Docker service and verify
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo systemctl enable --now docker
+$ sudo systemctl enable --now docker
 #   enable      start automatically on boot.
 #   --now       also start it right now.
 
-sudo systemctl status docker --no-pager
+$ sudo systemctl status docker --no-pager
 # Expected: "active (running)".
 
-sudo docker run --rm hello-world
+$ sudo docker run --rm hello-world
 #   docker run IMAGE    run a new container from IMAGE.
 #   --rm                 delete the container when it exits (no cleanup needed).
 #   hello-world          a 13 kB image whose only job is printing a success msg.
@@ -129,9 +129,9 @@ sudo docker run --rm hello-world
 
 ### 5.5 Grant the deploy user access to Docker
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo usermod -aG docker deployer
+$ sudo usermod -aG docker deployer
 #   usermod         modify an existing user.
 #   -a              append (add to supplementary groups WITHOUT removing
 #                    existing memberships — without -a you overwrite them).
@@ -139,15 +139,15 @@ sudo usermod -aG docker deployer
 #   deployer        target user.
 
 # The group change only takes effect in NEW logins (not in the current shell).
-sudo -iu deployer
+$ sudo -iu deployer
 #   sudo -i        simulate a full login shell for the target user.
 #   -u deployer    target user.
 
-docker ps
+$ docker ps
 # Expected: empty table (no containers yet, but the command succeeds without
 # "permission denied" on /var/run/docker.sock).
 
-exit
+$ exit
 # Leave the deployer shell.
 ```
 
@@ -157,19 +157,19 @@ exit
 
 ### 5.6 Lay out the app directory
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo -iu deployer
+$ sudo -iu deployer
 
-mkdir -p /opt/greenbook/releases
+$ mkdir -p /opt/greenbook/releases
 #   /opt/greenbook              root of the deployment; will hold docker-compose.yml
 #                                and a .env file with the current version.
 #   /opt/greenbook/releases     each deploy goes into a dated subdirectory.
 
-cd /opt/greenbook
+$ cd /opt/greenbook
 # Compose files we write later go here.
 
-exit
+$ exit
 ```
 
 ---

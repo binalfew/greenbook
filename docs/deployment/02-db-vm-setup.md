@@ -16,18 +16,18 @@ This section sets up PostgreSQL 16 on the DB VM. We use the PostgreSQL Global De
 
 We add the PGDG signing key to a dedicated file under /usr/share/postgresql-common/pgdg/, then create an apt source list that references it. This is the modern apt signing pattern — the older "apt-key add" is deprecated because it merged all keys into a single global trust store, defeating scoped trust.
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo apt install -y curl ca-certificates
+$ sudo apt install -y curl ca-certificates
 #   We need curl (to download the key) and ca-certificates (so curl's HTTPS
 #   to postgresql.org verifies). Already installed in pre-flight; repeating
 #   is harmless — apt will say "already the newest version".
 
-sudo install -d /usr/share/postgresql-common/pgdg
+$ sudo install -d /usr/share/postgresql-common/pgdg
 #   install -d DIR    create DIR. Unlike mkdir, install can set mode/owner
 #                      in one command. Here we just need the directory.
 
-sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+$ sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
   --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
 #   curl                  fetch a URL.
 #   -o PATH               write the response body to PATH (not stdout).
@@ -37,7 +37,7 @@ sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
 #   B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8. Verify with:
 #       gpg --show-keys /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
 
-sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+$ sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
   https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
   > /etc/apt/sources.list.d/pgdg.list'
 #   sh -c 'CMD'              run CMD in a fresh shell. Required because the
@@ -49,11 +49,11 @@ sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresq
 #                            -s = short form. Evaluated before the command runs.
 #   -pgdg main               PGDG's repository suite (codename + "-pgdg").
 
-sudo apt update
+$ sudo apt update
 #   Refresh package lists so apt learns about everything in the new PGDG repo.
 ```
 
-```
+```bash
 apt-cache policy postgresql-16 | head -20
 #   apt-cache policy PKG    show installed and candidate versions for PKG and
 #                           which repository each comes from.
@@ -62,7 +62,7 @@ apt-cache policy postgresql-16 | head -20
 # at apt.postgresql.org. If Candidate points at archive.ubuntu.com, the PGDG
 # repo was not added correctly — re-run the curl and echo steps above.
 
-sudo apt install -y postgresql-16 postgresql-client-16 postgresql-contrib-16
+$ sudo apt install -y postgresql-16 postgresql-client-16 postgresql-contrib-16
 #   postgresql-16           the server (postmaster, psql, data-dir setup).
 #   postgresql-client-16    psql and related CLI tools. Technically already
 #                            a dependency of the server package, listed
@@ -70,13 +70,13 @@ sudo apt install -y postgresql-16 postgresql-client-16 postgresql-contrib-16
 #   postgresql-contrib-16   optional modules: pg_trgm, pgcrypto, etc. Cheap
 #                            to include, often wanted later.
 
-sudo systemctl status postgresql --no-pager
+$ sudo systemctl status postgresql --no-pager
 # Expected: "active (exited)" for the postgresql wrapper service. On Debian/
 # Ubuntu, Postgres runs the actual database as a separate unit,
 # postgresql@16-main.service. Check it too:
 #   sudo systemctl status postgresql@16-main.service --no-pager
 
-sudo -u postgres psql -c "SELECT version();"
+$ sudo -u postgres psql -c "SELECT version();"
 #   sudo -u USER CMD    run CMD as the specified user.
 #   postgres            the OS user created by the PostgreSQL package; it owns
 #                        the data directory and is also the database superuser.
@@ -93,9 +93,9 @@ sudo -u postgres psql -c "SELECT version();"
 
 PostgreSQL 16 ships with password_encryption = scram-sha-256 as the default, but it is worth asserting this explicitly before creating any users — because roles keep whatever hash format was in effect when their password was set. If a legacy tool ever flips it to md5 and you create a user, that user’s password will be md5-hashed until you reset it.
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres psql <<'SQL'
+$ sudo -u postgres psql <<'SQL'
 ALTER SYSTEM SET password_encryption = 'scram-sha-256';
 --   ALTER SYSTEM modifies a server-wide parameter. Changes are written to
 --   postgresql.auto.conf, which is read AFTER postgresql.conf so it overrides.
@@ -115,9 +115,9 @@ The production database is named **`greenbook`** throughout this guide. Local de
 
 Generate a strong password first. Anything less than 24 random characters is not appropriate for a production database account.
 
-```
+```bash
 # [auishqosrgbdbs01]
-openssl rand -base64 32
+$ openssl rand -base64 32
 #   openssl rand         generate cryptographically random bytes.
 #   -base64              encode output as base64 (safe in env vars,
 #                         connection strings, most config files).
@@ -128,9 +128,9 @@ openssl rand -base64 32
 #   (b) later, in /etc/greenbook.env on the app VM.
 ```
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres psql <<'SQL'
+$ sudo -u postgres psql <<'SQL'
 -- Replace STRONG_PASSWORD_HERE with the openssl output above BEFORE pasting.
 CREATE USER appuser WITH LOGIN PASSWORD 'STRONG_PASSWORD_HERE';
 --   CREATE USER is shorthand for CREATE ROLE ... LOGIN.
@@ -178,13 +178,13 @@ SQL
 
 By default PostgreSQL only listens on localhost, which is correct for a single-VM setup but wrong for ours. We expose it on the internal interface only — never on 0.0.0.0, which would expose it on every interface including any future public one.
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres psql -c "SHOW config_file;"
+$ sudo -u postgres psql -c "SHOW config_file;"
 #   SHOW config_file     report the exact path of the active postgresql.conf.
 # Expected on Ubuntu: /etc/postgresql/16/main/postgresql.conf
 
-sudo nano /etc/postgresql/16/main/postgresql.conf
+$ sudo nano /etc/postgresql/16/main/postgresql.conf
 #   nano FILE    simple visual text editor. Use vim or any other if you prefer.
 #   sudo         required because the file is owned by postgres:postgres.
 ```
@@ -213,9 +213,9 @@ A listen_addresses change requires a full restart, not just a reload. We’ll do
 
 pg_hba.conf ("host-based authentication") controls which clients can connect, to which databases, and what authentication method is required. It is evaluated top-down, first-match-wins. This ordering is critical: a permissive rule at the top can shadow a stricter rule below it; a stray "reject" line above our allow rule will block our app.
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo nano /etc/postgresql/16/main/pg_hba.conf
+$ sudo nano /etc/postgresql/16/main/pg_hba.conf
 ```
 
 Scroll down until you find the "# IPv4 local connections:" section. Add our rule IMMEDIATELY ABOVE the first default IPv4 entry (the one starting with "host all all 127.0.0.1/32"):
@@ -248,9 +248,9 @@ host    greenbook appuser  10.111.11.51/32    scram-sha-256
 
 ### 4.6 Apply the changes
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo systemctl restart postgresql
+$ sudo systemctl restart postgresql
 #   restart         stops and starts the service. Required because
 #                   listen_addresses cannot be changed without restarting the
 #                   postmaster — the listener socket is opened at startup and
@@ -258,10 +258,10 @@ sudo systemctl restart postgresql
 #                   (including pg_hba.conf) accept a cheaper reload.
 # The restart takes 1-3 seconds. Open connections get terminated; clients reconnect.
 
-sudo systemctl status postgresql --no-pager
+$ sudo systemctl status postgresql --no-pager
 # Confirm the service came back up cleanly.
 
-sudo ss -tlnp | grep 5432
+$ sudo ss -tlnp | grep 5432
 #   ss           "socket statistics" — modern replacement for netstat.
 #   -t           TCP sockets only.
 #   -l           listening sockets (servers), not established connections.
@@ -275,9 +275,9 @@ sudo ss -tlnp | grep 5432
 
 ### 4.7 Open the firewall for the app VM only
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo ufw allow from 10.111.11.51 to any port 5432 proto tcp \
+$ sudo ufw allow from 10.111.11.51 to any port 5432 proto tcp \
   comment 'Postgres from auishqosrgbwbs01'
 #   ufw allow from SRC to DST port PORT proto PROTO [comment 'TEXT']
 #     from 10.111.11.51   source IP (or CIDR). Only this address matches.
@@ -288,7 +288,7 @@ sudo ufw allow from 10.111.11.51 to any port 5432 proto tcp \
 #     comment '...'     stored with the rule and shown in "ufw status".
 #                        Future you will thank present you for commenting.
 
-sudo ufw status numbered
+$ sudo ufw status numbered
 #   numbered      list rules with position numbers, so you can delete a
 #                 specific rule later with "sudo ufw delete N".
 # Expected: "5432/tcp  ALLOW IN  10.111.11.51  # Postgres from auishqosrgbwbs01".
@@ -298,15 +298,15 @@ sudo ufw status numbered
 
 ### 4.8 Verify end-to-end from the app VM
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo apt install -y postgresql-client-16
+$ sudo apt install -y postgresql-client-16
 #   Installs just the psql client. Not strictly required for the final
 #   deployment (the app talks to Postgres itself), but it gives us a cheap
 #   way to test the DB path without going through Docker first. Leave it
 #   installed — useful for operations.
 
-psql -h 10.111.11.50 -U appuser -d greenbook \
+$ psql -h 10.111.11.50 -U appuser -d greenbook \
   -c "SELECT current_user, current_database(), inet_server_addr();"
 #   psql             PostgreSQL's CLI.
 #   -h HOST          server hostname or IP. Without -h, psql uses a Unix socket
@@ -381,9 +381,9 @@ random_page_cost = 1.1
 # wrong biases the planner toward or away from index scans in borderline cases.
 ```
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo systemctl restart postgresql
+$ sudo systemctl restart postgresql
 #   shared_buffers and max_connections require restart (not just reload).
 #   Do this in a maintenance window once production traffic exists.
 ```

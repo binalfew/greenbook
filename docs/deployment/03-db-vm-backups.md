@@ -14,25 +14,25 @@ Two layers: a nightly logical dump (easy to move around, good for per-object res
 
 #### 4.10.1 Nightly pg_dump (logical backup)
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo mkdir -p /var/backups/postgres
+$ sudo mkdir -p /var/backups/postgres
 #   -p      idempotent — no error if the directory already exists.
 
-sudo chown postgres:postgres /var/backups/postgres
+$ sudo chown postgres:postgres /var/backups/postgres
 #   Ownership to the postgres user — the cron job runs as postgres and
 #   needs to write here.
 
-sudo chmod 700 /var/backups/postgres
+$ sudo chmod 700 /var/backups/postgres
 #   700     rwx for owner only. Dumps contain every row of your database;
 #           they are as sensitive as the live DB.
 ```
 
 Give the postgres user a crontab entry that runs the dump every night:
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres crontab -e
+$ sudo -u postgres crontab -e
 #   sudo -u postgres    run the command as the postgres user.
 #   crontab -e          open that user's crontab in $EDITOR (usually nano).
 # You'll end up in an editor. Add this line (ONE line, no leading whitespace):
@@ -71,17 +71,17 @@ sudo -u postgres crontab -e
 
 Test the job immediately instead of waiting until 02:00 tomorrow:
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres bash -c 'pg_dump -Fc -d greenbook -f /var/backups/postgres/greenbook-test.dump'
+$ sudo -u postgres bash -c 'pg_dump -Fc -d greenbook -f /var/backups/postgres/greenbook-test.dump'
 #   bash -c 'CMD'    run CMD in a fresh bash shell — needed because we use
 #                     redirection and quoting that the outer sudo doesn't parse.
 # Expected: no output. Runtime scales with DB size; empty DB is sub-second.
 
-ls -la /var/backups/postgres/
+$ ls -la /var/backups/postgres/
 # Expected: greenbook-test.dump owned by postgres:postgres, non-zero size.
 
-sudo -u postgres rm /var/backups/postgres/greenbook-test.dump
+$ sudo -u postgres rm /var/backups/postgres/greenbook-test.dump
 # Clean up the test dump.
 ```
 
@@ -89,15 +89,15 @@ sudo -u postgres rm /var/backups/postgres/greenbook-test.dump
 
 pgBackRest is the standard tool for production PostgreSQL backup. It supports full, differential, and incremental backups; compresses and optionally encrypts backups; manages WAL archiving automatically; and handles PITR restore with a single command. Installing and configuring it now — before production data exists — is much easier than retrofitting later.
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo apt install -y pgbackrest
+$ sudo apt install -y pgbackrest
 #   Package from the Ubuntu repo. PGDG also publishes a newer build; the
 #   Ubuntu version is sufficient for this deployment.
 
-sudo install -d -m 750 -o postgres -g postgres /var/lib/pgbackrest
-sudo install -d -m 750 -o postgres -g postgres /var/log/pgbackrest
-sudo install -d -m 770 -o postgres -g postgres /var/spool/pgbackrest
+$ sudo install -d -m 750 -o postgres -g postgres /var/lib/pgbackrest
+$ sudo install -d -m 750 -o postgres -g postgres /var/log/pgbackrest
+$ sudo install -d -m 770 -o postgres -g postgres /var/spool/pgbackrest
 #   install -d DIR     create DIR.
 #   -m MODE            set mode bits (750 = rwx for owner, rx for group).
 #   -o USER / -g GROUP set owner and group.
@@ -108,9 +108,9 @@ sudo install -d -m 770 -o postgres -g postgres /var/spool/pgbackrest
 
 Create the pgBackRest config at /etc/pgbackrest.conf:
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo tee /etc/pgbackrest.conf <<'EOF'
+$ sudo tee /etc/pgbackrest.conf <<'EOF'
 [global]
 repo1-path=/var/lib/pgbackrest
 #   repo1-path        where the repository (backups + WAL archive) is stored.
@@ -159,8 +159,8 @@ pg1-user=postgres
 #                     pg_hba.conf rule — no password needed.
 EOF
 
-sudo chown postgres:postgres /etc/pgbackrest.conf
-sudo chmod 640 /etc/pgbackrest.conf
+$ sudo chown postgres:postgres /etc/pgbackrest.conf
+$ sudo chmod 640 /etc/pgbackrest.conf
 # 640 = owner read/write, group read. The 'postgres' group can read so
 # pgbackrest invocations (run as the postgres user) can read the config.
 ```
@@ -200,42 +200,42 @@ max_wal_senders = 3
 
 Apply with a restart — archive_mode cannot be changed with reload:
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo systemctl restart postgresql
+$ sudo systemctl restart postgresql
 ```
 
 Create the stanza and take the first backup. A "stanza" is pgBackRest’s name for a configured Postgres cluster.
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres pgbackrest --stanza=main stanza-create
+$ sudo -u postgres pgbackrest --stanza=main stanza-create
 #   pgbackrest --stanza=NAME SUBCOMMAND
 #     --stanza=main       matches the [main] section in /etc/pgbackrest.conf
 #     stanza-create        initialize the repository for this stanza.
 # Expected: "completed successfully". Creates directory structure under repo1-path.
 
-sudo -u postgres pgbackrest --stanza=main check
+$ sudo -u postgres pgbackrest --stanza=main check
 #   check               sanity-check: verify Postgres is reachable, the archive
 #                        command works, and the repo is writable.
 # Expected: "check command end: completed successfully".
 
-sudo -u postgres pgbackrest --stanza=main --type=full backup
+$ sudo -u postgres pgbackrest --stanza=main --type=full backup
 #   backup              take a backup.
 #   --type=full         full backup (every block). Can also be --type=diff
 #                        (changes since last full) or --type=incr (since last
 #                        full OR diff OR incr).
 # Runtime scales with DB size; a fresh DB takes seconds.
 
-sudo -u postgres pgbackrest info
+$ sudo -u postgres pgbackrest info
 # Expected: stanza "main" listed, one full backup, current WAL range shown.
 ```
 
 Schedule recurring backups. Full weekly, differential daily. WAL streams continuously via archive_command (nothing to schedule).
 
-```
+```bash
 # [auishqosrgbdbs01]
-sudo -u postgres crontab -e
+$ sudo -u postgres crontab -e
 # Add these two lines (the pg_dump line from §4.10.1 should already be there):
 
 30 1 * * 0   pgbackrest --stanza=main --type=full backup
@@ -265,7 +265,7 @@ The pgBackRest repository on the DB VM protects against PostgreSQL corruption or
 
 The simplest offsite option for AU infrastructure is an NFS mount from a separate fileserver, or an S3-compatible object store (MinIO, Ceph). Add a [global] block with a second repo:
 
-```
+```bash
 # [auishqosrgbdbs01] — example: NFS-mounted offsite path at /mnt/backup-offsite
 # (assumes the NFS mount is already configured in /etc/fstab)
 
@@ -278,7 +278,7 @@ repo2-retention-full=4
 #                      offsite storage is typically cheaper per GB.
 
 # After editing, re-run stanza-create to initialise repo2:
-sudo -u postgres pgbackrest --stanza=main stanza-create
+$ sudo -u postgres pgbackrest --stanza=main stanza-create
 
 # All subsequent backups are written to BOTH repositories automatically.
 # Restores can be performed from either.

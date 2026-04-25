@@ -14,24 +14,24 @@ Nginx sits on the host (not in a container) and terminates TLS on port 443. It f
 
 ### 7.1 Install Nginx
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo apt install -y nginx
+$ sudo apt install -y nginx
 #   Ubuntu 24.04 ships nginx 1.24 in the standard repo. That version is
 #   used throughout this document; the HTTP/2 syntax we use (see §7.3)
 #   is compatible with both 1.24 and the newer 1.25+ from the upstream
 #   Nginx repo, so you can swap later without touching the config.
 
-nginx -v
+$ nginx -v
 # Expected: "nginx version: nginx/1.24.x (Ubuntu)".
 
-sudo systemctl enable --now nginx
+$ sudo systemctl enable --now nginx
 #   enable --now    start at boot AND start right now.
 
-sudo systemctl status nginx --no-pager
+$ sudo systemctl status nginx --no-pager
 # Expected: "active (running)".
 
-curl -I http://127.0.0.1/
+$ curl -I http://127.0.0.1/
 #   -I              HEAD-only request.
 # Expected: HTTP/1.1 200 OK from the default Nginx welcome page. Proves
 # Nginx is running and listening on port 80.
@@ -39,15 +39,15 @@ curl -I http://127.0.0.1/
 
 ### 7.2 Open ports 80 and 443 in UFW
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo ufw allow 'Nginx Full'
+$ sudo ufw allow 'Nginx Full'
 #   'Nginx Full'      a built-in UFW application profile (created by the
 #                     nginx package) that opens 80/tcp AND 443/tcp in one
 #                     rule. Equivalent to two explicit "ufw allow 80/tcp"
 #                     and "ufw allow 443/tcp" lines.
 
-sudo ufw status verbose
+$ sudo ufw status verbose
 # Expected: entries for 80/tcp AND 443/tcp (IPv4 and IPv6).
 ```
 
@@ -267,24 +267,24 @@ server {
 
 Enable the site and remove the default:
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo ln -s /etc/nginx/sites-available/greenbook.conf /etc/nginx/sites-enabled/
+$ sudo ln -s /etc/nginx/sites-available/greenbook.conf /etc/nginx/sites-enabled/
 #   ln -s SOURCE TARGET    create a symbolic link at TARGET pointing to SOURCE.
 #   Nginx reads every file in sites-enabled/ as part of its config. The
 #   two-directory pattern (available/enabled) lets you keep a site config
 #   around without actually serving it — just delete the symlink to disable.
 
-sudo rm /etc/nginx/sites-enabled/default
+$ sudo rm /etc/nginx/sites-enabled/default
 #   Removes the symlink to the default "welcome to nginx" site. The original
 #   file in sites-available/ stays on disk in case you want it back.
 
-sudo nginx -t
+$ sudo nginx -t
 #   -t              test the config for syntax errors. Do NOT skip this.
 # Expected: "syntax is ok" and "test is successful". Any other output means
 # fix the error before reloading.
 
-sudo systemctl reload nginx
+$ sudo systemctl reload nginx
 #   reload          graceful — SIGHUP. Nginx starts new workers with the new
 #                   config and retires the old ones as they finish current
 #                   requests. No dropped connections.
@@ -312,38 +312,38 @@ Let’s Encrypt issues free, automatically-renewing TLS certificates. It offers 
 
 Certbot is best installed from snap rather than apt. The apt version lags upstream and the snap version is the method officially recommended by Let’s Encrypt.
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo snap install core
-sudo snap refresh core
+$ sudo snap install core
+$ sudo snap refresh core
 #   snap install NAME    install a snap package. "core" is the snap runtime.
 #   snap refresh NAME    update snap-managed packages.
 
-sudo snap install --classic certbot
+$ sudo snap install --classic certbot
 #   --classic            certbot needs to break out of snap's strict sandbox
 #                         to write files under /etc/letsencrypt.
 
-sudo ln -s /snap/bin/certbot /usr/bin/certbot
+$ sudo ln -s /snap/bin/certbot /usr/bin/certbot
 #   Put certbot on PATH under /usr/bin/ so bare "certbot" works without
 #   qualifying /snap/bin/certbot.
 
-certbot --version
+$ certbot --version
 # Expected: "certbot 3.x.x" (or newer).
 ```
 
 Create the webroot that Nginx serves the ACME challenges from (the /.well-known/acme-challenge location in §7.3):
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo mkdir -p /var/www/certbot
-sudo chown www-data:www-data /var/www/certbot
+$ sudo mkdir -p /var/www/certbot
+$ sudo chown www-data:www-data /var/www/certbot
 #   www-data    the user Nginx runs as on Ubuntu. Certbot will write challenge
 #               files here that Nginx serves on plain HTTP.
 ```
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo certbot --nginx -d greenbook.au.int \
+$ sudo certbot --nginx -d greenbook.au.int \
   --email ops@au.int --agree-tos --no-eff-email --redirect
 #   --nginx              use the nginx plugin: certbot reads and edits the
 #                         nginx config automatically.
@@ -356,7 +356,7 @@ sudo certbot --nginx -d greenbook.au.int \
 # Runtime: 15-30 seconds. Certbot will write certificate files, edit
 # /etc/nginx/sites-enabled/greenbook.conf to point at them, and reload nginx.
 
-sudo certbot renew --dry-run
+$ sudo certbot renew --dry-run
 #   renew               test all installed certs can be renewed.
 #   --dry-run           go through the motions against LE's staging server;
 #                        nothing is persisted.
@@ -365,9 +365,9 @@ sudo certbot renew --dry-run
 
 The snap version of Certbot installs a systemd timer that attempts renewal twice per day — check with:
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo systemctl list-timers | grep -i certbot
+$ sudo systemctl list-timers | grep -i certbot
 # Expected: an active "snap.certbot.renew.timer" entry.
 ```
 
@@ -381,39 +381,39 @@ DNS-01 works entirely over outbound HTTPS — Let’s Encrypt never contacts the
 
 Certbot ships DNS plugins for the major providers. Install the plugin for your DNS host:
 
-```
+```bash
 # [auishqosrgbwbs01] — examples of DNS plugins; install only the one that matches your provider
-sudo snap install certbot-dns-route53     # AWS Route 53
-sudo snap install certbot-dns-cloudflare  # Cloudflare
-sudo snap install certbot-dns-google      # Google Cloud DNS
-sudo snap install certbot-dns-rfc2136     # generic RFC2136 (e.g. PowerDNS, BIND with TSIG)
+$ sudo snap install certbot-dns-route53     # AWS Route 53
+$ sudo snap install certbot-dns-cloudflare  # Cloudflare
+$ sudo snap install certbot-dns-google      # Google Cloud DNS
+$ sudo snap install certbot-dns-rfc2136     # generic RFC2136 (e.g. PowerDNS, BIND with TSIG)
 # For other providers, see:  certbot plugins
 ```
 
 Create a credentials file for the plugin (Cloudflare example):
 
-```
+```bash
 # [auishqosrgbwbs01] — as root
-sudo install -d -m 700 /etc/letsencrypt/secrets
+$ sudo install -d -m 700 /etc/letsencrypt/secrets
 #   /etc/letsencrypt/secrets    directory for credential files. 700 locks it
 #                                down to root — plugin auth tokens live here.
 
-sudo tee /etc/letsencrypt/secrets/cloudflare.ini <<'EOF'
+$ sudo tee /etc/letsencrypt/secrets/cloudflare.ini <<'EOF'
 # Cloudflare API token with Zone:DNS:Edit scope for your zone.
 # Create at: https://dash.cloudflare.com/profile/api-tokens
 dns_cloudflare_api_token = YOUR_SCOPED_TOKEN_HERE
 EOF
 
-sudo chmod 600 /etc/letsencrypt/secrets/cloudflare.ini
+$ sudo chmod 600 /etc/letsencrypt/secrets/cloudflare.ini
 # 600 is REQUIRED — the cloudflare plugin refuses to use group/world-readable
 # credentials. Good hygiene; do not override.
 ```
 
 Request the cert. Note: DNS-01 does NOT need the --nginx plugin (no ACME challenge over HTTP) — we let certbot obtain the cert standalone and point Nginx at it ourselves:
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo certbot certonly \
+$ sudo certbot certonly \
   --dns-cloudflare \
   --dns-cloudflare-credentials /etc/letsencrypt/secrets/cloudflare.ini \
   --dns-cloudflare-propagation-seconds 30 \
@@ -435,7 +435,7 @@ sudo certbot certonly \
 # Certificate files land under /etc/letsencrypt/live/greenbook.au.int/ —
 # exactly where the Nginx config in §7.3 expects them. After success:
 
-sudo nginx -t && sudo systemctl reload nginx
+$ sudo nginx -t && sudo systemctl reload nginx
 # Test and reload. Nginx now serves the real cert.
 
 # The same "certbot renew --dry-run" applies; the plugin remembers the
@@ -444,13 +444,13 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ### 7.5 Test the TLS deployment
 
-```
+```bash
 # From your workstation (not the VM):
-curl -I https://greenbook.au.int/
+$ curl -I https://greenbook.au.int/
 # Expected: HTTP/2 200  (or an application redirect).
 # Expected header: strict-transport-security: max-age=31536000; includeSubDomains
 
-openssl s_client -connect greenbook.au.int:443 \
+$ openssl s_client -connect greenbook.au.int:443 \
   -servername greenbook.au.int </dev/null 2>/dev/null | \
   openssl x509 -noout -subject -issuer -dates
 #   openssl s_client        open a raw TLS connection.
@@ -476,9 +476,9 @@ openssl s_client -connect greenbook.au.int:443 \
 
 For an air-gapped AU intranet where neither HTTP-01 nor DNS-01 is workable (no outbound internet, no public DNS), use certificates issued by your organisation’s internal CA. The Nginx config in §7.3 is unchanged apart from the certificate paths.
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
+$ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
 #   -m 750 owned by root:www-data. www-data (nginx worker) can read but
 #   not write; root can do both.
 
@@ -487,7 +487,7 @@ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
 # submit it to the CA, and install the returned cert:
 
 # Generate an ECDSA private key (smaller, faster, equal security to RSA-3072).
-sudo openssl ecparam -name prime256v1 -genkey \
+$ sudo openssl ecparam -name prime256v1 -genkey \
   -out /etc/ssl/greenbook/greenbook.au.int.key
 # Then create a CSR (certificate signing request), submit it to your CA, and
 # install the signed cert plus intermediate chain at /etc/ssl/greenbook/.
@@ -497,10 +497,10 @@ sudo openssl ecparam -name prime256v1 -genkey \
 #   ssl_certificate_key /etc/ssl/greenbook/greenbook.au.int.key;
 # (fullchain = server cert FOLLOWED BY the intermediate chain, in one file)
 
-sudo chmod 640 /etc/ssl/greenbook/*.key
-sudo chmod 644 /etc/ssl/greenbook/*.pem
+$ sudo chmod 640 /etc/ssl/greenbook/*.key
+$ sudo chmod 644 /etc/ssl/greenbook/*.pem
 
-sudo nginx -t && sudo systemctl reload nginx
+$ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Every workstation that will visit the site must trust your internal CA’s root certificate. AU-managed endpoints should have this deployed via the OS image or MDM; for one-off devices, import the root cert into the OS trust store manually.

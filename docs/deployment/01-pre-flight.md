@@ -14,10 +14,10 @@ Run these steps on both VMs before anything else. They establish a consistent ba
 
 ### 3.1 Verify the OS and update packages
 
-```
+```bash
 # On BOTH VMs
 
-lsb_release -a
+$ lsb_release -a
 #   lsb_release     prints Linux Standard Base release info
 #   -a              "all" — show distributor ID, release, codename, description
 # Expected output includes: "Ubuntu 24.04 LTS" and codename "noble".
@@ -26,19 +26,19 @@ lsb_release -a
 # anything older will not.
 ```
 
-```
-sudo apt update
+```bash
+$ sudo apt update
 #   apt update      download fresh package lists from configured repositories.
 #                   Does NOT install or upgrade anything — only refreshes
 #                   the index of what is available.
 
-sudo apt upgrade -y
+$ sudo apt upgrade -y
 #   apt upgrade     install newer versions of already-installed packages.
 #   -y              answer "yes" to every confirmation prompt (non-interactive).
 # Safe on a fresh VM. On a running production box, upgrade during a window —
 # kernel updates may require a reboot (check /var/run/reboot-required after).
 
-sudo apt install -y curl ca-certificates gnupg lsb-release \
+$ sudo apt install -y curl ca-certificates gnupg lsb-release \
                     ufw fail2ban unattended-upgrades htop net-tools
 #   apt install PKG...    install the listed packages and their dependencies.
 #   -y                     non-interactive.
@@ -56,20 +56,20 @@ sudo apt install -y curl ca-certificates gnupg lsb-release \
 
 ### 3.2 Set the hostname and /etc/hosts
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo hostnamectl set-hostname auishqosrgbwbs01
+$ sudo hostnamectl set-hostname auishqosrgbwbs01
 #   hostnamectl     systemd tool for managing the system hostname.
 #   set-hostname    sets both the transient and static hostnames.
 # Effective immediately for new shells; existing prompts may show the old name.
 
 # [auishqosrgbdbs01]
-sudo hostnamectl set-hostname auishqosrgbdbs01
+$ sudo hostnamectl set-hostname auishqosrgbdbs01
 ```
 
-```
+```bash
 # On BOTH VMs: edit /etc/hosts so each VM resolves the other by name
-sudo tee -a /etc/hosts <<'EOF'
+$ sudo tee -a /etc/hosts <<'EOF'
 10.111.11.51    auishqosrgbwbs01
 10.111.11.50    auishqosrgbdbs01
 EOF
@@ -87,16 +87,16 @@ EOF
 
 Consistent clocks matter: TLS certificates, log correlation, and SCRAM authentication all rely on accurate time. Ubuntu 24.04 ships systemd-timesyncd enabled by default, so there is usually nothing to install — we only need to pick a time zone.
 
-```
+```bash
 # Pick one time zone for both VMs. For the AU deployment this is typical:
-sudo timedatectl set-timezone Africa/Addis_Ababa
+$ sudo timedatectl set-timezone Africa/Addis_Ababa
 #   timedatectl         systemd tool for date/time/timezone management.
 #   set-timezone ZONE   set the system zone, where ZONE is a path under
 #                       /usr/share/zoneinfo (e.g. "UTC", "America/New_York",
 #                       "Africa/Addis_Ababa"). List candidates with:
 #                       timedatectl list-timezones | grep Africa
 
-timedatectl status
+$ timedatectl status
 #   Without arguments, shows current status: local time, UTC time, zone,
 #   whether system clock is synchronised, whether NTP service is active.
 # Expected: "System clock synchronized: yes" and "NTP service: active"
@@ -120,20 +120,20 @@ Without this step you're relying on a human to SSH in and run `apt upgrade` regu
 
 Every ~24 h a systemd timer fires `apt-get update` and then installs any package whose source matches `${distro_id}:${distro_codename}-security`. Results are logged to `/var/log/unattended-upgrades/`. On both greenbook VMs you should expect a short `apt` run most nights with nothing user-visible unless a reboot is required (see below).
 
-```
-sudo dpkg-reconfigure --priority=low unattended-upgrades
+```bash
+$ sudo dpkg-reconfigure --priority=low unattended-upgrades
 #   dpkg-reconfigure         re-run a package's post-install configuration.
 #   --priority=low           show all questions, not just high-priority ones.
 #   unattended-upgrades      the package to reconfigure.
 # You will be asked "Automatically download and install stable updates?" — YES.
 # This creates /etc/apt/apt.conf.d/20auto-upgrades with daily-update settings.
 
-sudo systemctl status unattended-upgrades --no-pager
+$ sudo systemctl status unattended-upgrades --no-pager
 #   systemctl status SERVICE    show current state of a systemd unit.
 #   --no-pager                  print all output at once (don't use a pager).
 # Expected: "active (running)" or "active (exited)".
 
-cat /etc/apt/apt.conf.d/20auto-upgrades
+$ cat /etc/apt/apt.conf.d/20auto-upgrades
 #   cat FILE    print file contents to stdout.
 # Expected content (both lines must be present):
 #     APT::Periodic::Update-Package-Lists "1";
@@ -158,9 +158,9 @@ cat /etc/apt/apt.conf.d/20auto-upgrades
 
 Disable password authentication and root login. This assumes you have already copied your public key to the target user (via ssh-copy-id from your workstation) and verified you can log in with keys.
 
-```
+```bash
 # On BOTH VMs, as a sudo user:
-sudo tee /etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
+$ sudo tee /etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
 PermitRootLogin no
 PasswordAuthentication no
 PubkeyAuthentication yes
@@ -187,14 +187,14 @@ EOF
 #     LoginGraceTime 30            — kill unauthenticated connections after 30s.
 ```
 
-```
-sudo sshd -t
+```bash
+$ sudo sshd -t
 #   sshd -t     "test mode" — parse the config and report errors WITHOUT
 #               applying changes. Always run this before any reload/restart.
 # Expected: no output on success. Any output means a syntax error — fix it
 # before reloading, or you risk breaking SSH entirely.
 
-sudo systemctl reload ssh
+$ sudo systemctl reload ssh
 #   systemctl reload SERVICE    send SIGHUP (or the equivalent) — reload
 #                               config without dropping existing connections.
 # Your existing SSH session stays open. New connections use the new config.
@@ -206,27 +206,27 @@ sudo systemctl reload ssh
 
 ### 3.6 Enable UFW with restrictive defaults
 
-```
-sudo ufw default deny incoming
+```bash
+$ sudo ufw default deny incoming
 #   ufw default POLICY DIRECTION   set the default policy for DIRECTION traffic.
 #   deny incoming                  drop every inbound packet that no rule allows.
 # Security posture: start with everything denied, open explicitly.
 
-sudo ufw default allow outgoing
+$ sudo ufw default allow outgoing
 #   allow outgoing                 VM can make outbound connections freely.
 # Needed so apt can fetch packages, curl can hit HTTPS, etc.
 
-sudo ufw allow OpenSSH
+$ sudo ufw allow OpenSSH
 #   ufw allow PROFILE|PORT         open the named app profile or a port number.
 #   OpenSSH                        a built-in profile equivalent to "22/tcp".
 # Without this rule, "ufw enable" below would cut your SSH connection.
 
-sudo ufw --force enable
+$ sudo ufw --force enable
 #   ufw enable         activate the firewall — rules take effect now.
 #   --force            skip the "May disrupt existing SSH connections"
 #                      interactive confirmation (safe because we allowed SSH).
 
-sudo ufw status verbose
+$ sudo ufw status verbose
 #   ufw status verbose    list all rules with default policies and logging level.
 # Expected: "Status: active" and at minimum an OpenSSH (22/tcp) allow rule.
 ```
@@ -239,13 +239,13 @@ sudo ufw status verbose
 
 fail2ban watches log files, matches patterns (e.g. "Failed password" lines), and adds short-term iptables bans for offending IPs. The default configuration ships with an SSH jail ready to use.
 
-```
-sudo systemctl enable --now fail2ban
+```bash
+$ sudo systemctl enable --now fail2ban
 #   systemctl enable SERVICE    start SERVICE automatically on boot.
 #   --now                        ALSO start it right now (not just next reboot).
 # To verify: sudo systemctl is-active fail2ban    → "active"
 
-sudo fail2ban-client status sshd
+$ sudo fail2ban-client status sshd
 #   fail2ban-client ACTION      talk to the running fail2ban daemon.
 #   status sshd                  show the current state of the "sshd" jail:
 #                                currently banned IPs, total bans, failed attempts.
@@ -256,9 +256,9 @@ sudo fail2ban-client status sshd
 
 The "deployer" user owns the app directories and is the account that runs docker commands. Keeping it separate from your personal sudo login limits blast radius if deploy credentials are ever compromised.
 
-```
+```bash
 # [auishqosrgbwbs01] only
-sudo useradd --system --create-home --shell /bin/bash deployer
+$ sudo useradd --system --create-home --shell /bin/bash deployer
 #   useradd              create a new account.
 #   --system             mark as a system account (uid < 1000). Some services
 #                         treat system accounts specially (e.g. login.defs
@@ -267,29 +267,29 @@ sudo useradd --system --create-home --shell /bin/bash deployer
 #   --shell /bin/bash    give them an interactive shell — we will SSH in as them.
 #   deployer             the username.
 
-sudo mkdir -p /opt/greenbook
+$ sudo mkdir -p /opt/greenbook
 #   mkdir -p PATH        create PATH and any missing parent directories.
 #                         Idempotent — no error if it already exists.
 
-sudo chown deployer:deployer /opt/greenbook
+$ sudo chown deployer:deployer /opt/greenbook
 #   chown USER:GROUP FILE    set ownership. After this, deployer can create
 #                             and modify files under /opt/greenbook without sudo.
 ```
 
-```
+```bash
 # If you want to SSH in as 'deployer', authorise your key:
-sudo mkdir -p /home/deployer/.ssh
+$ sudo mkdir -p /home/deployer/.ssh
 
-sudo cp ~/.ssh/authorized_keys /home/deployer/.ssh/
+$ sudo cp ~/.ssh/authorized_keys /home/deployer/.ssh/
 #   cp SRC DST    copy. We copy YOUR already-authorised keys into deployer's
 #                  account so the same physical key works for both logins.
 
-sudo chown -R deployer:deployer /home/deployer/.ssh
+$ sudo chown -R deployer:deployer /home/deployer/.ssh
 #   chown -R      recursive — apply to the directory and everything inside.
 #                  SSH refuses to use keys not owned by the target user.
 
-sudo chmod 700 /home/deployer/.ssh
-sudo chmod 600 /home/deployer/.ssh/authorized_keys
+$ sudo chmod 700 /home/deployer/.ssh
+$ sudo chmod 600 /home/deployer/.ssh/authorized_keys
 #   chmod MODE FILE    set permissions. SSH is strict:
 #                       700 on .ssh       — rwx only for owner (deployer).
 #                       600 on keys file  — rw only for owner.
@@ -309,19 +309,19 @@ sudo chmod 600 /home/deployer/.ssh/authorized_keys
 
 From your **laptop** (new terminal), try logging in as deployer:
 
-```
-ssh deployer@10.111.11.51
+```bash
+$ ssh deployer@10.111.11.51
 #   You should land in deployer's shell with NO prompt at all. First-time
 #   connection will ask you to accept the host fingerprint — type "yes" once.
 ```
 
 Once in, confirm the identity:
 
-```
-whoami                  # → deployer
-id                      # → uid=NNN(deployer) gid=NNN(deployer) groups=NNN(deployer)
-pwd                     # → /home/deployer
-ls -ld /opt/greenbook   # → owned by deployer:deployer
+```bash
+$ whoami                  # → deployer
+$ id                      # → uid=NNN(deployer) gid=NNN(deployer) groups=NNN(deployer)
+$ pwd                     # → /home/deployer
+$ ls -ld /opt/greenbook   # → owned by deployer:deployer
 ```
 
 If this works silently, you're set. Type `exit` (or `Ctrl-D`) to return to your laptop.
@@ -334,32 +334,32 @@ If this works silently, you're set. Type `exit` (or `Ctrl-D`) to return to your 
 
 **Step 1 — Diagnose from your laptop.** Run with `-v` (verbose) and filter to the authentication lines:
 
-```
-ssh -v deployer@10.111.11.51 2>&1 | grep -E "Offering|Authentications|denied|accepted"
+```bash
+$ ssh -v deployer@10.111.11.51 2>&1 | grep -E "Offering|Authentications|denied|accepted"
 ```
 
 You'll see lines like `Offering public key: /Users/you/.ssh/id_ed25519` and `Authentications that can continue: publickey,password`. If no offered key is accepted, the server does not have the matching public key in `/home/deployer/.ssh/authorized_keys`.
 
 **Step 2 — Log in as your admin user to fix it.** Use the sudo-capable account you used in §3.1–3.7 (NOT `deployer`):
 
-```
-ssh YOUR_ADMIN_USER@10.111.11.51
+```bash
+$ ssh YOUR_ADMIN_USER@10.111.11.51
 ```
 
 **Step 3a — If `~/.ssh/authorized_keys` already exists on your admin user.** Re-run the key-authorisation block, being careful that the target path ends in `authorized_keys` (not just the directory):
 
-```
+```bash
 # Check your admin user actually has an authorized_keys file:
-ls -la ~/.ssh/authorized_keys
+$ ls -la ~/.ssh/authorized_keys
 
-sudo mkdir -p /home/deployer/.ssh
-sudo cp ~/.ssh/authorized_keys /home/deployer/.ssh/authorized_keys
-sudo chown -R deployer:deployer /home/deployer/.ssh
-sudo chmod 700 /home/deployer/.ssh
-sudo chmod 600 /home/deployer/.ssh/authorized_keys
+$ sudo mkdir -p /home/deployer/.ssh
+$ sudo cp ~/.ssh/authorized_keys /home/deployer/.ssh/authorized_keys
+$ sudo chown -R deployer:deployer /home/deployer/.ssh
+$ sudo chmod 700 /home/deployer/.ssh
+$ sudo chmod 600 /home/deployer/.ssh/authorized_keys
 
 # Verify:
-sudo ls -la /home/deployer/.ssh
+$ sudo ls -la /home/deployer/.ssh
 # Expected:
 #   drwx------  2 deployer deployer ... .
 #   -rw-------  1 deployer deployer ... authorized_keys
@@ -367,26 +367,26 @@ sudo ls -la /home/deployer/.ssh
 
 **Step 3b — If `~/.ssh/authorized_keys` does NOT exist on your admin user.** This happens if the VM was provisioned with cloud-init that writes the key somewhere else, or you've been using password auth until now. Paste the public key directly. On your laptop:
 
-```
-cat ~/.ssh/id_ed25519.pub       # or id_rsa.pub — use whichever key you log in with
+```bash
+$ cat ~/.ssh/id_ed25519.pub       # or id_rsa.pub — use whichever key you log in with
 ```
 
 Copy the whole single line (starts with `ssh-ed25519 ` or `ssh-rsa `, ends with a comment like `you@laptop`). Then, on the VM as your admin user:
 
-```
-sudo mkdir -p /home/deployer/.ssh
-sudo tee /home/deployer/.ssh/authorized_keys > /dev/null <<'EOF'
+```bash
+$ sudo mkdir -p /home/deployer/.ssh
+$ sudo tee /home/deployer/.ssh/authorized_keys > /dev/null <<'EOF'
 ssh-ed25519 AAAA...paste-your-public-key-line-here... you@laptop
 EOF
-sudo chown -R deployer:deployer /home/deployer/.ssh
-sudo chmod 700 /home/deployer/.ssh
-sudo chmod 600 /home/deployer/.ssh/authorized_keys
+$ sudo chown -R deployer:deployer /home/deployer/.ssh
+$ sudo chmod 700 /home/deployer/.ssh
+$ sudo chmod 600 /home/deployer/.ssh/authorized_keys
 ```
 
 **Step 4 — Retest from your laptop:**
 
-```
-ssh deployer@10.111.11.51
+```bash
+$ ssh deployer@10.111.11.51
 ```
 
 No prompt, straight to shell. That's success.

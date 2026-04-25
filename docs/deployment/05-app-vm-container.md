@@ -269,11 +269,11 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 
 Three secrets are needed before you can write `/etc/greenbook.env`. Generate each one **on the app VM** so it never lives on your laptop or in shell history elsewhere. Print them once, copy each into the env file in the next step, and don't share them anywhere else.
 
-```
+```bash
 # [auishqosrgbwbs01] — generate all three at once and print
 
-echo "── SESSION_SECRET (cookie signing, 48 bytes / 64 base64 chars) ──"
-openssl rand -base64 48
+$ echo "── SESSION_SECRET (cookie signing, 48 bytes / 64 base64 chars) ──"
+$ openssl rand -base64 48
 #   openssl rand    cryptographically secure random bytes (uses the kernel CSPRNG).
 #   -base64         emit base64-encoded — safe for env files / connection strings.
 #   48              raw byte count BEFORE base64 expansion. Base64 expands 3 bytes
@@ -282,16 +282,16 @@ openssl rand -base64 48
 # bytes; 48 gives you 384 bits of entropy with headroom for rotation (you can
 # concatenate two of these as a comma-separated list — see "rotation" below).
 
-echo ""
-echo "── HONEYPOT_SECRET (honeypot encryption seed, 32 bytes / 44 base64 chars) ──"
-openssl rand -base64 32
+$ echo ""
+$ echo "── HONEYPOT_SECRET (honeypot encryption seed, 32 bytes / 44 base64 chars) ──"
+$ openssl rand -base64 32
 # 32 bytes / 256 bits — matches the seed-length expectation of @nichtsam/helmet's
 # honeypot field encryption. Independent from SESSION_SECRET by design (different
 # subsystem, different rotation cadence).
 
-echo ""
-echo "── DB password (postgres role, 32 bytes / 44 base64 chars) ──"
-openssl rand -base64 32
+$ echo ""
+$ echo "── DB password (postgres role, 32 bytes / 44 base64 chars) ──"
+$ openssl rand -base64 32
 # Use this for the `appuser` Postgres role created in §4.3 — if you didn't
 # generate one there, generate it now and update the role:
 #   On the DB VM:
@@ -325,9 +325,9 @@ Copy the three printed lines into a private note. They go into the file in the n
 
 #### Now write the file
 
-```
+```bash
 # [auishqosrgbwbs01] — run as a user with sudo
-sudo tee /etc/greenbook.env <<'EOF'
+$ sudo tee /etc/greenbook.env <<'EOF'
 # ─── Required ────────────────────────────────────────────
 NODE_ENV=production
 PORT=3000
@@ -368,14 +368,14 @@ RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=300
 EOF
 
-sudo chown root:deployer /etc/greenbook.env
+$ sudo chown root:deployer /etc/greenbook.env
 #   Ownership: root (can write), deployer (can read). Regular users cannot.
 
-sudo chmod 640 /etc/greenbook.env
+$ sudo chmod 640 /etc/greenbook.env
 #   640 = rw for owner (root), r for group (deployer), nothing for others.
 #         The deployer user can read it (needed to run compose); others cannot.
 
-ls -l /etc/greenbook.env
+$ ls -l /etc/greenbook.env
 # Expected: -rw-r----- 1 root deployer
 ```
 
@@ -554,9 +554,9 @@ services:
 
 Before the first build, lay out the deploy root:
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-mkdir -p /opt/greenbook/releases
+$ mkdir -p /opt/greenbook/releases
 #   Each deploy lands under releases/<timestamp>/. /opt/greenbook holds the
 #   compose file, .env (APP_VERSION pin), and deploy.sh.
 ```
@@ -567,15 +567,15 @@ Copy the docker-compose.yml from §6.4 to `/opt/greenbook/docker-compose.yml` be
 
 Assume greenbook source lives at `/opt/greenbook/releases/2026-04-23-1430` (see §8 for the full release-directory workflow; for the first deploy you can clone it anywhere).
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-VERSION=2026-04-23-1430
+$ VERSION=2026-04-23-1430
 #   Shell variable — used several times below. Not exported; lives in this shell.
 
-cd /opt/greenbook/releases/$VERSION
+$ cd /opt/greenbook/releases/$VERSION
 # Navigate to the source tree.
 
-docker build -t greenbook:$VERSION .
+$ docker build -t greenbook:$VERSION .
 #   docker build    build an image from a Dockerfile.
 #   -t NAME:TAG     name and tag for the resulting image.
 #   .               build context — Dockerfile must exist here, and
@@ -583,12 +583,12 @@ docker build -t greenbook:$VERSION .
 # Runtime: cold build ~90-180 s (downloads node:22-alpine + npm ci of ~900
 # packages), warm cache ~15-30 s.
 
-docker tag greenbook:$VERSION greenbook:latest
+$ docker tag greenbook:$VERSION greenbook:latest
 #   docker tag SOURCE TARGET   add an additional name to an existing image.
 #   Now two tags point at the same image. Compose's APP_VERSION:-latest
 #   default means a compose file with no .env still works.
 
-echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
+$ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
 #   Writes the compose environment file that docker compose reads
 #   automatically when it's in the same directory as docker-compose.yml.
 
@@ -596,16 +596,16 @@ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
 # to exist. See §8.6 for the `prisma db push` + `npm run db:seed` bootstrap
 # — skip ahead and run those steps, then return here.
 
-cd /opt/greenbook
-docker compose -f /opt/greenbook/docker-compose.yml up -d
+$ cd /opt/greenbook
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d
 #   docker compose -f FILE COMMAND   use FILE as the compose file.
 #   up                                 create & start services defined in file.
 #   -d                                 detached — run in background.
 
-docker compose -f /opt/greenbook/docker-compose.yml ps
+$ docker compose -f /opt/greenbook/docker-compose.yml ps
 # Expected: service 'app' with STATE=running and (after start_period) HEALTH=healthy.
 
-docker compose -f /opt/greenbook/docker-compose.yml logs -f app
+$ docker compose -f /opt/greenbook/docker-compose.yml logs -f app
 #   logs -f SERVICE    follow (-f) the logs of SERVICE. Ctrl+C to exit.
 # Expected in production (pino JSON, one event per line):
 #   {"level":"info","time":"...","service":"greenbook-prod","msg":"Starting production server"}
@@ -617,18 +617,18 @@ docker compose -f /opt/greenbook/docker-compose.yml logs -f app
 
 Probe from the host:
 
-```
+```bash
 # [auishqosrgbwbs01]
-curl -I http://127.0.0.1:3000/
+$ curl -I http://127.0.0.1:3000/
 #   curl -I URL     HEAD request — just the headers, not the body.
 # Expected: HTTP/1.1 200 OK (or a redirect from greenbook's root — the
 # public / renders the unified AU directory landing page via
 # app/routes/_public/index.tsx).
 
-curl -I http://127.0.0.1:3000/healthz
+$ curl -I http://127.0.0.1:3000/healthz
 # Expected: HTTP/1.1 200 OK (assumes the §6.7 route is in place).
 
-curl -sI http://127.0.0.1:3000/ | grep -i "x-correlation-id\|x-request-id"
+$ curl -sI http://127.0.0.1:3000/ | grep -i "x-correlation-id\|x-request-id"
 # Confirms the correlation middleware is live — every response carries
 # a correlation ID, even on the root route.
 ```
@@ -725,5 +725,161 @@ Both routes are already listed in `skipHealthCheck()` (`server/security.ts:63-65
 > **⚠ Why the DB probe matters for greenbook specifically**
 >
 > Greenbook's Prisma adapter is lazy — the first query after boot opens the pool. Without the `SELECT 1` probe, the healthcheck would report "ok" before any route has touched the DB. A misconfigured `DATABASE_URL` would then only surface when a real request came in. The probe catches this at container start.
+
+### 6.8 Checkpoint — what should be true now
+
+Before moving on to [06 — Nginx and TLS](06-app-vm-nginx-tls.md), every item below should pass. If any fails, the next section will not work — fix before continuing.
+
+```bash
+# 1. The image built and is in the local Docker store.
+$ docker image ls greenbook
+# Pass: at least one row with TAG matching your VERSION (timestamp), SIZE ~700-900 MB.
+
+# 2. The container is running and healthy.
+$ docker compose -f /opt/greenbook/docker-compose.yml ps
+# Pass: STATE=running, HEALTH=healthy. (HEALTH=starting for ~45s after recreation
+# is normal — wait it out and re-check.)
+
+# 3. The container runs as the node user (uid 1000), not root.
+$ docker exec greenbook id
+# Pass: "uid=1000(node) gid=1000(node) groups=1000(node)"
+
+# 4. /healthz returns 200 with status "ok" AND the DB check passes.
+$ curl -s http://127.0.0.1:3000/healthz | head -1
+# Pass: JSON with "status":"ok" and "checks":{"process":"ok","db":"ok"}.
+# "status":"degraded" with "db":"<error>" means Postgres is unreachable —
+# revisit pg_hba (§4.5), DATABASE_URL in /etc/greenbook.env (§6.3),
+# and the firewall rule on the DB VM (§4.7).
+
+# 5. The published port is loopback only.
+$ sudo ss -tlnp | grep ':3000'
+# Pass: "127.0.0.1:3000". NOT "0.0.0.0:3000" or "*:3000".
+
+# 6. Logs are pino JSON (one event per line, NOT pino-pretty colour).
+$ docker logs --tail 5 greenbook | head -1
+# Pass: starts with `{"level":"info"...` or similar JSON.
+# If you see colourised text, NODE_ENV is not "production" inside the container —
+# check the env file and recreate.
+
+# 7. The image is read-only at the root, with /tmp as writable tmpfs.
+$ docker exec greenbook touch /etc/test 2>&1 | grep -i "read-only"
+# Pass: "Read-only file system" error.
+$ docker exec greenbook touch /tmp/test && docker exec greenbook rm /tmp/test
+# Pass: both succeed silently (writable tmpfs at /tmp).
+```
+
+If all seven pass, the application container is production-ready. Move on to nginx + TLS.
+
+### 6.9 Common build and runtime failures
+
+The four failures below account for ~80% of "I followed the guide but it didn't work" reports against §6. Recognise the symptom, jump to the fix.
+
+#### Failure 1: `prisma generate` fails during `npm ci` with "Environment variable not found: DATABASE_URL"
+
+**Symptom (build log)**:
+
+```
+> greenbook@0.0.0 postinstall
+> prisma generate
+
+Environment variables loaded from .env
+Error: Environment variable not found: DATABASE_URL.
+  -->  prisma/schema.prisma:NN
+```
+
+**Why**: `prisma.config.ts` reads `DATABASE_URL` at load time. Inside a Docker build there's no `.env` file (excluded by `.dockerignore`, correctly), so the variable is unset.
+
+**Fix**: the Dockerfile in §6.1 already passes a `DUMMY_DATABASE_URL` build-arg specifically for this case:
+
+```dockerfile
+ARG DUMMY_DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy?schema=public
+ENV DATABASE_URL=${DUMMY_DATABASE_URL}
+```
+
+If you're seeing this error, your Dockerfile is missing those two lines OR they're below the `RUN npm ci` instead of above it. Make sure the `ARG` + `ENV` come BEFORE `RUN npm ci` in the deps stage.
+
+#### Failure 2: At runtime, Prisma throws "PrismaClientInitializationError: error reading certificate"
+
+**Symptom (container logs)**:
+
+```
+PrismaClientInitializationError: error reading certificate file ".../node_modules/@prisma/engines/..."
+```
+
+or
+
+```
+Error opening a TLS connection: error:0A000086:SSL routines:tls_post_process_server_certificate:certificate verify failed
+```
+
+**Why**: alpine doesn't ship `openssl` by default. `@prisma/adapter-pg` uses `openssl` during connection setup on some code paths.
+
+**Fix**: confirm the runtime stage of the Dockerfile has `apk add --no-cache openssl`:
+
+```dockerfile
+FROM node:${NODE_VERSION}-alpine AS runtime
+...
+RUN apk add --no-cache openssl dumb-init
+```
+
+If missing, add it, rebuild, redeploy.
+
+#### Failure 3: At runtime, the container immediately exits with `Error: Cannot find module '/app/server.js'`
+
+**Symptom (container logs)**:
+
+```
+Error: Cannot find module '/app/server.js'
+    at Module._resolveFilename (...)
+```
+
+**Why**: the runtime stage didn't COPY the `server.js` from the build stage. Easy to forget when you start from a generic Dockerfile.
+
+**Fix**: confirm the runtime stage has all five COPYs from §6.1:
+
+```dockerfile
+COPY --from=build --chown=node:node /app/package.json      ./package.json
+COPY --from=build --chown=node:node /app/package-lock.json ./package-lock.json
+COPY --from=build --chown=node:node /app/node_modules      ./node_modules
+COPY --from=build --chown=node:node /app/build             ./build
+COPY --from=build --chown=node:node /app/server.js         ./server.js   ← THIS
+COPY --from=build --chown=node:node /app/server            ./server      ← AND THIS
+COPY --from=build --chown=node:node /app/app/generated     ./app/generated
+```
+
+The two most-commonly-missed ones are `server.js` (the root-level Express bootstrap) and `server/` (the directory containing correlation, logger, security, sentry, shutdown helpers — all imported by server.js).
+
+#### Failure 4: Container starts but Prisma queries fail with `ENOENT: no such file or directory, open '/Users/...'`
+
+**Symptom (container logs at first DB query)**:
+
+```
+PrismaClientInitializationError: ENOENT: no such file or directory,
+  open '/Users/binalfew/Projects/greenbook/app/generated/prisma/...'
+```
+
+**Why**: Prisma 7 bakes absolute host paths into its generated client when `prisma generate` runs. If the host filesystem layout is `/Users/...` (macOS), and the container runs Linux (where `/Users` doesn't exist), every query fails because the client tries to read its own metadata from a path that's not in the image.
+
+**Fix**: the build must regenerate the Prisma client INSIDE the deps stage, NOT copy a locally-generated one in. Two checks:
+
+```bash
+# (1) `app/generated` IS in .dockerignore:
+$ grep -E '^app/generated' /Users/binalfew/Projects/greenbook/.dockerignore
+# Pass: "app/generated" present.
+
+# (2) The deps stage runs `npm ci` (which fires postinstall → prisma generate)
+# AFTER copying prisma/ schema. The §6.1 Dockerfile is correct on both counts.
+```
+
+If `app/generated` is missing from `.dockerignore`, your locally-generated client is shipping into the image. Add the line, delete `app/generated/` from your local repo (`rm -rf app/generated`), rebuild — the deps stage will regenerate cleanly inside the image.
+
+> **ℹ When in doubt, check the runtime image directly**
+>
+> ```bash
+> $ docker run --rm --entrypoint sh greenbook:VERSION -c \
+>     'ls -la /app/server.js /app/server/app.ts /app/build/server/index.js /app/app/generated/prisma/client.js 2>&1 | head'
+> ```
+>
+> All four paths must exist and be owned by `node:node`. Any "No such file or directory" tells you exactly which COPY is missing.
 
 ---

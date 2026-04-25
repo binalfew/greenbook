@@ -24,19 +24,19 @@ Version 1.3 · April 2026 · Greenbook-specific · Multi-file edition
 
 ## File index
 
-| #   | File                                             | What's in it                                                                                       | Where it runs         |
-| --- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | --------------------- |
-| 01  | [Pre-flight](01-pre-flight.md)                   | Ubuntu hardening, SSH key-only auth, UFW, fail2ban, deploy user                                    | BOTH VMs              |
-| 02  | [Database VM setup](02-db-vm-setup.md)           | PostgreSQL 16, SCRAM-SHA-256, `greenbook` DB + `appuser`, pg_hba, tuning                           | DB VM                 |
-| 03  | [Database VM backups](03-db-vm-backups.md)       | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                      | DB VM                 |
-| 04  | [App VM Docker setup](04-app-vm-docker.md)       | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                    | App VM                |
-| 05  | [Application container](05-app-vm-container.md)  | Hardened Dockerfile, `.dockerignore`, `/etc/greenbook.env`, compose, `/healthz`                    | App VM                |
-| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)          | Nginx reverse proxy, streaming SSR / SSE / PWA tuning, Let's Encrypt or internal CA                | App VM                |
-| 07  | [Deploy workflow](07-deploy-workflow.md)         | Build path A/B, schema (`db push` vs `migrate`), env files, `deploy.sh`, rollback, seed            | App VM (+ build host) |
-| 08  | [Day-2 operations](08-day-2-operations.md)       | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates | BOTH VMs              |
-| 09  | [Hardening checklist](09-hardening-checklist.md) | Pre-go-live audit and quarterly review                                                             | BOTH VMs              |
-| 10  | [Troubleshooting](10-troubleshooting.md)         | 502 / restart loop / DB unreachable / cert / disk / latency                                        | BOTH VMs              |
-| 11  | [Future Graylog](11-future-graylog.md)           | Architecture + sizing + install outline (planning only)                                            | future 3rd VM         |
+| #   | File                                             | What's in it                                                                                                             | Where it runs         |
+| --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| 01  | [Pre-flight](01-pre-flight.md)                   | Ubuntu hardening, SSH key-only auth, UFW, fail2ban, deploy user                                                          | BOTH VMs              |
+| 02  | [Database VM setup](02-db-vm-setup.md)           | PostgreSQL 16, SCRAM-SHA-256, `greenbook` DB + `appuser`, pg_hba, tuning                                                 | DB VM                 |
+| 03  | [Database VM backups](03-db-vm-backups.md)       | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                                            | DB VM                 |
+| 04  | [App VM Docker setup](04-app-vm-docker.md)       | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                                          | App VM                |
+| 05  | [Application container](05-app-vm-container.md)  | Hardened Dockerfile, `.dockerignore`, `/etc/greenbook.env`, compose, `/healthz`, checkpoint, common-failures playbook    | App VM                |
+| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)          | Nginx reverse proxy, streaming SSR / SSE / PWA tuning, Let's Encrypt or internal CA                                      | App VM                |
+| 07  | [Deploy workflow](07-deploy-workflow.md)         | First-deploy linear walkthrough, build path A/B, schema (`db push` vs `migrate`), env files, `deploy.sh`, rollback, seed | App VM (+ build host) |
+| 08  | [Day-2 operations](08-day-2-operations.md)       | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates                       | BOTH VMs              |
+| 09  | [Hardening checklist](09-hardening-checklist.md) | Pre-go-live audit and quarterly review                                                                                   | BOTH VMs              |
+| 10  | [Troubleshooting](10-troubleshooting.md)         | 502 / restart loop / DB unreachable / cert / disk / latency                                                              | BOTH VMs              |
+| 11  | [Future Graylog](11-future-graylog.md)           | Architecture + sizing + install outline (planning only)                                                                  | future 3rd VM         |
 
 ### Appendices
 

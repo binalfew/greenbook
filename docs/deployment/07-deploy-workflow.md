@@ -14,8 +14,8 @@ The goal of this workflow is that any deploy (including rollback) is: one comman
 
 ### 8.1 Directory layout
 
-```
-/opt/greenbook/
+```bash
+$ /opt/greenbook/
 ├── docker-compose.yml        # checked-in compose file (§6.4)
 ├── .env                      # written by deploy.sh; pins APP_VERSION
 ├── releases/
@@ -29,6 +29,101 @@ The goal of this workflow is that any deploy (including rollback) is: one comman
 
 Greenbook can be deployed two ways. Pick the one that matches your network reality — they differ only in **where the image is built**; everything from §8.2.1 onward (schema, env, compose-up, healthcheck) is identical.
 
+#### First-time deploy — the linear walkthrough
+
+If this is your first deploy and you don't want to bounce between Path A/B, schema, env, promote, and seed sections to figure out the order, use this single-sequence walkthrough. It assumes you've completed [01–06](README.md) and the DB is empty.
+
+```bash
+# ────────────────────────────────────────────────────────────────
+# STEP 1. On the app VM as deployer — pick a version tag.
+# ────────────────────────────────────────────────────────────────
+$ ssh deployer@10.111.11.51
+$ VERSION=$(date -u +%Y-%m-%d-%H%M)
+$ echo "Building greenbook:$VERSION"
+
+# ────────────────────────────────────────────────────────────────
+# STEP 2. Get the image onto the VM. Choose A or B based on
+#         whether `curl https://github.com/` works on this VM.
+# ────────────────────────────────────────────────────────────────
+
+# (Path A — open egress)
+$ cd /opt/greenbook/releases
+$ git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git $VERSION
+$ cd $VERSION
+$ docker build -t greenbook:$VERSION .
+
+# (Path B — restricted egress: build on your laptop, then on the VM:)
+# $ scp greenbook-$VERSION.tar.gz deployer@10.111.11.51:/tmp/
+# $ ssh deployer@10.111.11.51
+# $ gunzip -c /tmp/greenbook-$VERSION.tar.gz | docker load
+# $ rm /tmp/greenbook-$VERSION.tar.gz
+
+# Either way, after this step:
+$ docker image ls greenbook:$VERSION
+# Expected: one row, ~700-900 MB.
+
+# ────────────────────────────────────────────────────────────────
+# STEP 3. Apply the schema (db push for greenbook today).
+# ────────────────────────────────────────────────────────────────
+$ docker run --rm \
+    --env-file /etc/greenbook.env \
+    greenbook:$VERSION \
+    npx prisma db push --skip-generate
+# Expected: "The database is already in sync with the Prisma schema." (re-deploy)
+#       or  "🚀  Your database is now in sync with your schema." (first time)
+
+# ────────────────────────────────────────────────────────────────
+# STEP 4. Seed the DB (FIRST DEPLOY ONLY — skip on re-deploys).
+# ────────────────────────────────────────────────────────────────
+$ docker run --rm \
+    --env-file /etc/greenbook.env \
+    greenbook:$VERSION \
+    npx tsx prisma/seed.ts
+# Expected runtime: 5-30s. Creates roles, permissions, feature flags,
+# the system tenant, and demo AUC leadership data.
+
+# ────────────────────────────────────────────────────────────────
+# STEP 5. Pin the version compose will use.
+# ────────────────────────────────────────────────────────────────
+$ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
+
+# ────────────────────────────────────────────────────────────────
+# STEP 6. Bring the container up.
+# ────────────────────────────────────────────────────────────────
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d
+$ docker compose -f /opt/greenbook/docker-compose.yml ps
+# Expected: STATE=running. HEALTH starts as "starting" for ~45s, then "healthy".
+
+# ────────────────────────────────────────────────────────────────
+# STEP 7. Verify.
+# ────────────────────────────────────────────────────────────────
+$ curl -s http://127.0.0.1:3000/healthz | head -1
+# Expected JSON: "status":"ok", "checks":{"process":"ok","db":"ok"},
+# "version":"<your VERSION>"
+$ curl -sI https://greenbook.au.int/  | grep -E "HTTP|strict-transport"
+# Expected: "HTTP/2 200" and an HSTS header.
+
+# ────────────────────────────────────────────────────────────────
+# STEP 8. Rotate the seeded demo passwords (FIRST DEPLOY ONLY).
+# ────────────────────────────────────────────────────────────────
+# Log into the admin UI as admin@africanunion.org / admin123,
+# IMMEDIATELY change the admin password, then delete the three demo
+# users (manager@, focal@, user@) before opening the URL to anyone
+# else. See §8.6 for details.
+```
+
+That's it. From here on, re-deploys skip steps 4 and 8 — six commands instead of eight.
+
+> **⚠ Don't skip step 4 on a fresh database**
+>
+> Greenbook's auth refuses every login until roles + permissions exist (no implicit "admin" role). Step 4 is the only thing that creates them. If you skip it, you can't log in to fix it — you'd have to seed manually via psql.
+
+> **ℹ "Where do I get the env file from?" — STEP 0 if you haven't already**
+>
+> Steps 3, 4, and 6 all rely on `/etc/greenbook.env` existing on the VM. If you didn't create it during [05 — Application container §6.3](05-app-vm-container.md), do that BEFORE step 1: it's a 5-minute openssl + tee sequence.
+
+The remaining sections in §8 (Path A/B detailed walk-throughs, schema-deploy variants, env-file model, deploy.sh, rollback) are the reference material that step 1–8 above abstracts over. Read on if you want to know WHY each step exists.
+
 > **ℹ Which path should I use?**
 >
 > **Path A — Build on the VM** is simplest when the app VM has open outbound internet (or a working HTTPS proxy that reaches `github.com`, `registry.npmjs.org`, and `registry-1.docker.io`). The VM clones the repo, runs `docker build`, and the new image lands directly in the local Docker image store.
@@ -37,10 +132,10 @@ Greenbook can be deployed two ways. Pick the one that matches your network reali
 >
 > A quick test on the app VM tells you which path applies:
 >
-> ```
+> ```bash
 > # [auishqosrgbwbs01] as deployer
-> curl -fsS --connect-timeout 10 https://github.com/ -o /dev/null && echo "Path A works"
-> docker pull --quiet hello-world  >/dev/null 2>&1 && echo "Docker Hub reachable"
+> $ curl -fsS --connect-timeout 10 https://github.com/ -o /dev/null && echo "Path A works"
+> $ docker pull --quiet hello-world  >/dev/null 2>&1 && echo "Docker Hub reachable"
 > ```
 >
 > If both lines print success, Path A is open. If either fails, use Path B.
@@ -49,17 +144,17 @@ Greenbook can be deployed two ways. Pick the one that matches your network reali
 
 All commands as the `deployer` user.
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-VERSION=$(date -u +%Y-%m-%d-%H%M)
+$ VERSION=$(date -u +%Y-%m-%d-%H%M)
 #   VERSION=VALUE    shell variable (not exported).
 #   $(CMD)           command substitution — captures stdout of CMD.
 #   date -u +...     UTC timestamp. Use UTC so versions sort consistently
 #                    regardless of the build host's timezone.
 # Timestamp-based versions are monotonic, no duplicates, easy to sort.
 
-cd /opt/greenbook/releases
-git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git $VERSION
+$ cd /opt/greenbook/releases
+$ git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git $VERSION
 #   git clone URL DIR      clone URL into a new directory DIR.
 #   --depth 1              shallow clone — download only the latest commit,
 #                          not the full history. Much faster for deploys.
@@ -67,16 +162,16 @@ git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git $VERSION
 # Assumes your SSH key is authorised on the git server and loaded in the
 # local ssh-agent. Can also use an HTTPS URL with a deploy token.
 
-cd $VERSION
+$ cd $VERSION
 
-docker build -t greenbook:$VERSION .
+$ docker build -t greenbook:$VERSION .
 #   docker build    build an image from this directory's Dockerfile.
 #   -t NAME:TAG     name the image. Version stays permanent; rollback
 #                    works by pointing compose at an older tag.
 #   .               build context — this dir.
 # Runtime depends on cache state: cold build ~90-180 s, warm ~10-30 s.
 
-docker tag greenbook:$VERSION greenbook:latest
+$ docker tag greenbook:$VERSION greenbook:latest
 # Optional: also tag as "latest". Useful as a safety default for compose
 # when .env is missing. Not used by the deploy flow itself.
 ```
@@ -97,33 +192,33 @@ The app VM ends up with: a loaded image, ready to `docker compose up`. It never 
 
 **Step B1 — On your laptop (or build host)** — anywhere with internet, Docker, and your GitHub SSH key:
 
-```
+```bash
 # Pick a stable artefacts directory outside the repo
-mkdir -p ~/greenbook-builds && cd ~/greenbook-builds
+$ mkdir -p ~/greenbook-builds && cd ~/greenbook-builds
 
 # Fresh shallow clone at the ref you're shipping
-rm -rf src
-git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git src
-cd src
+$ rm -rf src
+$ git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git src
+$ cd src
 
 # Tag the build (UTC for consistent sort across machines/timezones)
-VERSION=$(date -u +%Y-%m-%d-%H%M)
-echo "Building greenbook:$VERSION"
+$ VERSION=$(date -u +%Y-%m-%d-%H%M)
+$ echo "Building greenbook:$VERSION"
 ```
 
 **Step B2 — Build for the VM's architecture.** The greenbook VMs are x86_64 (amd64). If your laptop is also x86_64, plain `docker build` works. If you're on Apple Silicon (arm64), use `buildx` with `--platform linux/amd64` to cross-build, or you'll get "exec format error" on the VM:
 
-```
+```bash
 # Check your local arch:
-uname -m
+$ uname -m
 #   x86_64  → use plain `docker build`
 #   arm64   → use buildx with the platform flag (slower, ~3-5x via emulation)
 
 # x86_64 host:
-docker build -t greenbook:$VERSION .
+$ docker build -t greenbook:$VERSION .
 
 # Apple Silicon (arm64) host:
-docker buildx build --platform linux/amd64 -t greenbook:$VERSION --load .
+$ docker buildx build --platform linux/amd64 -t greenbook:$VERSION --load .
 #   --platform linux/amd64    target architecture
 #   --load                    drop the result into the local docker store
 #                              (default buildx behaviour pushes to a registry)
@@ -131,62 +226,62 @@ docker buildx build --platform linux/amd64 -t greenbook:$VERSION --load .
 
 **Step B3 — Verify the image before shipping.** A 30-second sanity check on your laptop catches most "the build looked fine but the image is broken" failures:
 
-```
+```bash
 # Image exists and has reasonable size:
-docker image ls greenbook:$VERSION
+$ docker image ls greenbook:$VERSION
 # Expected: ~700-900 MB. Anything under 200 MB means COPY paths
 # in the Dockerfile didn't pick up server.js / build / node_modules.
 
 # Critical files are present in the runtime image:
-docker run --rm --entrypoint sh greenbook:$VERSION -c \
+$ docker run --rm --entrypoint sh greenbook:$VERSION -c \
   'ls /app/server.js /app/server/app.ts /app/build/server/index.js /app/app/generated/prisma/client.js'
 # All four must exist; any "No such file" means the runtime stage
 # is missing a COPY.
 
 # Container starts as the node user (uid 1000), not root:
-docker run --rm --entrypoint id greenbook:$VERSION
+$ docker run --rm --entrypoint id greenbook:$VERSION
 # Expected: uid=1000(node) gid=1000(node) groups=1000(node)
 ```
 
 **Step B4 — Save and compress the image:**
 
-```
-cd ..
-docker save greenbook:$VERSION | gzip > greenbook-$VERSION.tar.gz
-ls -lh greenbook-$VERSION.tar.gz
+```bash
+$ cd ..
+$ docker save greenbook:$VERSION | gzip > greenbook-$VERSION.tar.gz
+$ ls -lh greenbook-$VERSION.tar.gz
 # Expected: ~250-400 MB compressed. The raw save is ~700-900 MB; gzip
 # typically gets it to a third of that.
 ```
 
 **Step B5 — Ship to the app VM:**
 
-```
-scp greenbook-$VERSION.tar.gz deployer@10.111.11.51:/tmp/
+```bash
+$ scp greenbook-$VERSION.tar.gz deployer@10.111.11.51:/tmp/
 # Transfer time is bounded by your VPN bandwidth. ~250 MB over a 50 Mbps
 # link = ~40 s; over a 5 Mbps link = ~7 minutes. Plan accordingly.
 ```
 
 **Step B6 — On the app VM (deployer):**
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-VERSION=2026-04-25-1030    # match what you set in step B1
+$ VERSION=2026-04-25-1030    # match what you set in step B1
 
 # Load the image into the local Docker store:
-gunzip -c /tmp/greenbook-$VERSION.tar.gz | docker load
+$ gunzip -c /tmp/greenbook-$VERSION.tar.gz | docker load
 # Expected: "Loaded image: greenbook:<VERSION>"
 # Runtime: 10-30 s depending on disk speed; this is the slowest step.
 
 # Verify the image is registered locally and tagged correctly:
-docker image ls greenbook
+$ docker image ls greenbook
 # Should show greenbook:<VERSION> with size ~700-900 MB.
 # Note the IMAGE ID — useful if compose ever caches a stale layer.
 
 # Optional: also tag as latest for the compose default:
-docker tag greenbook:$VERSION greenbook:latest
+$ docker tag greenbook:$VERSION greenbook:latest
 
 # Clean up the tarball — it's redundant now:
-rm /tmp/greenbook-$VERSION.tar.gz
+$ rm /tmp/greenbook-$VERSION.tar.gz
 ```
 
 The image is now in the local Docker store. Continue at §8.2.1 (schema changes) below — exactly the same as Path A from this point on.
@@ -220,9 +315,9 @@ Greenbook currently uses **`prisma db push`** as its schema workflow — no `pri
 
 **Path A — `prisma db push` (current greenbook default)**
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer — still in $VERSION directory
-docker run --rm \
+$ docker run --rm \
   --env-file /etc/greenbook.env \
   greenbook:$VERSION \
   npx prisma db push --skip-generate
@@ -252,9 +347,9 @@ docker run --rm \
 
 **Path B — `prisma migrate deploy` (once you have a migrations dir)**
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-docker run --rm \
+$ docker run --rm \
   --env-file /etc/greenbook.env \
   greenbook:$VERSION \
   npx prisma migrate deploy
@@ -330,23 +425,23 @@ Or just rerun `deploy.sh` with the same image — the version pin write triggers
 
 `SESSION_SECRET` supports zero-downtime rotation because greenbook parses it as a comma-separated list (covered in §6.3). The deploy-time motion is:
 
-```
+```bash
 # 1. Generate the new secret on your laptop:
-NEW_SECRET=$(openssl rand -base64 48)
+$ NEW_SECRET=$(openssl rand -base64 48)
 
 # 2. SSH to the app VM, edit /etc/greenbook.env:
-sudoedit /etc/greenbook.env
+$ sudoedit /etc/greenbook.env
 #    Change:  SESSION_SECRET=<current>
 #    To:      SESSION_SECRET=<new>,<current>
 #    Save and exit.
 
 # 3. Recreate the container:
-docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
 
 # 4. After your session TTL has fully passed (typically 30 days), edit
 #    again and drop the old value:
 #    SESSION_SECRET=<new>
-docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
 ```
 
 `HONEYPOT_SECRET`, `RESEND_API_KEY`, and `DATABASE_URL` do NOT support graceful rotation — change them and live tokens / connections are invalidated. Plan a brief maintenance window for those.
@@ -355,11 +450,11 @@ docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
 
 A typo in `DATABASE_URL` or a missing `HONEYPOT_SECRET` causes greenbook to throw "Invalid environment variables" at boot (per `app/utils/config/env.server.ts`). Catch this BEFORE recreating the production container:
 
-```
+```bash
 # Run a one-shot container with the env file applied and just print the
 # parsed env. Doesn't connect to the DB, doesn't open ports — just boots
 # the env validator and exits.
-docker run --rm --env-file /etc/greenbook.env greenbook:$VERSION \
+$ docker run --rm --env-file /etc/greenbook.env greenbook:$VERSION \
   node -e "require('./build/server/index.js'); console.log('env OK')"
 # Successful exit → env file parses, all required vars present.
 # "Invalid environment variables" → fix /etc/greenbook.env before deploying.
@@ -367,9 +462,9 @@ docker run --rm --env-file /etc/greenbook.env greenbook:$VERSION \
 
 Or simpler — boot the container with healthcheck and watch for the env-validation throw in logs:
 
-```
-docker compose -f /opt/greenbook/docker-compose.yml up -d
-docker compose -f /opt/greenbook/docker-compose.yml logs --tail=50 app
+```bash
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d
+$ docker compose -f /opt/greenbook/docker-compose.yml logs --tail=50 app
 # Look for a clean "Server is running on http://localhost:3000".
 # If you see "Invalid environment variables" near the top, the container
 # crashes immediately — fix the env file and re-recreate.
@@ -379,16 +474,16 @@ docker compose -f /opt/greenbook/docker-compose.yml logs --tail=50 app
 
 Now that the image is loaded (Path A or Path B), the schema is up to date (§8.2.1), and `/etc/greenbook.env` is present + correct (§8.2.2), pin the version and bring up the container:
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
+$ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
 #   Writes the compose env file that docker compose reads automatically.
 #   Overwrites any previous value. After this, compose resolves
 #   ${APP_VERSION} (used in docker-compose.yml) to the new version tag.
 #   This is the file from §8.2.2's "two-file model" table — the version-
 #   pin file, not the secrets file.
 
-docker compose -f /opt/greenbook/docker-compose.yml up -d
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d
 #   -f FILE     explicit path to the compose file. Works from ANY directory.
 #   up          create and start services. For services that already exist
 #               with the same image & config, this is a no-op; for services
@@ -398,28 +493,28 @@ docker compose -f /opt/greenbook/docker-compose.yml up -d
 # healthcheck to pass. Downtime is typically 2-5 seconds — the recreation
 # gap. The job queue drains during stop_grace_period (30 s ceiling).
 
-docker compose -f /opt/greenbook/docker-compose.yml ps
+$ docker compose -f /opt/greenbook/docker-compose.yml ps
 # Check that STATE=running and HEALTH=healthy.
 # If HEALTH=starting longer than ~45 s, the healthcheck loop hasn't passed
 # yet — see §12.1 (502 Bad Gateway from Nginx) for diagnosis.
 
 # Confirm the right version is actually serving:
-curl -s http://127.0.0.1:3000/healthz | grep -E '"version"'
+$ curl -s http://127.0.0.1:3000/healthz | grep -E '"version"'
 # Expected: "version":"<your VERSION>"
 ```
 
 ### 8.3 Rollback
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer — tags are still on disk from previous builds
-docker image ls greenbook
+$ docker image ls greenbook
 #   Lists all greenbook images. The TAG column shows every version you've built.
 #   Retention depends on whether you prune (§9.4).
 
 # Pick the previous version — e.g. 2026-04-22-0930 — and switch back:
-PREV=2026-04-22-0930
-echo "APP_VERSION=$PREV" > /opt/greenbook/.env
-docker compose -f /opt/greenbook/docker-compose.yml up -d
+$ PREV=2026-04-22-0930
+$ echo "APP_VERSION=$PREV" > /opt/greenbook/.env
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d
 # That's the whole rollback. No rebuild needed — we're reusing an image
 # that's already on disk.
 ```
@@ -432,9 +527,9 @@ docker compose -f /opt/greenbook/docker-compose.yml up -d
 
 Docker already restarts containers on daemon start (thanks to `restart: unless-stopped` in compose). But if you want an explicit systemd unit that runs "docker compose up" on boot — useful for correct ordering relative to other services — create the unit:
 
-```
+```bash
 # [auishqosrgbwbs01]
-sudo tee /etc/systemd/system/greenbook.service <<'EOF'
+$ sudo tee /etc/systemd/system/greenbook.service <<'EOF'
 [Unit]
 Description=Greenbook (docker compose)
 Requires=docker.service
@@ -465,10 +560,10 @@ WantedBy=multi-user.target
 # Start with the standard multi-user runlevel (normal boot).
 EOF
 
-sudo systemctl daemon-reload
+$ sudo systemctl daemon-reload
 #   daemon-reload   tell systemd to pick up the new unit file.
 
-sudo systemctl enable greenbook.service
+$ sudo systemctl enable greenbook.service
 #   enable          create the WantedBy symlink. Unit will auto-start on boot.
 # Note: do NOT use --now, since "docker compose up -d" was already run
 # manually in §8.2 and the container is running.
@@ -478,7 +573,7 @@ sudo systemctl enable greenbook.service
 
 Save as `/opt/greenbook/deploy.sh`, chmod +x. Usage: `./deploy.sh <git-ref>`.
 
-```
+```bash
 #!/usr/bin/env bash
 # /opt/greenbook/deploy.sh
 #
@@ -493,15 +588,15 @@ set -euo pipefail
 #                  not just the last. Without this, "false | true" returns 0.
 # These three flags together make bash actually safe for production scripts.
 
-RELEASE_BASE=/opt/greenbook/releases
-COMPOSE_FILE=/opt/greenbook/docker-compose.yml
-ENV_FILE=/opt/greenbook/.env
-ENV_RUNTIME=/etc/greenbook.env
-REPO_URL=git@github.com:binalfew/greenbook.git
+$ RELEASE_BASE=/opt/greenbook/releases
+$ COMPOSE_FILE=/opt/greenbook/docker-compose.yml
+$ ENV_FILE=/opt/greenbook/.env
+$ ENV_RUNTIME=/etc/greenbook.env
+$ REPO_URL=git@github.com:binalfew/greenbook.git
 # Schema workflow: "push" (current greenbook) or "migrate" (after baseline).
-SCHEMA_MODE=${SCHEMA_MODE:-push}
+$ SCHEMA_MODE=${SCHEMA_MODE:-push}
 
-if [ $# -lt 1 ]; then
+$ if [ $# -lt 1 ]; then
   echo "usage: $0 <git-ref>"
   exit 1
 fi
@@ -509,25 +604,25 @@ fi
 #   [ $# -lt 1 ]   true if fewer than 1 argument was given.
 # Every deploy requires an explicit ref — no "just deploy whatever's latest".
 
-REF="$1"
+$ REF="$1"
 #   $1            first positional argument.
 
-VERSION=$(date +%Y-%m-%d-%H%M)
-RELEASE_DIR="$RELEASE_BASE/$VERSION"
+$ VERSION=$(date +%Y-%m-%d-%H%M)
+$ RELEASE_DIR="$RELEASE_BASE/$VERSION"
 
-echo "==> cloning $REF into $RELEASE_DIR"
-git clone --depth 1 --branch "$REF" "$REPO_URL" "$RELEASE_DIR"
+$ echo "==> cloning $REF into $RELEASE_DIR"
+$ git clone --depth 1 --branch "$REF" "$REPO_URL" "$RELEASE_DIR"
 #   Shallow clone of the specified ref. If $REF is a branch or tag, this
 #   works directly. For a specific COMMIT SHA, clone the repo first and
 #   checkout the SHA separately — git clone --branch doesn't take SHAs.
 
-cd "$RELEASE_DIR"
+$ cd "$RELEASE_DIR"
 
-echo "==> building image greenbook:$VERSION"
-docker build -t "greenbook:$VERSION" .
+$ echo "==> building image greenbook:$VERSION"
+$ docker build -t "greenbook:$VERSION" .
 
-echo "==> applying schema changes ($SCHEMA_MODE)"
-if [ "$SCHEMA_MODE" = "migrate" ]; then
+$ echo "==> applying schema changes ($SCHEMA_MODE)"
+$ if [ "$SCHEMA_MODE" = "migrate" ]; then
   docker run --rm --env-file "$ENV_RUNTIME" \
     "greenbook:$VERSION" npx prisma migrate deploy
 else
@@ -538,14 +633,14 @@ else
 fi
 # Exits non-zero on failure — set -e aborts the deploy here.
 
-echo "==> promoting to $VERSION"
-echo "APP_VERSION=$VERSION" > "$ENV_FILE"
-docker compose -f "$COMPOSE_FILE" up -d
+$ echo "==> promoting to $VERSION"
+$ echo "APP_VERSION=$VERSION" > "$ENV_FILE"
+$ docker compose -f "$COMPOSE_FILE" up -d
 
-echo "==> waiting for healthy status (max 90s)"
+$ echo "==> waiting for healthy status (max 90s)"
 # 90s because start_period is 45s + the DB probe adds a little latency on
 # first query after container recreation.
-for i in {1..18}; do
+$ for i in {1..18}; do
   STATUS=$(docker inspect --format='{{.State.Health.Status}}' greenbook 2>/dev/null || echo "starting")
   if [ "$STATUS" = "healthy" ]; then
     echo "==> healthy — done."
@@ -555,23 +650,23 @@ for i in {1..18}; do
   sleep 5
 done
 
-echo "!! still not healthy after 90s. investigate with:"
-echo "     docker compose -f $COMPOSE_FILE logs --tail=100 app"
-exit 1
+$ echo "!! still not healthy after 90s. investigate with:"
+$ echo "     docker compose -f $COMPOSE_FILE logs --tail=100 app"
+$ exit 1
 ```
 
 Give it the execute bit and run:
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer
-chmod +x /opt/greenbook/deploy.sh
+$ chmod +x /opt/greenbook/deploy.sh
 
-/opt/greenbook/deploy.sh main
+$ /opt/greenbook/deploy.sh main
 #   Clones main, builds greenbook:<timestamp>, applies schema (push or
 #   migrate per SCHEMA_MODE), promotes the new version, and waits for health.
 
 # Once you migrate to versioned migrations:
-SCHEMA_MODE=migrate /opt/greenbook/deploy.sh v1.3.0
+$ SCHEMA_MODE=migrate /opt/greenbook/deploy.sh v1.3.0
 ```
 
 ### 8.6 First-run bootstrap (one-time)
@@ -580,23 +675,23 @@ Greenbook ships a seed script (`prisma/seed.ts`) that creates the baseline data 
 
 Run this ONCE against a fresh database, before the first real deploy:
 
-```
+```bash
 # [auishqosrgbwbs01] as deployer — after §8.2 built the first image
-VERSION=<your-first-image-tag>
+$ VERSION=<your-first-image-tag>
 
 # Step 1 — apply the schema:
-docker run --rm --env-file /etc/greenbook.env \
+$ docker run --rm --env-file /etc/greenbook.env \
   greenbook:$VERSION npx prisma db push --skip-generate
 
 # Step 2 — seed:
-docker run --rm --env-file /etc/greenbook.env \
+$ docker run --rm --env-file /etc/greenbook.env \
   greenbook:$VERSION npx tsx prisma/seed.ts
 # Runtime: ~5-30 seconds. Creates the system tenant, the "admin" / "manager" /
 # "focal" / "user" roles with permissions, the FF_DIRECTORY + FF_PUBLIC_DIRECTORY
 # feature flags opted-in for the system tenant, and AUC demo leadership.
 
 # Step 3 — verify (optional):
-docker run --rm --env-file /etc/greenbook.env \
+$ docker run --rm --env-file /etc/greenbook.env \
   greenbook:$VERSION \
   node -e "import('./app/generated/prisma/client.js').then(async ({PrismaClient}) => {
     const p = new PrismaClient();
