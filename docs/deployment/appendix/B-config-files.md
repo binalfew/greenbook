@@ -63,29 +63,29 @@ host    greenbook appuser  10.111.11.51/32    scram-sha-256
 
 ### B.4 /etc/greenbook.env (template)
 
-```bash
+```ini
 # ─── Required ────────────────────────────────────────────
-$ NODE_ENV=production
-$ PORT=3000
-$ DATABASE_URL=postgres://appuser:STRONG_PASSWORD@10.111.11.50:5432/greenbook
-$ SESSION_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_48
-$ HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
-$ RESEND_API_KEY=re_REPLACE_WITH_REAL_KEY
+NODE_ENV=production
+PORT=3000
+DATABASE_URL=postgres://appuser:STRONG_PASSWORD@10.111.11.50:5432/greenbook
+SESSION_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_48
+HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
+RESEND_API_KEY=re_REPLACE_WITH_REAL_KEY
 
 # ─── Public URL + service metadata ───────────────────────
-$ APP_URL=https://greenbook.au.int
-$ APP_NAME=greenbook-prod
+APP_URL=https://greenbook.au.int
+APP_NAME=greenbook-prod
 # APP_VERSION injected by deploy.sh via /opt/greenbook/.env
 
 # ─── Logging / observability ─────────────────────────────
-$ LOG_LEVEL=info
-$ SENTRY_DSN=
-$ SENTRY_TRACES_SAMPLE_RATE=0.1
+LOG_LEVEL=info
+SENTRY_DSN=
+SENTRY_TRACES_SAMPLE_RATE=0.1
 
 # ─── CORS + rate limiting ────────────────────────────────
-$ CORS_ORIGINS=https://greenbook.au.int
-$ RATE_LIMIT_WINDOW_MS=900000
-$ RATE_LIMIT_MAX_REQUESTS=300
+CORS_ORIGINS=https://greenbook.au.int
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=300
 ```
 
 ### B.5 /opt/greenbook/docker-compose.yml
@@ -169,22 +169,22 @@ pg1-user=postgres
 
 ### B.7 /etc/systemd/system/greenbook.service
 
-```bash
+```ini
 [Unit]
-$ Description=Greenbook (docker compose)
-$ Requires=docker.service
-$ After=docker.service network-online.target
-$ Wants=network-online.target
+Description=Greenbook (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
 
 [Service]
-$ Type=oneshot
-$ RemainAfterExit=yes
-$ WorkingDirectory=/opt/greenbook
-$ ExecStart=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml up -d
-$ ExecStop=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml down
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/greenbook
+ExecStart=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml down
 
 [Install]
-$ WantedBy=multi-user.target
+WantedBy=multi-user.target
 ```
 
 ### B.8 /etc/nginx/sites-available/greenbook.conf
