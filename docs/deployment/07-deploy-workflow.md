@@ -1,8 +1,10 @@
 # 07 — Deploy workflow
 
-> **Phase**: bring-up + every deploy · **Run on**: App VM + (for Path B) build host · **Time**: ~30 min first time, ~5 min subsequent
+> **Phase**: bring-up + every deploy · **Run on**: App VM + (for Path B) build host · **Time**: ~45 min first time, ~5 min subsequent
 >
-> Two paths to get an image onto the VM (build-on-VM vs build-elsewhere-and-ship), the `prisma db push` vs `prisma migrate` schema decision, the two-file env model (`/etc/greenbook.env` for secrets vs `/opt/greenbook/.env` for the version pin), the promote step, rollback, systemd autostart, the annotated `deploy.sh`, and the one-time first-run seed.
+> **Initial app VM setup (one-time)**: `/etc/greenbook.env`, `/opt/greenbook/docker-compose.yml`, directory layout — §8.2.
+>
+> **Deploy cycle (every deploy)**: two paths to get an image onto the VM (build-on-VM vs build-elsewhere-and-ship), the `prisma db push` vs `prisma migrate` schema decision, env-file lifecycle, the promote step, rollback, systemd autostart, the annotated `deploy.sh`, and the one-time first-run seed — §8.3 onward.
 >
 > **Prev**: [06 — Nginx and TLS](06-app-vm-nginx-tls.md) · **Next**: [08 — Day-2 operations](08-day-2-operations.md) · **Index**: [README](README.md)
 

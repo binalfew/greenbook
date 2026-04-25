@@ -225,7 +225,7 @@ Version 1.2 took the generic v1.1 single-file document and validated every comma
 - **Environment variables**: greenbook's `app/utils/config/env.server.ts` validates five required (`NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `HONEYPOT_SECRET`, `RESEND_API_KEY`) plus ten optional via a Zod schema. [§6.3](05-app-vm-container.md) lists all of them with provenance and guidance.
 - **Schema workflow**: greenbook currently runs on `prisma db push` (no `prisma/migrations/` directory). [§8.3.1](07-deploy-workflow.md) presents both `db push` and `migrate deploy` paths.
 - **Seed / bootstrap**: greenbook's first-run requires `npm run db:seed`. [§8.7](07-deploy-workflow.md) covers it.
-- **Healthcheck route**: `server/security.ts` skips `/up` and `/healthz` from rate limiting, but no route file exists. [§6.7](05-app-vm-container.md) contains a greenbook-compatible resource route.
+- **Healthcheck route**: `server/security.ts` skips `/up` and `/healthz` from rate limiting, but no route file exists. [§6.3](05-app-vm-container.md) contains a greenbook-compatible resource route.
 - **SESSION_SECRET rotation**: greenbook parses it as a comma-separated list (`new,old`). [§6.3](05-app-vm-container.md) explains the rotation semantics.
 - **Trust proxy**: `server/app.ts` calls `app.set("trust proxy", 1)` — keep nginx as the only hop or update the count.
 - **Service Worker + static assets**: short Cache-Control on `sw.js`, immutable on `/assets/*` — [§7.3](06-app-vm-nginx-tls.md).

@@ -1,8 +1,10 @@
 # 05 — Application container
 
-> **Phase**: bring-up · **Run on**: App VM (`auishqosrgbwbs01`) · **Time**: ~30 min
+> **Phase**: bring-up · **Run on**: Repo (laptop) · **Time**: ~20 min
 >
-> The hardened multi-stage Dockerfile (Node 22 alpine, non-root, dumb-init, openssl, pruned production deps), `.dockerignore`, the runtime env file at `/etc/greenbook.env`, the production `docker-compose.yml`, and the `/healthz` resource route greenbook needs but doesn't ship by default.
+> **Source-tree artefacts only.** The hardened multi-stage Dockerfile (Node 22 alpine, non-root, dumb-init, openssl, pruned production deps), `.dockerignore`, and the `/healthz` resource route greenbook needs but doesn't ship by default. Plus a post-build checkpoint and a common-failures playbook.
+>
+> Host-side artefacts (`/etc/greenbook.env`, `/opt/greenbook/docker-compose.yml`) live in [07 §8.2](07-deploy-workflow.md).
 >
 > **Prev**: [04 — App VM Docker setup](04-app-vm-docker.md) · **Next**: [06 — Nginx and TLS](06-app-vm-nginx-tls.md) · **Index**: [README](README.md)
 
