@@ -322,6 +322,10 @@ $ sudo chmod 600 /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem
 #   when it overwrites the file.
 ```
 
+> **ℹ Expect an `"ssl_stapling" ignored, issuer certificate not found` warning**
+>
+> The next `nginx -t` will print that warning against the placeholder cert. It is benign and self-resolving: OCSP stapling needs the issuer's intermediate cert to fetch a revocation response, and a self-signed cert has no separate issuer. Nginx silently disables stapling for the placeholder and continues loading the config — that's why the test still ends in "syntax is ok / test is successful." Once Certbot installs the real Let's Encrypt chain in §7.4, OCSP stapling activates and the warning disappears.
+
 Test the config and reload:
 
 ```bash
