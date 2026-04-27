@@ -88,18 +88,18 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 
 ##### Optional (operational knobs)
 
-| Variable                    | Default                 | Consumer                               | Notes                                                                                                                                                          |
-| --------------------------- | ----------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                      | `3000`                  | `server.js`                            | Only change if you also change the compose publish line + nginx upstream.                                                                                      |
-| `APP_URL`                   | `http://localhost:5173` | `app/utils/config/env.server.ts`       | **Must** match the HTTPS URL nginx serves. Used to construct OIDC/SAML callback URLs and transactional-email links. Getting this wrong silently breaks SSO.    |
-| `APP_NAME`                  | `app`                   | `server/logger.js`                     | Appears as `service` in every pino log line + as a Sentry tag. Set to something identifying (`greenbook-prod`).                                                |
-| `APP_VERSION`               | `dev`                   | `server/logger.js`, `server/sentry.js` | Appears as `version` in pino + as the Sentry `release`. The deploy script in §8.6 sets it to the release timestamp automatically.                              |
-| `LOG_LEVEL`                 | `info`                  | `server/logger.js`                     | One of `fatal`, `error`, `warn`, `info`, `debug`, `trace`. Lower the threshold only temporarily during debugging — `debug`/`trace` are very chatty.            |
-| `SENTRY_DSN`                | _(unset)_               | `server/sentry.js`, `app/root.tsx`     | Leave empty to disable error tracking. If set, also exposed to the browser bundle via `getEnv()`.                                                              |
-| `SENTRY_TRACES_SAMPLE_RATE` | `0.1`                   | `server/sentry.js`                     | Fraction (0.0–1.0) of transactions sampled. Keep low in prod.                                                                                                  |
-| `CORS_ORIGINS`              | `http://localhost:3000` | `server/security.ts`                   | Comma-separated allowlist. **Set this to the public HTTPS origin** (e.g. `https://greenbook.au.int`) or cookie-authed API calls from the PWA will be rejected. |
-| `RATE_LIMIT_WINDOW_MS`      | `900000` (15 min)       | `server/security.ts`                   | Window for the general rate limiter.                                                                                                                           |
-| `RATE_LIMIT_MAX_REQUESTS`   | `300`                   | `server/security.ts`                   | Per-user (authenticated) or per-IP limit in the window.                                                                                                        |
+| Variable                    | Default                 | Consumer                               | Notes                                                                                                                                                                    |
+| --------------------------- | ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PORT`                      | `3000`                  | `server.js`                            | Only change if you also change the compose publish line + nginx upstream.                                                                                                |
+| `APP_URL`                   | `http://localhost:5173` | `app/utils/config/env.server.ts`       | **Must** match the HTTPS URL nginx serves. Used to construct OIDC/SAML callback URLs and transactional-email links. Getting this wrong silently breaks SSO.              |
+| `APP_NAME`                  | `app`                   | `server/logger.js`                     | Appears as `service` in every pino log line + as a Sentry tag. Set to something identifying (`greenbook-prod`).                                                          |
+| `APP_VERSION`               | `dev`                   | `server/logger.js`, `server/sentry.js` | Appears as `version` in pino + as the Sentry `release`. The deploy script in §8.6 sets it to the release timestamp automatically.                                        |
+| `LOG_LEVEL`                 | `info`                  | `server/logger.js`                     | One of `fatal`, `error`, `warn`, `info`, `debug`, `trace`. Lower the threshold only temporarily during debugging — `debug`/`trace` are very chatty.                      |
+| `SENTRY_DSN`                | _(unset)_               | `server/sentry.js`, `app/root.tsx`     | Leave empty to disable error tracking. If set, also exposed to the browser bundle via `getEnv()`.                                                                        |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.1`                   | `server/sentry.js`                     | Fraction (0.0–1.0) of transactions sampled. Keep low in prod.                                                                                                            |
+| `CORS_ORIGINS`              | `http://localhost:3000` | `server/security.ts`                   | Comma-separated allowlist. **Set this to the public HTTPS origin** (e.g. `https://greenbook.africanunion.org`) or cookie-authed API calls from the PWA will be rejected. |
+| `RATE_LIMIT_WINDOW_MS`      | `900000` (15 min)       | `server/security.ts`                   | Window for the general rate limiter.                                                                                                                                     |
+| `RATE_LIMIT_MAX_REQUESTS`   | `300`                   | `server/security.ts`                   | Per-user (authenticated) or per-IP limit in the window.                                                                                                                  |
 
 > **ℹ The legacy `MICROSOFT_*` variables in `.env.example`**
 >
@@ -189,7 +189,7 @@ HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
 RESEND_API_KEY=re_REPLACE_WITH_REAL_KEY
 
 # ─── Public URL + service metadata ──────────────────────
-APP_URL=https://greenbook.au.int
+APP_URL=https://greenbook.africanunion.org
 APP_NAME=greenbook-prod
 # APP_VERSION is written by deploy.sh — leave blank here.
 
@@ -202,7 +202,7 @@ SENTRY_TRACES_SAMPLE_RATE=0.1
 
 # ─── CORS + rate limiting ───────────────────────────────
 # CRITICAL: set CORS_ORIGINS to the exact public origin (no trailing slash).
-CORS_ORIGINS=https://greenbook.au.int
+CORS_ORIGINS=https://greenbook.africanunion.org
 
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=300
@@ -493,7 +493,7 @@ $ docker compose -f /opt/greenbook/docker-compose.yml ps
 $ curl -s http://127.0.0.1:3000/healthz | head -1
 # Expected JSON: "status":"ok", "checks":{"process":"ok","db":"ok"},
 # "version":"<your VERSION>"
-$ curl -sI https://greenbook.au.int/  | grep -E "HTTP|strict-transport"
+$ curl -sI https://greenbook.africanunion.org/  | grep -E "HTTP|strict-transport"
 # Expected: "HTTP/2 200" and an HSTS header.
 
 # ────────────────────────────────────────────────────────────────
@@ -688,8 +688,8 @@ The image is now in the local Docker store. Continue at §8.3.1 (schema changes)
 > The save → scp → load loop works perfectly for the first ~5 deploys. Past that, it gets old: every deploy ships a 250 MB tarball over your VPN, and the build host (laptop) has to be online when you want to deploy. Once you're doing more than one deploy a week, stand up a private container registry the app VM CAN reach (Harbor, GitLab CR, AWS ECR, plain `registry:2` on a build host inside `10.111.11.0/24`). Path B then collapses to:
 >
 > ```
-> # Build host: docker push registry.au.int/greenbook:$VERSION
-> # App VM:     docker pull registry.au.int/greenbook:$VERSION
+> # Build host: docker push registry.africanunion.org/greenbook:$VERSION
+> # App VM:     docker pull registry.africanunion.org/greenbook:$VERSION
 > ```
 >
 > No tarballs, no scp. Defer this to post-MVP — don't hold up first production deploy on registry standup.

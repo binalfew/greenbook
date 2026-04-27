@@ -79,7 +79,7 @@ Every command is followed by an explanation of what it does and why. Where a com
 
 - Two Ubuntu 24.04 LTS (Noble Numbat) VMs are already provisioned, reachable over SSH, and have sudo-enabled non-root user accounts.
 - The VMs can reach each other on an internal network. Examples use **10.111.11.51** for the app VM (`auishqosrgbwbs01`) and **10.111.11.50** for the DB VM (`auishqosrgbdbs01`) — substitute your actual addresses.
-- You have (or will acquire) a DNS name that resolves to the app VM. The examples use `greenbook.au.int`; substitute your actual host. The public URL **must** match `APP_URL` in the env file — SSO callbacks and email links are constructed from it.
+- You have (or will acquire) a DNS name that resolves to the app VM. The examples use `greenbook.africanunion.org`; substitute your actual host. The public URL **must** match `APP_URL` in the env file — SSO callbacks and email links are constructed from it.
 - Greenbook is at or ahead of commit `4a01def` (the template-extraction phases 1–15 merged, the AU Blue Book directory module shipped at `/$tenant/directory/*`, and the public unified directory shipped at `/directory/*`).
 - Node 22 is the target runtime (per `CLAUDE.md`). The hardened Dockerfile pins `node:22-alpine`.
 - The team is comfortable with Docker conceptually but wants the guardrails of an explicit, reviewed procedure.
@@ -195,7 +195,7 @@ The offsite backup destination shown in the diagram is non-optional for a produc
 
 ### 2.4 Traffic flow of a single request
 
-1. A browser resolves `greenbook.au.int` to 10.111.11.51 and opens a TLS connection to port 443.
+1. A browser resolves `greenbook.africanunion.org` to 10.111.11.51 and opens a TLS connection to port 443.
 2. Nginx on the app VM terminates TLS, applies security headers, sets long-cache headers on `/assets/*` / short-cache on `/sw.js`, and forwards the request to `http://127.0.0.1:3000` with `proxy_buffering off` so streamed SSR responses and SSE connections pass through unbuffered.
 3. Docker's port mapping delivers the request from `127.0.0.1:3000` into the `greenbook` container's `0.0.0.0:3000`.
 4. Express (`server.js` + `server/app.ts`) runs middleware in order: correlation ID → request logger (pino, JSON) → CORS → session extraction → rate limiter (general/mutation/auth tier by route) → React Router handler (`@react-router/express` + `createRequestHandler`).

@@ -84,7 +84,7 @@ HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
 RESEND_API_KEY=re_REPLACE_WITH_REAL_KEY
 
 # ─── Public URL + service metadata ───────────────────────
-APP_URL=https://greenbook.au.int
+APP_URL=https://greenbook.africanunion.org
 APP_NAME=greenbook-prod
 # APP_VERSION injected by deploy.sh via /opt/greenbook/.env
 
@@ -94,7 +94,7 @@ SENTRY_DSN=
 SENTRY_TRACES_SAMPLE_RATE=0.1
 
 # ─── CORS + rate limiting ────────────────────────────────
-CORS_ORIGINS=https://greenbook.au.int
+CORS_ORIGINS=https://greenbook.africanunion.org
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=300
 ```
@@ -200,6 +200,15 @@ WantedBy=multi-user.target
 
 ### B.8 /etc/nginx/sites-available/greenbook.conf
 
+The production nginx vhost is shipped as a standalone file in this directory: **[greenbook.conf](greenbook.conf)**. Copy it to the app VM with:
+
+```bash
+$ scp docs/deployment/appendix/greenbook.conf \
+      deployer@10.111.11.51:/etc/nginx/sites-available/greenbook.conf
+```
+
+Stripped (no annotations) form for at-a-glance reference:
+
 ```
 upstream greenbook_upstream {
     server 127.0.0.1:3000;
@@ -214,7 +223,7 @@ map $http_upgrade $connection_upgrade {
 server {
     listen 80;
     listen [::]:80;
-    server_name greenbook.au.int;
+    server_name greenbook.africanunion.org;
 
     location /.well-known/acme-challenge/ { root /var/www/certbot; }
     location / { return 301 https://$host$request_uri; }
@@ -223,10 +232,10 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name greenbook.au.int;
+    server_name greenbook.africanunion.org;
 
-    ssl_certificate     /etc/letsencrypt/live/greenbook.au.int/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/greenbook.au.int/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_session_cache   shared:SSL:10m;
@@ -284,5 +293,7 @@ server {
     }
 }
 ```
+
+Rationale for every directive is in [06-app-vm-nginx-tls.md §7.3](../06-app-vm-nginx-tls.md).
 
 ---

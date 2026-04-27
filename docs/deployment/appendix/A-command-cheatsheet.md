@@ -56,15 +56,15 @@ $ sudo tail -F /var/log/postgresql/postgresql-16-main.log
 $ curl -I http://127.0.0.1:3000/healthz
 
 # Public health probe (from anywhere)
-$ curl -I https://greenbook.au.int/healthz
+$ curl -I https://greenbook.africanunion.org/healthz
 
 # Container health
 $ docker compose -f /opt/greenbook/docker-compose.yml ps
 $ docker inspect greenbook --format '{{.State.Health.Status}}'
 
 # TLS cert expiry
-$ echo | openssl s_client -connect greenbook.au.int:443 \
-  -servername greenbook.au.int 2>/dev/null | \
+$ echo | openssl s_client -connect greenbook.africanunion.org:443 \
+  -servername greenbook.africanunion.org 2>/dev/null | \
   openssl x509 -noout -dates
 ```
 

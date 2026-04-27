@@ -64,7 +64,15 @@ $ sudo ufw status verbose
 
 ### 7.3 The Nginx server config
 
-Replace the default Nginx site with a config that proxies to the greenbook container. Create `/etc/nginx/sites-available/greenbook.conf`:
+Replace the default Nginx site with a config that proxies to the greenbook container. The canonical source is shipped as a standalone file in [appendix/greenbook.conf](appendix/greenbook.conf) — copy it to the app VM with:
+
+```bash
+# From your laptop, with this repo cloned:
+$ scp docs/deployment/appendix/greenbook.conf \
+      deployer@10.111.11.51:/etc/nginx/sites-available/greenbook.conf
+```
+
+The full annotated content (also in the appendix file):
 
 ```
 # /etc/nginx/sites-available/greenbook.conf
@@ -104,7 +112,7 @@ map $http_upgrade $connection_upgrade {
 server {
     listen      80;
     listen      [::]:80;
-    server_name greenbook.au.int;
+    server_name greenbook.africanunion.org;
 
     # Serve Certbot's ACME HTTP-01 challenge files on port 80.
     location /.well-known/acme-challenge/ {
@@ -127,11 +135,11 @@ server {
     #  syntax that enables HTTP/2. The standalone "http2 on;" directive
     #  only exists from 1.25.1 and would break the config on 1.24.
 
-    server_name greenbook.au.int;
+    server_name greenbook.africanunion.org;
 
     # Certbot will fill in certificate paths here. Placeholders shown below.
-    ssl_certificate     /etc/letsencrypt/live/greenbook.au.int/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/greenbook.au.int/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem;
 
     # Modern TLS configuration (see Mozilla's "intermediate" profile).
     ssl_protocols         TLSv1.2 TLSv1.3;
@@ -289,7 +297,35 @@ $ sudo ln -s /etc/nginx/sites-available/greenbook.conf /etc/nginx/sites-enabled/
 $ sudo rm /etc/nginx/sites-enabled/default
 #   Removes the symlink to the default "welcome to nginx" site. The original
 #   file in sites-available/ stays on disk in case you want it back.
+```
 
+Bootstrap a placeholder certificate. The HTTPS server block above references `ssl_certificate` files that Certbot creates in §7.4 — but `nginx -t` opens those files at config-test time and refuses the whole config if either is missing. That means the test (and any reload) fails BEFORE you ever get to run Certbot. Drop in a 1-day self-signed cert at the exact paths the config expects; Certbot overwrites both files on first run, so the placeholder is genuinely temporary.
+
+```bash
+# [auishqosrgbwbs01]
+$ sudo mkdir -p /etc/letsencrypt/live/greenbook.africanunion.org
+
+$ sudo openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+    -keyout /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem \
+    -out    /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem \
+    -subj   "/CN=greenbook.africanunion.org"
+#   req -x509 -nodes    self-signed cert, no passphrase on the key.
+#   -newkey rsa:2048    generate a fresh 2048-bit RSA key alongside the cert.
+#                        The real Let's Encrypt cert in §7.4 may land as ECDSA
+#                        — fine, nginx loads whichever algorithm the file holds.
+#   -days 1             expires in 24 hours. Short on purpose: if you forget
+#                        to run Certbot, browsers will scream loudly.
+#   -subj "/CN=..."     non-interactive subject. Skips the DN prompts.
+
+$ sudo chmod 600 /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem
+#   Lock the placeholder key down to root-only — same mode Certbot uses
+#   when it overwrites the file.
+```
+
+Test the config and reload:
+
+```bash
+# [auishqosrgbwbs01]
 $ sudo nginx -t
 #   -t              test the config for syntax errors. Do NOT skip this.
 # Expected: "syntax is ok" and "test is successful". Any other output means
@@ -301,9 +337,9 @@ $ sudo systemctl reload nginx
 #                   requests. No dropped connections.
 ```
 
-> **⚠ HTTPS will return an error until certificates are installed**
+> **⚠ HTTPS will show a "not trusted" warning until Certbot runs**
 >
-> At this point `https://greenbook.au.int` will produce a TLS handshake error because the `ssl_certificate` paths in the config point to files that do not yet exist. That is expected and fixed by the Certbot step below, which creates the files AND reloads Nginx. The HTTP site on port 80 works already; test HTTPS AFTER Certbot runs.
+> The placeholder cert above lets `nginx -t` pass and lets nginx start, but a browser visiting `https://greenbook.africanunion.org` will see a self-signed / "not trusted" warning until §7.4 issues the real Let's Encrypt cert. The HTTP site on port 80 works already (it 301-redirects to HTTPS, where the browser then warns). **Don't share the public URL with anyone before §7.4 completes.**
 
 ### 7.4 TLS with Let’s Encrypt (public internet or public DNS)
 
@@ -315,7 +351,7 @@ Let’s Encrypt issues free, automatically-renewing TLS certificates. It offers 
 >
 > If your VM has only an internal IP (e.g. 10.111.11.x) and your DNS record resolves to that internal IP, HTTP-01 WILL FAIL. Let's Encrypt's servers cannot reach 10.111.11.x (or any RFC 1918 private range) from the public internet regardless of how accessible port 80 is on the intranet.
 >
-> If your VM has an internal IP but the domain has PUBLIC DNS records (a common AU setup — public greenbook.au.int record pointing at a publicly-routable IP that is routed to the VM via a NAT or reverse proxy), both methods can work.
+> If your VM has an internal IP but the domain has PUBLIC DNS records (a common AU setup — public greenbook.africanunion.org record pointing at a publicly-routable IP that is routed to the VM via a NAT or reverse proxy), both methods can work.
 >
 > If your VM is air-gapped from the internet entirely, use an internal CA instead (§7.6).
 
@@ -354,8 +390,8 @@ $ sudo chown www-data:www-data /var/www/certbot
 
 ```bash
 # [auishqosrgbwbs01]
-$ sudo certbot --nginx -d greenbook.au.int \
-  --email ops@au.int --agree-tos --no-eff-email --redirect
+$ sudo certbot --nginx -d greenbook.africanunion.org \
+  --email ops@africanunion.org --agree-tos --no-eff-email --redirect
 #   --nginx              use the nginx plugin: certbot reads and edits the
 #                         nginx config automatically.
 #   -d DOMAIN             domain to certify. Repeat -d for multi-SAN certs.
@@ -388,7 +424,7 @@ DNS-01 works entirely over outbound HTTPS — Let’s Encrypt never contacts the
 
 - The VM has only an internal IP (no public port 80 reachability).
 - Your DNS records are public (resolvable on the internet) even if the target IPs are not.
-- You need wildcard certificates (\*.au.int) — HTTP-01 cannot issue wildcards; DNS-01 can.
+- You need wildcard certificates (\*.africanunion.org) — HTTP-01 cannot issue wildcards; DNS-01 can.
 
 Certbot ships DNS plugins for the major providers. Install the plugin for your DNS host:
 
@@ -428,8 +464,8 @@ $ sudo certbot certonly \
   --dns-cloudflare \
   --dns-cloudflare-credentials /etc/letsencrypt/secrets/cloudflare.ini \
   --dns-cloudflare-propagation-seconds 30 \
-  -d greenbook.au.int \
-  --email ops@au.int --agree-tos --no-eff-email
+  -d greenbook.africanunion.org \
+  --email ops@africanunion.org --agree-tos --no-eff-email
 #   certonly                            obtain the cert but don't edit any
 #                                        webserver config.
 #   --dns-cloudflare                     use the Cloudflare DNS plugin.
@@ -441,9 +477,9 @@ $ sudo certbot certonly \
 #                                        Cloudflare; slower providers may
 #                                        need 60-120s.
 #   -d DOMAIN                             domain to certify. Can also be
-#                                         "-d *.au.int" for a wildcard
+#                                         "-d *.africanunion.org" for a wildcard
 #                                         (DNS-01 supports wildcards).
-# Certificate files land under /etc/letsencrypt/live/greenbook.au.int/ —
+# Certificate files land under /etc/letsencrypt/live/greenbook.africanunion.org/ —
 # exactly where the Nginx config in §7.3 expects them. After success:
 
 $ sudo nginx -t && sudo systemctl reload nginx
@@ -457,12 +493,12 @@ $ sudo nginx -t && sudo systemctl reload nginx
 
 ```bash
 # From your workstation (not the VM):
-$ curl -I https://greenbook.au.int/
+$ curl -I https://greenbook.africanunion.org/
 # Expected: HTTP/2 200  (or an application redirect).
 # Expected header: strict-transport-security: max-age=31536000; includeSubDomains
 
-$ openssl s_client -connect greenbook.au.int:443 \
-  -servername greenbook.au.int </dev/null 2>/dev/null | \
+$ openssl s_client -connect greenbook.africanunion.org:443 \
+  -servername greenbook.africanunion.org </dev/null 2>/dev/null | \
   openssl x509 -noout -subject -issuer -dates
 #   openssl s_client        open a raw TLS connection.
 #   -connect HOST:PORT      what to connect to.
@@ -474,7 +510,7 @@ $ openssl s_client -connect greenbook.au.int:443 \
 #                            parse the server cert from s_client's output
 #                            and show who issued it, for whom, and validity.
 # Expected:
-#   subject=CN = greenbook.au.int
+#   subject=CN = greenbook.africanunion.org
 #   issuer=C = US, O = Let's Encrypt, CN = R10  (or similar)
 #   notBefore=...   notAfter=...   (typically 90 days apart)
 ```
@@ -499,13 +535,13 @@ $ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
 
 # Generate an ECDSA private key (smaller, faster, equal security to RSA-3072).
 $ sudo openssl ecparam -name prime256v1 -genkey \
-  -out /etc/ssl/greenbook/greenbook.au.int.key
+  -out /etc/ssl/greenbook/greenbook.africanunion.org.key
 # Then create a CSR (certificate signing request), submit it to your CA, and
 # install the signed cert plus intermediate chain at /etc/ssl/greenbook/.
 
 # In the Nginx server block in §7.3, change the ssl_certificate paths:
-#   ssl_certificate     /etc/ssl/greenbook/greenbook.au.int.fullchain.pem;
-#   ssl_certificate_key /etc/ssl/greenbook/greenbook.au.int.key;
+#   ssl_certificate     /etc/ssl/greenbook/greenbook.africanunion.org.fullchain.pem;
+#   ssl_certificate_key /etc/ssl/greenbook/greenbook.africanunion.org.key;
 # (fullchain = server cert FOLLOWED BY the intermediate chain, in one file)
 
 $ sudo chmod 640 /etc/ssl/greenbook/*.key

@@ -370,11 +370,11 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Verify with:
 
   ```bash
-  $ openssl s_client -connect greenbook.au.int:443 -tls1_1 </dev/null 2>&1 | grep -E "Cipher|protocol"
+  $ openssl s_client -connect greenbook.africanunion.org:443 -tls1_1 </dev/null 2>&1 | grep -E "Cipher|protocol"
   # Pass: connection FAILS or "Cipher: 0000" — TLS 1.1 must be rejected.
-  $ openssl s_client -connect greenbook.au.int:443 -tls1_2 </dev/null 2>&1 | grep "Protocol"
+  $ openssl s_client -connect greenbook.africanunion.org:443 -tls1_2 </dev/null 2>&1 | grep "Protocol"
   # Pass: "Protocol: TLSv1.2"
-  $ openssl s_client -connect greenbook.au.int:443 -tls1_3 </dev/null 2>&1 | grep "Protocol"
+  $ openssl s_client -connect greenbook.africanunion.org:443 -tls1_3 </dev/null 2>&1 | grep "Protocol"
   # Pass: "Protocol: TLSv1.3"
   ```
 
@@ -385,7 +385,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Verify with:
 
   ```bash
-  $ curl -sI https://greenbook.au.int/ | grep -i strict-transport-security
+  $ curl -sI https://greenbook.africanunion.org/ | grep -i strict-transport-security
   # Pass: "Strict-Transport-Security: max-age=31536000" (or larger)
   ```
 
@@ -396,7 +396,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Verify with:
 
   ```bash
-  $ curl -sI https://greenbook.au.int/ | grep -E -i "x-content-type-options|x-frame-options|referrer-policy"
+  $ curl -sI https://greenbook.africanunion.org/ | grep -E -i "x-content-type-options|x-frame-options|referrer-policy"
   # Pass: all three headers present with the values above.
   ```
 
@@ -407,7 +407,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Verify with:
 
   ```bash
-  $ openssl s_client -connect greenbook.au.int:443 -servername greenbook.au.int -status </dev/null 2>&1 | grep -E "OCSP response:|OCSP Response Status"
+  $ openssl s_client -connect greenbook.africanunion.org:443 -servername greenbook.africanunion.org -status </dev/null 2>&1 | grep -E "OCSP response:|OCSP Response Status"
   # Pass: "OCSP Response Status: successful (0x0)" appears.
   ```
 
@@ -443,7 +443,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Verify with:
 
   ```bash
-  $ echo | openssl s_client -connect greenbook.au.int:443 -servername greenbook.au.int 2>/dev/null \
+  $ echo | openssl s_client -connect greenbook.africanunion.org:443 -servername greenbook.africanunion.org 2>/dev/null \
       | openssl x509 -noout -enddate
   # Pass: "notAfter=" date is at least 14 days in the future.
   # If less, your monitoring should already be alerting.
@@ -497,7 +497,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
 
 > Run on the **App VM** unless noted.
 
-- **External uptime monitor probes `https://greenbook.au.int/healthz` at least every minute.**
+- **External uptime monitor probes `https://greenbook.africanunion.org/healthz` at least every minute.**
   Why: relying on internal monitoring to tell you the site is up is circular — if the network split takes out monitoring, you find out from a user.
   Verify with: log into your uptime provider (UptimeRobot / Pingdom / StatusCake / internal monitor) and confirm a check exists, is passing, and is configured for ≤ 60s frequency.
 

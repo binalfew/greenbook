@@ -100,7 +100,7 @@ $ if ! docker ps --filter "name=^greenbook$" --filter "status=running" --format 
 fi
 
 # ----- HTTPS healthcheck ---------------------------------------------------
-$ if ! curl -fsS -m 5 https://greenbook.au.int/healthz -o /dev/null; then
+$ if ! curl -fsS -m 5 https://greenbook.africanunion.org/healthz -o /dev/null; then
   # -f      fail on HTTP errors (exit non-zero on 4xx/5xx).
   # -s      silent.
   # -S      show errors despite -s.
@@ -111,7 +111,7 @@ $ if ! curl -fsS -m 5 https://greenbook.au.int/healthz -o /dev/null; then
 fi
 
 # ----- certificate expiry --------------------------------------------------
-$ DAYS_LEFT=$(echo | openssl s_client -connect greenbook.au.int:443 -servername greenbook.au.int 2>/dev/null \
+$ DAYS_LEFT=$(echo | openssl s_client -connect greenbook.africanunion.org:443 -servername greenbook.africanunion.org 2>/dev/null \
   | openssl x509 -noout -enddate \
   | cut -d= -f2 \
   | xargs -I{} date -d {} +%s \
@@ -153,7 +153,7 @@ $ sudo install -m 755 greenbook-health.sh /usr/local/bin/greenbook-health.sh
 # Run every 5 minutes from cron, alert via email if anything fails:
 $ sudo tee /etc/cron.d/greenbook-health <<'EOF'
 */5 * * * * root /usr/local/bin/greenbook-health.sh 2>&1 | \
-  mail -s '[greenbook-health] problem' -E ops@au.int
+  mail -s '[greenbook-health] problem' -E ops@africanunion.org
 EOF
 #   */5 * * * *    every 5 minutes.
 #   root            cron user — needed for the mail command and docker access.
