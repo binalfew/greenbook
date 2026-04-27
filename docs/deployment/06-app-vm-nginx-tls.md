@@ -8,6 +8,17 @@
 
 ---
 
+## Contents
+
+- [§7.1 Install Nginx](#71-install-nginx)
+- [§7.2 Open ports 80 and 443 in UFW](#72-open-ports-80-and-443-in-ufw)
+- [§7.3 The Nginx server config](#73-the-nginx-server-config)
+- [§7.4 TLS with Let's Encrypt (public internet or public DNS)](#74-tls-with-lets-encrypt-public-internet-or-public-dns)
+  - [§7.4.1 HTTP-01 validation (VM reachable on public internet, port 80)](#741-http-01-validation-vm-reachable-on-public-internet-port-80)
+  - [§7.4.2 DNS-01 validation (VM not publicly reachable but has public DNS)](#742-dns-01-validation-vm-not-publicly-reachable-but-has-public-dns)
+- [§7.5 Test the TLS deployment](#75-test-the-tls-deployment)
+- [§7.6 Using an internal CA instead of Let's Encrypt](#76-using-an-internal-ca-instead-of-lets-encrypt)
+
 ## 7. Nginx and TLS
 
 Nginx sits on the host (not in a container) and terminates TLS on port 443. It forwards decrypted HTTP to the Node container at 127.0.0.1:3000 and adds security headers. Putting Nginx on the host (not in a container) keeps TLS certificates on the host filesystem, makes Certbot integration straightforward, and lets Nginx survive app container restarts.

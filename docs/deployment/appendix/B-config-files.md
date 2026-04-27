@@ -6,6 +6,17 @@
 
 ---
 
+## Contents
+
+- [§B.1 /etc/ssh/sshd_config.d/99-hardening.conf](#b1-etcsshsshd_configd99-hardeningconf)
+- [§B.2 /etc/postgresql/16/main/postgresql.conf (relevant additions)](#b2-etcpostgresql16mainpostgresqlconf-relevant-additions)
+- [§B.3 /etc/postgresql/16/main/pg_hba.conf (the relevant line)](#b3-etcpostgresql16mainpg_hbaconf-the-relevant-line)
+- [§B.4 /etc/greenbook.env (template)](#b4-etcgreenbookenv-template)
+- [§B.5 /opt/greenbook/docker-compose.yml](#b5-optgreenbookdocker-composeyml)
+- [§B.6 /etc/pgbackrest.conf](#b6-etcpgbackrestconf)
+- [§B.7 /etc/systemd/system/greenbook.service](#b7-etcsystemdsystemgreenbookservice)
+- [§B.8 /etc/nginx/sites-available/greenbook.conf](#b8-etcnginxsites-availablegreenbookconf)
+
 ## Appendix B: Complete configuration files reference
 
 ### B.1 /etc/ssh/sshd_config.d/99-hardening.conf

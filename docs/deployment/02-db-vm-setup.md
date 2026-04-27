@@ -8,6 +8,18 @@
 
 ---
 
+## Contents
+
+- [§4.1 Add the PGDG apt repository and install PostgreSQL 16](#41-add-the-pgdg-apt-repository-and-install-postgresql-16)
+- [§4.2 Set the password encryption to SCRAM-SHA-256](#42-set-the-password-encryption-to-scram-sha-256)
+- [§4.3 Create the application database and user](#43-create-the-application-database-and-user)
+- [§4.4 Configure listen_addresses](#44-configure-listen_addresses)
+- [§4.5 Configure pg_hba.conf (who can connect from where)](#45-configure-pg_hbaconf-who-can-connect-from-where)
+- [§4.6 Apply the changes](#46-apply-the-changes)
+- [§4.7 Open the firewall for the app VM only](#47-open-the-firewall-for-the-app-vm-only)
+- [§4.8 Verify end-to-end from the app VM](#48-verify-end-to-end-from-the-app-vm)
+- [§4.9 Essential tuning](#49-essential-tuning)
+
 ## 4. Database VM setup
 
 This section sets up PostgreSQL 16 on the DB VM. We use the PostgreSQL Global Development Group (PGDG) apt repository rather than Ubuntu’s packages, because PGDG tracks upstream patch releases and publishes security fixes immediately. PostgreSQL 16 is supported by the community until November 2028.

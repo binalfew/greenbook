@@ -8,6 +8,17 @@
 
 ---
 
+## Contents
+
+- [§10.1 Graylog architecture](#101-graylog-architecture)
+- [§10.2 Why a separate VM](#102-why-a-separate-vm)
+- [§10.3 Sizing guidance](#103-sizing-guidance)
+- [§10.4 Installation outline](#104-installation-outline)
+- [§10.5 Wiring Docker logs to Graylog](#105-wiring-docker-logs-to-graylog)
+  - [Option A: Docker's gelf log driver (direct)](#option-a-dockers-gelf-log-driver-direct)
+  - [Option B: Keep json-file, run a log shipper (recommended)](#option-b-keep-json-file-run-a-log-shipper-recommended)
+- [§10.6 Shipping Node application logs directly](#106-shipping-node-application-logs-directly)
+
 ## 10. Planning a future Graylog deployment
 
 Graylog is a log-aggregation platform: it ingests structured and unstructured log events from many sources, indexes them into OpenSearch, and gives you a web UI to search, filter, alert on, and dashboard them. It is the SIEM-adjacent open-source choice when you need something more than "tail the journal on each VM" but less than a commercial platform like Splunk or Datadog.

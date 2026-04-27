@@ -8,6 +8,15 @@
 
 ---
 
+## Contents
+
+- [§12.1 "502 Bad Gateway" from Nginx](#121-502-bad-gateway-from-nginx)
+- [§12.2 Container keeps restarting](#122-container-keeps-restarting)
+- [§12.3 Cannot connect from the app VM to Postgres](#123-cannot-connect-from-the-app-vm-to-postgres)
+- [§12.4 TLS certificate did not renew](#124-tls-certificate-did-not-renew)
+- [§12.5 Disk full](#125-disk-full)
+- [§12.6 Slow queries / app latency](#126-slow-queries--app-latency)
+
 ## 12. Troubleshooting
 
 A directed set of diagnostic commands for the most common failure modes. The pattern in each case is: isolate which layer is broken (app → compose → Docker → Nginx → network → DB), then drill in.

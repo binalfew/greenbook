@@ -10,6 +10,14 @@
 
 ---
 
+## Contents
+
+- [§6.1 The Dockerfile](#61-the-dockerfile)
+- [§6.2 The .dockerignore](#62-the-dockerignore)
+- [§6.3 Adding a /healthz route to greenbook](#63-adding-a-healthz-route-to-greenbook)
+- [§6.4 Checkpoint — repo-side artefacts ready](#64-checkpoint--repo-side-artefacts-ready)
+- [§6.5 Common build and runtime failures](#65-common-build-and-runtime-failures)
+
 ## 6. The application container
 
 This file covers the **repo-side artefacts** that have to be in greenbook's source tree before any deploy can succeed: the Dockerfile, the `.dockerignore`, and the `/healthz` route. After this file you should be able to build a working image; what runs on the app VM (the env file, the compose file, the deploy cycle) is in [07-deploy-workflow.md](07-deploy-workflow.md).
@@ -323,49 +331,27 @@ Both routes are already listed in `skipHealthCheck()` (`server/security.ts:63-65
 >
 > Greenbook's Prisma adapter is lazy — the first query after boot opens the pool. Without the `SELECT 1` probe, the healthcheck would report "ok" before any route has touched the DB. A misconfigured `DATABASE_URL` would then only surface when a real request came in. The probe catches this at container start.
 
-### 6.4 Checkpoint — what should be true now
+### 6.4 Checkpoint — repo-side artefacts ready
 
-Before moving on to [06 — Nginx and TLS](06-app-vm-nginx-tls.md), every item below should pass. If any fails, the next section will not work — fix before continuing.
+This file produces three things in greenbook's source tree: the hardened Dockerfile, the `.dockerignore`, and the `/healthz` route. Verify each one is in place before you continue to [06 — Nginx and TLS](06-app-vm-nginx-tls.md). Runtime verification — image actually built, container healthy, port loopback-only, logs in JSON, root filesystem read-only — happens after the first deploy on the app VM and lives in [07 §8.3.4](07-deploy-workflow.md#834-post-deploy-verification--what-should-be-true-now).
 
 ```bash
-# 1. The image built and is in the local Docker store.
-$ docker image ls greenbook
-# Pass: at least one row with TAG matching your VERSION (timestamp), SIZE ~700-900 MB.
+# Run from the repo root on your laptop / dev machine.
 
-# 2. The container is running and healthy.
-$ docker compose -f /opt/greenbook/docker-compose.yml ps
-# Pass: STATE=running, HEALTH=healthy. (HEALTH=starting for ~45s after recreation
-# is normal — wait it out and re-check.)
+# 1. Dockerfile starts with the BuildKit syntax line from §6.1.
+$ head -1 Dockerfile
+# Pass: "# syntax=docker/dockerfile:1.7"
 
-# 3. The container runs as the node user (uid 1000), not root.
-$ docker exec greenbook id
-# Pass: "uid=1000(node) gid=1000(node) groups=1000(node)"
+# 2. .dockerignore excludes app/generated (guards against Failure 4 in §6.5).
+$ grep -q '^app/generated$' .dockerignore && echo OK
+# Pass: "OK"
 
-# 4. /healthz returns 200 with status "ok" AND the DB check passes.
-$ curl -s http://127.0.0.1:3000/healthz | head -1
-# Pass: JSON with "status":"ok" and "checks":{"process":"ok","db":"ok"}.
-# "status":"degraded" with "db":"<error>" means Postgres is unreachable —
-# revisit pg_hba (02 §4.5), DATABASE_URL in /etc/greenbook.env (07 §8.2.2),
-# and the firewall rule on the DB VM (§4.7).
-
-# 5. The published port is loopback only.
-$ sudo ss -tlnp | grep ':3000'
-# Pass: "127.0.0.1:3000". NOT "0.0.0.0:3000" or "*:3000".
-
-# 6. Logs are pino JSON (one event per line, NOT pino-pretty colour).
-$ docker logs --tail 5 greenbook | head -1
-# Pass: starts with `{"level":"info"...` or similar JSON.
-# If you see colourised text, NODE_ENV is not "production" inside the container —
-# check the env file and recreate.
-
-# 7. The image is read-only at the root, with /tmp as writable tmpfs.
-$ docker exec greenbook touch /etc/test 2>&1 | grep -i "read-only"
-# Pass: "Read-only file system" error.
-$ docker exec greenbook touch /tmp/test && docker exec greenbook rm /tmp/test
-# Pass: both succeed silently (writable tmpfs at /tmp).
+# 3. /healthz resource route exists in the source tree.
+$ test -f app/routes/healthz.tsx && echo OK
+# Pass: "OK"
 ```
 
-If all seven pass, the application container is production-ready. Move on to nginx + TLS.
+If all three pass, the repo-side artefacts are ready. Move on to [06 — Nginx and TLS](06-app-vm-nginx-tls.md); the first deploy in [07 §8.3](07-deploy-workflow.md#83-deploy-build-the-image-and-stage-it-on-the-app-vm) builds the image from these files and §8.3.4 verifies the running container.
 
 ### 6.5 Common build and runtime failures
 

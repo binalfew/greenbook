@@ -8,6 +8,15 @@
 
 ---
 
+## Contents
+
+- [§5.1 Remove any pre-installed Docker packages](#51-remove-any-pre-installed-docker-packages)
+- [§5.2 Add the Docker apt repository](#52-add-the-docker-apt-repository)
+- [§5.3 Install Docker Engine, CLI, Compose, and Buildx](#53-install-docker-engine-cli-compose-and-buildx)
+- [§5.4 Enable the Docker service and verify](#54-enable-the-docker-service-and-verify)
+- [§5.5 Grant the deploy user access to Docker](#55-grant-the-deploy-user-access-to-docker)
+- [§5.6 Lay out the app directory](#56-lay-out-the-app-directory)
+
 ## 5. App VM setup: Docker Engine
 
 This section installs Docker CE from Docker’s official apt repository. Ubuntu ships a docker.io package but it lags upstream significantly and does not include the Compose v2 plugin.

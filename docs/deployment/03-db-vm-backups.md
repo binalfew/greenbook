@@ -8,6 +8,13 @@
 
 ---
 
+## Contents
+
+- [§4.10 Backup strategy](#410-backup-strategy)
+  - [§4.10.1 Nightly pg_dump (logical backup)](#4101-nightly-pg_dump-logical-backup)
+  - [§4.10.2 pgBackRest (physical + WAL, PITR-capable)](#4102-pgbackrest-physical--wal-pitr-capable)
+  - [§4.10.3 Offsite backup](#4103-offsite-backup)
+
 ### 4.10 Backup strategy
 
 Two layers: a nightly logical dump (easy to move around, good for per-object restores), and a continuous physical + WAL backup via pgBackRest (allows point-in-time recovery to any moment, which pg_dump alone cannot do).

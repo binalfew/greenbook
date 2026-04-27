@@ -8,6 +8,16 @@
 
 ---
 
+## Contents
+
+- [§9.1 Viewing logs](#91-viewing-logs)
+- [§9.2 Restarting services](#92-restarting-services)
+  - [§9.2.1 Reading pino JSON logs](#921-reading-pino-json-logs)
+- [§9.3 Simple monitoring script](#93-simple-monitoring-script)
+- [§9.4 Pruning old images](#94-pruning-old-images)
+- [§9.5 OS and Docker updates](#95-os-and-docker-updates)
+- [§9.6 PostgreSQL updates](#96-postgresql-updates)
+
 ## 9. Day-2 operations
 
 ### 9.1 Viewing logs

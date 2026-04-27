@@ -6,6 +6,14 @@
 
 ---
 
+## Contents
+
+- [§A.1 Deploy](#a1-deploy)
+- [§A.2 Logs](#a2-logs)
+- [§A.3 Health](#a3-health)
+- [§A.4 Backup](#a4-backup)
+- [§A.5 Firewall](#a5-firewall)
+
 ## Appendix A: Command cheat sheet
 
 Minimal commands you will run most often, with paths fully qualified so they work from any directory.

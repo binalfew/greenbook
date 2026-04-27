@@ -8,6 +8,16 @@
 
 ---
 
+## Contents
+
+- [§11.1 Operating system](#111-operating-system)
+- [§11.2 PostgreSQL](#112-postgresql)
+- [§11.3 Docker and the app container](#113-docker-and-the-app-container)
+- [§11.4 Nginx and TLS](#114-nginx-and-tls)
+- [§11.5 Secrets](#115-secrets)
+- [§11.6 Observability](#116-observability)
+- [Quarterly review template](#quarterly-review-template)
+
 ## 11. Hardening checklist
 
 Treat this as a checklist to walk through before declaring the deployment "production ready" — and again quarterly thereafter.

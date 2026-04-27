@@ -8,6 +8,17 @@
 
 ---
 
+## Contents
+
+- [§3.1 Verify the OS and update packages](#31-verify-the-os-and-update-packages)
+- [§3.2 Set the hostname and /etc/hosts](#32-set-the-hostname-and-etchosts)
+- [§3.3 Set the time zone and enable NTP](#33-set-the-time-zone-and-enable-ntp)
+- [§3.4 Enable automatic security updates](#34-enable-automatic-security-updates)
+- [§3.5 Harden SSH](#35-harden-ssh)
+- [§3.6 Enable UFW with restrictive defaults](#36-enable-ufw-with-restrictive-defaults)
+- [§3.7 Enable fail2ban for SSH](#37-enable-fail2ban-for-ssh)
+- [§3.8 Create a dedicated deploy user on the app VM](#38-create-a-dedicated-deploy-user-on-the-app-vm)
+
 ## 3. Pre-flight: preparing both VMs
 
 Run these steps on both VMs before anything else. They establish a consistent baseline: same time zone, same packages, firewall on, SSH hardened, unattended security patches on. Each command below is annotated with what it does.

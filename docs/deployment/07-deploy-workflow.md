@@ -10,6 +10,23 @@
 
 ---
 
+## Contents
+
+- [§8.1 App VM directory layout](#81-app-vm-directory-layout)
+- [§8.2 Initial app VM setup (one-time)](#82-initial-app-vm-setup-one-time)
+  - [§8.2.1 Create the deploy directory structure](#821-create-the-deploy-directory-structure)
+  - [§8.2.2 The environment file: /etc/greenbook.env](#822-the-environment-file-etcgreenbookenv)
+  - [§8.2.3 The compose file: /opt/greenbook/docker-compose.yml](#823-the-compose-file-optgreenbookdocker-composeyml)
+- [§8.3 Deploy: build the image and stage it on the app VM](#83-deploy-build-the-image-and-stage-it-on-the-app-vm)
+  - [§8.3.1 Apply schema changes — the greenbook reality check](#831-apply-schema-changes--the-greenbook-reality-check)
+  - [§8.3.2 Env file lifecycle across deploys](#832-env-file-lifecycle-across-deploys)
+  - [§8.3.3 Promote the new image](#833-promote-the-new-image)
+  - [§8.3.4 Post-deploy verification — what should be true now](#834-post-deploy-verification--what-should-be-true-now)
+- [§8.4 Rollback](#84-rollback)
+- [§8.5 Autostart on boot (systemd)](#85-autostart-on-boot-systemd)
+- [§8.6 Annotated deploy.sh](#86-annotated-deploysh)
+- [§8.7 First-run bootstrap (one-time)](#87-first-run-bootstrap-one-time)
+
 ## 8. Deploy workflow
 
 The goal of this workflow is that any deploy (including rollback) is: one command, fast, atomic-ish (clients either see the old version or the new one, not a broken one), and reversible without rebuilding.
@@ -424,6 +441,7 @@ $ echo "Building greenbook:$VERSION"
 # (Path A — open egress)
 $ cd /opt/greenbook/releases
 $ git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git $VERSION
+# sudo git clone --depth 1 --branch main https://github.com/binalfew/greenbook.git $VERSION
 $ cd $VERSION
 $ docker build -t greenbook:$VERSION .
 
@@ -856,6 +874,52 @@ $ docker compose -f /opt/greenbook/docker-compose.yml ps
 $ curl -s http://127.0.0.1:3000/healthz | grep -E '"version"'
 # Expected: "version":"<your VERSION>"
 ```
+
+### 8.3.4 Post-deploy verification — what should be true now
+
+After §8.3.3 promotes the new version, run all seven checks below on the app VM. Each one verifies a different production guarantee from [05 §6](05-app-vm-container.md) + [§8.2.3](#823-the-compose-file-optgreenbookdocker-composeyml); if any fails, the deploy is broken even if compose reports `running`.
+
+```bash
+# [auishqosrgbwbs01] as deployer
+
+# 1. The image built (Path A) or was loaded (Path B) and is in the local Docker store.
+$ docker image ls greenbook
+# Pass: at least one row with TAG matching your VERSION (timestamp), SIZE ~700-900 MB.
+
+# 2. The container is running and healthy.
+$ docker compose -f /opt/greenbook/docker-compose.yml ps
+# Pass: STATE=running, HEALTH=healthy. (HEALTH=starting for ~45s after recreation
+# is normal — wait it out and re-check.)
+
+# 3. The container runs as the node user (uid 1000), not root.
+$ docker exec greenbook id
+# Pass: "uid=1000(node) gid=1000(node) groups=1000(node)"
+
+# 4. /healthz returns 200 with status "ok" AND the DB check passes.
+$ curl -s http://127.0.0.1:3000/healthz | head -1
+# Pass: JSON with "status":"ok" and "checks":{"process":"ok","db":"ok"}.
+# "status":"degraded" with "db":"<error>" means Postgres is unreachable —
+# revisit pg_hba (02 §4.5), DATABASE_URL in /etc/greenbook.env (§8.2.2),
+# and the firewall rule on the DB VM (02 §4.7).
+
+# 5. The published port is loopback only.
+$ sudo ss -tlnp | grep ':3000'
+# Pass: "127.0.0.1:3000". NOT "0.0.0.0:3000" or "*:3000".
+
+# 6. Logs are pino JSON (one event per line, NOT pino-pretty colour).
+$ docker logs --tail 5 greenbook | head -1
+# Pass: starts with `{"level":"info"...` or similar JSON.
+# If you see colourised text, NODE_ENV is not "production" inside the container —
+# check the env file and recreate.
+
+# 7. The image is read-only at the root, with /tmp as writable tmpfs.
+$ docker exec greenbook touch /etc/test 2>&1 | grep -i "read-only"
+# Pass: "Read-only file system" error.
+$ docker exec greenbook touch /tmp/test && docker exec greenbook rm /tmp/test
+# Pass: both succeed silently (writable tmpfs at /tmp).
+```
+
+If all seven pass, the deploy is production-ready. On a first deploy continue to [§8.7 First-run bootstrap](#87-first-run-bootstrap-one-time) to seed the database; on a re-deploy you're done — see [08 — Day-2 operations](08-day-2-operations.md).
 
 ### 8.4 Rollback
 
