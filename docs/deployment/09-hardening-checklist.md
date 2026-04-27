@@ -413,18 +413,28 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
 
   Set in: [06-app-vm-nginx-tls.md §7.3](06-app-vm-nginx-tls.md)
 
-- **Certbot auto-renewal timer is active and a dry-run renewal succeeds.**
-  Why: the cert expires every 90 days (Let's Encrypt). A failed renewal taken to expiry breaks every login.
-  Verify with (on the **app VM**):
+- **Certificate renewal is monitored or automated, depending on the TLS path.**
+  Why: a stalled or forgotten renewal silently breaks every login at `notAfter`. The verification differs by which §7.x cert source is in use.
+  - **Let's Encrypt (§7.4)** — Certbot's snap timer should be active and a dry-run renewal must succeed:
 
-  ```bash
-  $ systemctl list-timers | grep -i certbot
-  # Pass: a timer entry, "next" within the next 24h.
-  $ sudo certbot renew --dry-run 2>&1 | tail -5
-  # Pass: "Congratulations, all simulated renewals succeeded".
-  ```
+    ```bash
+    $ systemctl list-timers | grep -i certbot
+    # Pass: a timer entry, "next" within the next 24h.
+    $ sudo certbot renew --dry-run 2>&1 | tail -5
+    # Pass: "Congratulations, all simulated renewals succeeded".
+    ```
 
-  Set in: [06-app-vm-nginx-tls.md §7.4](06-app-vm-nginx-tls.md)
+  - **Commercial cert (§7.7, the AU path) / internal CA (§7.6)** — there is no automation by default. Confirm a calendar reminder exists ≥30 days before `notAfter`, AND that the monitoring probe in [08 §9.3](08-day-2-operations.md#93-simple-monitoring-script) is wired into alerting (it pages when ≤14 days remain). Spot-check the on-disk cert directly:
+
+    ```bash
+    # AU wildcard cert (commercial):
+    $ sudo openssl x509 -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
+        -noout -dates
+    # Pass: notAfter is at least 30 days out AND a calendar reminder is set
+    #       for ~30 days before that date.
+    ```
+
+  Set in: [06-app-vm-nginx-tls.md §7.4](06-app-vm-nginx-tls.md) (Let's Encrypt) · [§7.6](06-app-vm-nginx-tls.md#76-using-an-internal-ca-instead-of-lets-encrypt) (internal CA) · [§7.7](06-app-vm-nginx-tls.md#77-using-a-pre-purchased-commercial-certificate) (commercial / AU wildcard)
 
 - **Edge rate limits configured for `/login`, `/forgot-password`, `/api/*`.**
   Why: greenbook has its own rate limiter at the Express layer, but the Nginx zones run BEFORE Express and protect the Node process from floods Express can't even see.
