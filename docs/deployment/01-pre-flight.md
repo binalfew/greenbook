@@ -10,20 +10,20 @@
 
 ## Contents
 
-- [§3.1 Verify the OS and update packages](#31-verify-the-os-and-update-packages)
-- [§3.2 Set the hostname and /etc/hosts](#32-set-the-hostname-and-etchosts)
-- [§3.3 Set the time zone and enable NTP](#33-set-the-time-zone-and-enable-ntp)
-- [§3.4 Enable automatic security updates](#34-enable-automatic-security-updates)
-- [§3.5 Harden SSH](#35-harden-ssh)
-- [§3.6 Enable UFW with restrictive defaults](#36-enable-ufw-with-restrictive-defaults)
-- [§3.7 Enable fail2ban for SSH](#37-enable-fail2ban-for-ssh)
-- [§3.8 Create a dedicated deploy user on the app VM](#38-create-a-dedicated-deploy-user-on-the-app-vm)
+- [§1.1 Verify the OS and update packages](#11-verify-the-os-and-update-packages)
+- [§1.2 Set the hostname and /etc/hosts](#12-set-the-hostname-and-etchosts)
+- [§1.3 Set the time zone and enable NTP](#13-set-the-time-zone-and-enable-ntp)
+- [§1.4 Enable automatic security updates](#14-enable-automatic-security-updates)
+- [§1.5 Harden SSH](#15-harden-ssh)
+- [§1.6 Enable UFW with restrictive defaults](#16-enable-ufw-with-restrictive-defaults)
+- [§1.7 Enable fail2ban for SSH](#17-enable-fail2ban-for-ssh)
+- [§1.8 Create a dedicated deploy user on the app VM](#18-create-a-dedicated-deploy-user-on-the-app-vm)
 
-## 3. Pre-flight: preparing both VMs
+## 1. Pre-flight: preparing both VMs
 
 Run these steps on both VMs before anything else. They establish a consistent baseline: same time zone, same packages, firewall on, SSH hardened, unattended security patches on. Each command below is annotated with what it does.
 
-### 3.1 Verify the OS and update packages
+### 1.1 Verify the OS and update packages
 
 ```bash
 # On BOTH VMs
@@ -65,7 +65,7 @@ $ sudo apt install -y curl ca-certificates gnupg lsb-release \
 #     net-tools         netstat, ifconfig, route (deprecated but often useful)
 ```
 
-### 3.2 Set the hostname and /etc/hosts
+### 1.2 Set the hostname and /etc/hosts
 
 ```bash
 # [auishqosrgbwbs01]
@@ -94,7 +94,7 @@ EOF
 # After this, "ping auishqosrgbdbs01" from the app VM resolves to 10.111.11.50 without DNS.
 ```
 
-### 3.3 Set the time zone and enable NTP
+### 1.3 Set the time zone and enable NTP
 
 Consistent clocks matter: TLS certificates, log correlation, and SCRAM authentication all rely on accurate time. Ubuntu 24.04 ships systemd-timesyncd enabled by default, so there is usually nothing to install — we only need to pick a time zone.
 
@@ -113,7 +113,7 @@ $ timedatectl status
 # Expected: "System clock synchronized: yes" and "NTP service: active"
 ```
 
-### 3.4 Enable automatic security updates
+### 1.4 Enable automatic security updates
 
 #### Why this step matters
 
@@ -155,7 +155,7 @@ $ cat /etc/apt/apt.conf.d/20auto-upgrades
 
 > **⚠ Kernel updates install but do NOT reboot automatically**
 >
-> If a security patch touches the kernel, the new kernel lands on disk but the running kernel is still the old (vulnerable) one until you reboot. Kernel patches don't protect you until that happens. Check `/var/run/reboot-required` at least weekly — §9.5 shows the one-liner — and schedule a maintenance reboot during a quiet window. On the app VM the container restarts automatically (`restart: unless-stopped`); on the DB VM you'll briefly drop the Postgres pool and Prisma will reconnect.
+> If a security patch touches the kernel, the new kernel lands on disk but the running kernel is still the old (vulnerable) one until you reboot. Kernel patches don't protect you until that happens. Check `/var/run/reboot-required` at least weekly — §8.5 shows the one-liner — and schedule a maintenance reboot during a quiet window. On the app VM the container restarts automatically (`restart: unless-stopped`); on the DB VM you'll briefly drop the Postgres pool and Prisma will reconnect.
 
 > **⚠ Docker and PostgreSQL are NOT updated by default**
 >
@@ -165,7 +165,7 @@ $ cat /etc/apt/apt.conf.d/20auto-upgrades
 >
 > `unattended-upgrades` will never remove packages, never cross a major Ubuntu release boundary, and never replace a held package. The worst realistic outcome is a benign overnight upgrade of something like `openssl` that requires a service restart the next time you touch it. Leave it on.
 
-### 3.5 Harden SSH
+### 1.5 Harden SSH
 
 Disable password authentication and root login. This assumes you have already copied your public key to the target user (via ssh-copy-id from your workstation) and verified you can log in with keys.
 
@@ -215,7 +215,7 @@ $ sudo systemctl reload ssh
 >
 > Keep your current SSH session open. From a SECOND terminal (a new SSH connection, not a new tmux pane in the old one), verify that key-based login still works before you end the first session. If you lock yourself out, console access to the VM is your only recovery.
 
-### 3.6 Enable UFW with restrictive defaults
+### 1.6 Enable UFW with restrictive defaults
 
 ```bash
 $ sudo ufw default deny incoming
@@ -246,7 +246,7 @@ $ sudo ufw status verbose
 >
 > Docker installs iptables rules directly and does not, by default, honour UFW rules for published container ports. On the app VM we work around this by publishing the container port only to 127.0.0.1 (not 0.0.0.0). Because 127.0.0.1 is never reachable from off-host, UFW does not need to protect it. All external traffic to the app arrives via Nginx on ports 80/443, which UFW does control normally.
 
-### 3.7 Enable fail2ban for SSH
+### 1.7 Enable fail2ban for SSH
 
 fail2ban watches log files, matches patterns (e.g. "Failed password" lines), and adds short-term iptables bans for offending IPs. The default configuration ships with an SSH jail ready to use.
 
@@ -263,7 +263,7 @@ $ sudo fail2ban-client status sshd
 # Fresh install shows zero bans — expected.
 ```
 
-### 3.8 Create a dedicated deploy user on the app VM
+### 1.8 Create a dedicated deploy user on the app VM
 
 The "deployer" user owns the app directories and is the account that runs docker commands. Keeping it separate from your personal sudo login limits blast radius if deploy credentials are ever compromised.
 
@@ -313,8 +313,8 @@ $ sudo chmod 600 /home/deployer/.ssh/authorized_keys
 >
 > - **The account cannot be brute-forced over SSH** because "the deployer password" does not exist.
 > - **Login is SSH-key-only** via the `authorized_keys` file we just installed. The same private key on your laptop that logs you in as your sudo admin account now also logs you in as `deployer`.
-> - **`sudo -iu deployer` from your admin account** switches to the deployer shell **without any password** (sudo authenticates against YOUR admin password, not deployer's). This is the pattern used throughout §5 and §6.
-> - **`deployer` deliberately has no sudo rights.** Its only privileges are ownership of `/opt/greenbook` (just done) and membership in the `docker` group (added in §5.5). If `deployer` is ever compromised (leaked key, forgotten session), the blast radius is the app container and `/opt/greenbook` — nothing else on the box.
+> - **`sudo -iu deployer` from your admin account** switches to the deployer shell **without any password** (sudo authenticates against YOUR admin password, not deployer's). This is the pattern used throughout §4 and §5.
+> - **`deployer` deliberately has no sudo rights.** Its only privileges are ownership of `/opt/greenbook` (just done) and membership in the `docker` group (added in §4.5). If `deployer` is ever compromised (leaked key, forgotten session), the blast radius is the app container and `/opt/greenbook` — nothing else on the box.
 
 #### Verify SSH works before moving on
 
@@ -339,7 +339,7 @@ If this works silently, you're set. Type `exit` (or `Ctrl-D`) to return to your 
 
 > **⚠ If you get a password prompt instead of a key-auth login**
 >
-> A password prompt means SSH key auth failed AND the server is still allowing password auth as a fallback (§3.5 hasn't been applied yet, or sshd wasn't reloaded). **Do not try to guess a password — `deployer` has none. Press Ctrl-C and follow the troubleshooting block below.** The fact that you're getting a password prompt at all is actually useful: it means you're not locked out, and you can still reach the box as your admin user to fix the key.
+> A password prompt means SSH key auth failed AND the server is still allowing password auth as a fallback (§1.5 hasn't been applied yet, or sshd wasn't reloaded). **Do not try to guess a password — `deployer` has none. Press Ctrl-C and follow the troubleshooting block below.** The fact that you're getting a password prompt at all is actually useful: it means you're not locked out, and you can still reach the box as your admin user to fix the key.
 
 #### Troubleshooting "Permission denied" / unexpected password prompt
 
@@ -351,7 +351,7 @@ $ ssh -v deployer@10.111.11.51 2>&1 | grep -E "Offering|Authentications|denied|a
 
 You'll see lines like `Offering public key: /Users/you/.ssh/id_ed25519` and `Authentications that can continue: publickey,password`. If no offered key is accepted, the server does not have the matching public key in `/home/deployer/.ssh/authorized_keys`.
 
-**Step 2 — Log in as your admin user to fix it.** Use the sudo-capable account you used in §3.1–3.7 (NOT `deployer`):
+**Step 2 — Log in as your admin user to fix it.** Use the sudo-capable account you used in §1.1–3.7 (NOT `deployer`):
 
 ```bash
 $ ssh YOUR_ADMIN_USER@10.111.11.51
@@ -411,7 +411,7 @@ No prompt, straight to shell. That's success.
 5. **sshd config override.** On odd base images, `/etc/ssh/sshd_config` can have `AuthorizedKeysFile` pointed elsewhere. Check: `sudo grep -i authorizedkeysfile /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf`. Default is `.ssh/authorized_keys` relative to the user's home; anything else means you need to put the key there instead.
 6. **SELinux/AppArmor.** Not an issue on stock Ubuntu 24.04; skip unless you've enabled extra mandatory-access controls.
 
-Once `ssh deployer@10.111.11.51` works with no prompt at all, go complete §3.5 (disable password auth everywhere) — until then the VM still accepts passwords from any account that has one, which defeats the point of key-only auth.
+Once `ssh deployer@10.111.11.51` works with no prompt at all, go complete §1.5 (disable password auth everywhere) — until then the VM still accepts passwords from any account that has one, which defeats the point of key-only auth.
 
 We will add deployer to the docker group later, after Docker is installed.
 

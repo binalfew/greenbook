@@ -4,7 +4,7 @@
 >
 > **Source-tree artefacts only.** The hardened multi-stage Dockerfile (Node 22 alpine, non-root, dumb-init, openssl, pruned production deps), `.dockerignore`, and the `/healthz` resource route greenbook needs but doesn't ship by default. Plus a post-build checkpoint and a common-failures playbook.
 >
-> Host-side artefacts (`/etc/greenbook.env`, `/opt/greenbook/docker-compose.yml`) live in [07 §8.2](07-deploy-workflow.md).
+> Host-side artefacts (`/etc/greenbook.env`, `/opt/greenbook/docker-compose.yml`) live in [07 §7.2](07-deploy-workflow.md).
 >
 > **Prev**: [04 — App VM Docker setup](04-app-vm-docker.md) · **Next**: [06 — Nginx and TLS](06-app-vm-nginx-tls.md) · **Index**: [README](README.md)
 
@@ -12,13 +12,13 @@
 
 ## Contents
 
-- [§6.1 The Dockerfile](#61-the-dockerfile)
-- [§6.2 The .dockerignore](#62-the-dockerignore)
-- [§6.3 Adding a /healthz route to greenbook](#63-adding-a-healthz-route-to-greenbook)
-- [§6.4 Checkpoint — repo-side artefacts ready](#64-checkpoint--repo-side-artefacts-ready)
-- [§6.5 Common build and runtime failures](#65-common-build-and-runtime-failures)
+- [§5.1 The Dockerfile](#51-the-dockerfile)
+- [§5.2 The .dockerignore](#52-the-dockerignore)
+- [§5.3 Adding a /healthz route to greenbook](#53-adding-a-healthz-route-to-greenbook)
+- [§5.4 Checkpoint — repo-side artefacts ready](#54-checkpoint--repo-side-artefacts-ready)
+- [§5.5 Common build and runtime failures](#55-common-build-and-runtime-failures)
 
-## 6. The application container
+## 5. The application container
 
 This file covers the **repo-side artefacts** that have to be in greenbook's source tree before any deploy can succeed: the Dockerfile, the `.dockerignore`, and the `/healthz` route. After this file you should be able to build a working image; what runs on the app VM (the env file, the compose file, the deploy cycle) is in [07-deploy-workflow.md](07-deploy-workflow.md).
 
@@ -26,7 +26,7 @@ Greenbook runs as a container built from a multi-stage Dockerfile. The build sta
 
 **Important**: greenbook ships its own Express server (`server.js` → `server/app.ts`) that layers correlation IDs, pino logging, CORS, session extraction, three rate-limit tiers, the in-process job-queue tick, and Sentry init. It does **not** use `react-router-serve`. The Dockerfile `CMD` therefore invokes `npm run start`, which runs `node server.js`. Treat the `server/` directory and `server.js` as ship-critical — both must land in the runtime image.
 
-### 6.1 The Dockerfile
+### 5.1 The Dockerfile
 
 Replace the existing `Dockerfile` at the repo root with the hardened multi-stage version below. The current in-repo Dockerfile is functional for local docker compose use but doesn't set a non-root user, doesn't drop capabilities, doesn't install a PID-1 init, and omits the `server/` directory from the runtime image. The version below lands on the same multi-stage shape but fixes all four gaps.
 
@@ -123,7 +123,7 @@ COPY --from=deps /app/app/generated ./app/generated
 
 COPY . .
 # Now copy the entire source tree. Anything in .dockerignore is excluded
-# (see §6.2). This is the last layer that changes when source code changes.
+# (see §5.2). This is the last layer that changes when source code changes.
 
 RUN npm run build
 # react-router-build emits:
@@ -194,7 +194,7 @@ COPY --from=build --chown=node:node /app/prisma.config.ts  ./prisma.config.ts
 #                           pre-generated client in app/generated/), BUT
 #                           required by `npx prisma db push` and
 #                           `prisma migrate deploy` at deploy time. Without
-#                           it, the schema-deploy step in 07 §8.3.1 fails
+#                           it, the schema-deploy step in 07 §7.3.1 fails
 #                           with "Could not find Prisma Schema".
 #   7. prisma.config.ts  — Prisma 7 datasource configuration. Same reason as
 #                           prisma/: only needed by the prisma CLI at deploy
@@ -215,10 +215,10 @@ STOPSIGNAL SIGTERM
 #   2. stop the job processor (app/utils/events/job-queue.server.ts)
 #   3. flush pending Sentry events when SENTRY_DSN is set
 # The 10-second default Docker grace can be tight when the job queue has
-# long-running handlers; the compose file in 07 §8.2.3 extends it to 30s via stop_grace_period.
+# long-running handlers; the compose file in 07 §7.2.3 extends it to 30s via stop_grace_period.
 
 EXPOSE 3000
-# Documentation — does NOT publish the port. See compose "ports:" in 07 §8.2.3.
+# Documentation — does NOT publish the port. See compose "ports:" in 07 §7.2.3.
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["npm", "run", "start"]
@@ -261,7 +261,7 @@ CMD ["npm", "run", "start"]
 
 > **ℹ Why `prisma/` and `prisma.config.ts` are in the runtime image (and how migrations actually run)**
 >
-> The runtime stage copies seven things from the build stage; two of them — `prisma/` and `prisma.config.ts` — are **not used at request-handling time**. The running server queries the DB through the pre-generated client in `app/generated/` plus `@prisma/adapter-pg`; neither the schema source nor the config file is opened on a hot path. They're in the image **only so the prisma CLI can find them** when you run `npx prisma db push` (07 §8.3.1) or `prisma migrate deploy` against a deployed image. Without them you'd see:
+> The runtime stage copies seven things from the build stage; two of them — `prisma/` and `prisma.config.ts` — are **not used at request-handling time**. The running server queries the DB through the pre-generated client in `app/generated/` plus `@prisma/adapter-pg`; neither the schema source nor the config file is opened on a hot path. They're in the image **only so the prisma CLI can find them** when you run `npx prisma db push` (07 §7.3.1) or `prisma migrate deploy` against a deployed image. Without them you'd see:
 >
 > ```
 > Error: Could not find Prisma Schema that is required for this command.
@@ -298,9 +298,9 @@ CMD ["npm", "run", "start"]
 > | `playwright.download.prss.microsoft.com`<br>`objects.githubusercontent.com`      | Playwright postinstall — Chromium / Firefox / Webkit. **Already suppressed** above via `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`; whitelist only if you remove that env var. | deps (suppressed) |
 > | `registry.yarnpkg.com`                                                           | only if anything is yarn-installed (greenbook isn't — npm-only)                                                                                                         | n/a               |
 >
-> **Switch to Path B if you can't allow these on the build host.** [07 §8.3 Path B](07-deploy-workflow.md#83-deploy-build-the-image-and-stage-it-on-the-app-vm) builds on a host that already reaches all of the above (your laptop, a CI runner with full internet) and ships the resulting image as a tarball over SSH — the air-gapped VM only needs `docker load`, no outbound HTTPS at all. That's the recommended default for AU production.
+> **Switch to Path B if you can't allow these on the build host.** [07 §7.3 Path B](07-deploy-workflow.md#73-deploy-build-the-image-and-stage-it-on-the-app-vm) builds on a host that already reaches all of the above (your laptop, a CI runner with full internet) and ships the resulting image as a tarball over SSH — the air-gapped VM only needs `docker load`, no outbound HTTPS at all. That's the recommended default for AU production.
 
-### 6.2 The .dockerignore
+### 5.2 The .dockerignore
 
 Without a .dockerignore, the build context (everything sent to the Docker daemon) includes node_modules, .git, .env files, and previous build output — slow, wasteful, and a secret-leak risk.
 
@@ -320,7 +320,7 @@ build
 .env
 .env.*
 # Local dev secrets. Must not reach the image. Production secrets live
-# on the host in /etc/greenbook.env and enter via env_file in compose (07 §8.2.3).
+# on the host in /etc/greenbook.env and enter via env_file in compose (07 §7.2.3).
 
 .dockerignore
 Dockerfile
@@ -359,11 +359,11 @@ npm-debug.log*
 
 > **⚠ `app/generated` must be in `.dockerignore`**
 >
-> Prisma 7 embeds absolute-path metadata into the generated client. If you build a locally-generated client on macOS (`/Users/...`) and ship it to a Linux container, you'll see obscure `ENOENT` errors on first query. Always let `prisma generate` run inside the deps stage — §6.1's postinstall hook takes care of this as long as the local client is ignored.
+> Prisma 7 embeds absolute-path metadata into the generated client. If you build a locally-generated client on macOS (`/Users/...`) and ship it to a Linux container, you'll see obscure `ENOENT` errors on first query. Always let `prisma generate` run inside the deps stage — §5.1's postinstall hook takes care of this as long as the local client is ignored.
 
-### 6.3 Adding a /healthz route to greenbook
+### 5.3 Adding a /healthz route to greenbook
 
-The container healthcheck (07 §8.2.3) and operational monitoring (08 §9) both probe `GET /healthz`. Greenbook's `server/security.ts` already marks `/healthz` and `/up` as "skip rate-limit" paths, but no route handler exists yet — you need to add one.
+The container healthcheck (07 §7.2.3) and operational monitoring (08 §8) both probe `GET /healthz`. Greenbook's `server/security.ts` already marks `/healthz` and `/up` as "skip rate-limit" paths, but no route handler exists yet — you need to add one.
 
 Add a resource route at `app/routes/healthz.tsx`. The file-system router picks it up automatically on the next `npm run build`:
 
@@ -375,8 +375,8 @@ Add a resource route at `app/routes/healthz.tsx`. The file-system router picks i
 //   · 503 {"status":"degraded", ...} process is up but Postgres failed
 //
 // Used by:
-//   · Docker container healthcheck (compose healthcheck block — 07 §8.2.3)
-//   · /usr/local/bin/greenbook-health.sh (§9.3)
+//   · Docker container healthcheck (compose healthcheck block — 07 §7.2.3)
+//   · /usr/local/bin/greenbook-health.sh (§8.3)
 //   · Uptime monitors / external probes
 //   · Nginx's `skipHealthCheck` in server/security.ts so this route is
 //     never rate-limited.
@@ -450,18 +450,18 @@ Both routes are already listed in `skipHealthCheck()` (`server/security.ts:63-65
 >
 > Greenbook's Prisma adapter is lazy — the first query after boot opens the pool. Without the `SELECT 1` probe, the healthcheck would report "ok" before any route has touched the DB. A misconfigured `DATABASE_URL` would then only surface when a real request came in. The probe catches this at container start.
 
-### 6.4 Checkpoint — repo-side artefacts ready
+### 5.4 Checkpoint — repo-side artefacts ready
 
-This file produces three things in greenbook's source tree: the hardened Dockerfile, the `.dockerignore`, and the `/healthz` route. Verify each one is in place before you continue to [06 — Nginx and TLS](06-app-vm-nginx-tls.md). Runtime verification — image actually built, container healthy, port loopback-only, logs in JSON, root filesystem read-only — happens after the first deploy on the app VM and lives in [07 §8.3.4](07-deploy-workflow.md#834-post-deploy-verification--what-should-be-true-now).
+This file produces three things in greenbook's source tree: the hardened Dockerfile, the `.dockerignore`, and the `/healthz` route. Verify each one is in place before you continue to [06 — Nginx and TLS](06-app-vm-nginx-tls.md). Runtime verification — image actually built, container healthy, port loopback-only, logs in JSON, root filesystem read-only — happens after the first deploy on the app VM and lives in [07 §7.3.4](07-deploy-workflow.md#734-post-deploy-verification--what-should-be-true-now).
 
 ```bash
 # Run from the repo root on your laptop / dev machine.
 
-# 1. Dockerfile starts with the BuildKit syntax line from §6.1.
+# 1. Dockerfile starts with the BuildKit syntax line from §5.1.
 $ head -1 Dockerfile
 # Pass: "# syntax=docker/dockerfile:1.7"
 
-# 2. .dockerignore excludes app/generated (guards against Failure 4 in §6.5).
+# 2. .dockerignore excludes app/generated (guards against Failure 4 in §5.5).
 $ grep -q '^app/generated$' .dockerignore && echo OK
 # Pass: "OK"
 
@@ -470,11 +470,11 @@ $ test -f app/routes/healthz.tsx && echo OK
 # Pass: "OK"
 ```
 
-If all three pass, the repo-side artefacts are ready. Move on to [06 — Nginx and TLS](06-app-vm-nginx-tls.md); the first deploy in [07 §8.3](07-deploy-workflow.md#83-deploy-build-the-image-and-stage-it-on-the-app-vm) builds the image from these files and §8.3.4 verifies the running container.
+If all three pass, the repo-side artefacts are ready. Move on to [06 — Nginx and TLS](06-app-vm-nginx-tls.md); the first deploy in [07 §7.3](07-deploy-workflow.md#73-deploy-build-the-image-and-stage-it-on-the-app-vm) builds the image from these files and §7.3.4 verifies the running container.
 
-### 6.5 Common build and runtime failures
+### 5.5 Common build and runtime failures
 
-The four failures below account for ~80% of "I followed the guide but it didn't work" reports against §6. Recognise the symptom, jump to the fix.
+The four failures below account for ~80% of "I followed the guide but it didn't work" reports against §5. Recognise the symptom, jump to the fix.
 
 #### Failure 1: `prisma generate` fails during `npm ci` with "Environment variable not found: DATABASE_URL"
 
@@ -491,7 +491,7 @@ Error: Environment variable not found: DATABASE_URL.
 
 **Why**: `prisma.config.ts` reads `DATABASE_URL` at load time. Inside a Docker build there's no `.env` file (excluded by `.dockerignore`, correctly), so the variable is unset.
 
-**Fix**: the Dockerfile in §6.1 already passes a `DUMMY_DATABASE_URL` build-arg specifically for this case:
+**Fix**: the Dockerfile in §5.1 already passes a `DUMMY_DATABASE_URL` build-arg specifically for this case:
 
 ```dockerfile
 ARG DUMMY_DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy?schema=public
@@ -537,7 +537,7 @@ Error: Cannot find module '/app/server.js'
 
 **Why**: the runtime stage didn't COPY the `server.js` from the build stage. Easy to forget when you start from a generic Dockerfile.
 
-**Fix**: confirm the runtime stage has all five COPYs from §6.1:
+**Fix**: confirm the runtime stage has all five COPYs from §5.1:
 
 ```dockerfile
 COPY --from=build --chown=node:node /app/package.json      ./package.json
@@ -570,7 +570,7 @@ $ grep -E '^app/generated' /Users/binalfew/Projects/greenbook/.dockerignore
 # Pass: "app/generated" present.
 
 # (2) The deps stage runs `npm ci` (which fires postinstall → prisma generate)
-# AFTER copying prisma/ schema. The §6.1 Dockerfile is correct on both counts.
+# AFTER copying prisma/ schema. The §5.1 Dockerfile is correct on both counts.
 ```
 
 If `app/generated` is missing from `.dockerignore`, your locally-generated client is shipping into the image. Add the line, delete `app/generated/` from your local repo (`rm -rf app/generated`), rebuild — the deps stage will regenerate cleanly inside the image.

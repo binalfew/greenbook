@@ -10,21 +10,21 @@
 
 ## Contents
 
-- [§4.1 Add the PGDG apt repository and install PostgreSQL 16](#41-add-the-pgdg-apt-repository-and-install-postgresql-16)
-- [§4.2 Set the password encryption to SCRAM-SHA-256](#42-set-the-password-encryption-to-scram-sha-256)
-- [§4.3 Create the application database and user](#43-create-the-application-database-and-user)
-- [§4.4 Configure listen_addresses](#44-configure-listen_addresses)
-- [§4.5 Configure pg_hba.conf (who can connect from where)](#45-configure-pg_hbaconf-who-can-connect-from-where)
-- [§4.6 Apply the changes](#46-apply-the-changes)
-- [§4.7 Open the firewall for the app VM only](#47-open-the-firewall-for-the-app-vm-only)
-- [§4.8 Verify end-to-end from the app VM](#48-verify-end-to-end-from-the-app-vm)
-- [§4.9 Essential tuning](#49-essential-tuning)
+- [§2.1 Add the PGDG apt repository and install PostgreSQL 16](#21-add-the-pgdg-apt-repository-and-install-postgresql-16)
+- [§2.2 Set the password encryption to SCRAM-SHA-256](#22-set-the-password-encryption-to-scram-sha-256)
+- [§2.3 Create the application database and user](#23-create-the-application-database-and-user)
+- [§2.4 Configure listen_addresses](#24-configure-listen_addresses)
+- [§2.5 Configure pg_hba.conf (who can connect from where)](#25-configure-pg_hbaconf-who-can-connect-from-where)
+- [§2.6 Apply the changes](#26-apply-the-changes)
+- [§2.7 Open the firewall for the app VM only](#27-open-the-firewall-for-the-app-vm-only)
+- [§2.8 Verify end-to-end from the app VM](#28-verify-end-to-end-from-the-app-vm)
+- [§2.9 Essential tuning](#29-essential-tuning)
 
-## 4. Database VM setup
+## 2. Database VM setup
 
 This section sets up PostgreSQL 16 on the DB VM. We use the PostgreSQL Global Development Group (PGDG) apt repository rather than Ubuntu’s packages, because PGDG tracks upstream patch releases and publishes security fixes immediately. PostgreSQL 16 is supported by the community until November 2028.
 
-### 4.1 Add the PGDG apt repository and install PostgreSQL 16
+### 2.1 Add the PGDG apt repository and install PostgreSQL 16
 
 We add the PGDG signing key to a dedicated file under /usr/share/postgresql-common/pgdg/, then create an apt source list that references it. This is the modern apt signing pattern — the older "apt-key add" is deprecated because it merged all keys into a single global trust store, defeating scoped trust.
 
@@ -101,7 +101,7 @@ $ sudo -u postgres psql -c "SELECT version();"
 >
 > The URL https://www.postgresql.org/media/keys/ACCC4CF8.asc serves the long-term PGDG signing key. Its fingerprint is B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8. You can verify with: gpg --show-keys /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
 
-### 4.2 Set the password encryption to SCRAM-SHA-256
+### 2.2 Set the password encryption to SCRAM-SHA-256
 
 PostgreSQL 16 ships with password_encryption = scram-sha-256 as the default, but it is worth asserting this explicitly before creating any users — because roles keep whatever hash format was in effect when their password was set. If a legacy tool ever flips it to md5 and you create a user, that user’s password will be md5-hashed until you reset it.
 
@@ -121,7 +121,7 @@ SQL
 # Expected final output: scram-sha-256
 ```
 
-### 4.3 Create the application database and user
+### 2.3 Create the application database and user
 
 The production database is named **`greenbook`** throughout this guide. Local development uses `app` as the DB name (per `.env.example`) because that was the template default — but in production we rename to `greenbook` so every piece of metadata (psql prompts, `pg_dump` filenames, pgBackRest stanzas, log lines, cloud-console listings) identifies this database unambiguously. If your AU naming standard prefers `greenbook_prod` or similar, substitute everywhere you see `greenbook` below.
 
@@ -186,7 +186,7 @@ SQL
 >
 > The default template1 may carry local modifications. template0 is a clean, unmodified template — using it guarantees reproducible databases across environments.
 
-### 4.4 Configure listen_addresses
+### 2.4 Configure listen_addresses
 
 By default PostgreSQL only listens on localhost, which is correct for a single-VM setup but wrong for ours. We expose it on the internal interface only — never on 0.0.0.0, which would expose it on every interface including any future public one.
 
@@ -221,7 +221,7 @@ listen_addresses = 'localhost,10.111.11.50'
 
 A listen_addresses change requires a full restart, not just a reload. We’ll do both the restart and the pg_hba edit below and restart once.
 
-### 4.5 Configure pg_hba.conf (who can connect from where)
+### 2.5 Configure pg_hba.conf (who can connect from where)
 
 pg_hba.conf ("host-based authentication") controls which clients can connect, to which databases, and what authentication method is required. It is evaluated top-down, first-match-wins. This ordering is critical: a permissive rule at the top can shadow a stricter rule below it; a stray "reject" line above our allow rule will block our app.
 
@@ -258,7 +258,7 @@ host    greenbook appuser  10.111.11.51/32    scram-sha-256
 >
 > md5 password hashing is considered legacy by the PostgreSQL project and is being phased out. scram-sha-256 uses a challenge-response mechanism that never sends the password or its hash across the network, and resists pass-the-hash attacks. trust means no authentication at all — acceptable only for local Unix sockets to the postgres role, never for network connections.
 
-### 4.6 Apply the changes
+### 2.6 Apply the changes
 
 ```bash
 # [auishqosrgbdbs01]
@@ -285,7 +285,7 @@ $ sudo ss -tlnp | grep 5432
 # re-check the postgresql.conf edit.
 ```
 
-### 4.7 Open the firewall for the app VM only
+### 2.7 Open the firewall for the app VM only
 
 ```bash
 # [auishqosrgbdbs01]
@@ -308,7 +308,7 @@ $ sudo ufw status numbered
 # it defeats the point of this rule.
 ```
 
-### 4.8 Verify end-to-end from the app VM
+### 2.8 Verify end-to-end from the app VM
 
 ```bash
 # [auishqosrgbwbs01]
@@ -325,7 +325,7 @@ $ psql -h 10.111.11.50 -U appuser -d greenbook \
 #                     (which would fail on the app VM — no local Postgres here).
 #   -U USER          database role to connect as (not the OS user).
 #   -d DB            database to connect to — the production name we created
-#                     in §4.3. Local dev uses "app"; production is "greenbook".
+#                     in §2.3. Local dev uses "app"; production is "greenbook".
 #   -c "SQL"         run SQL and exit (non-interactive).
 # You will be prompted for APP_DB_PASSWORD. After typing it:
 # Expected: one row — appuser | greenbook | 10.111.11.50
@@ -336,7 +336,7 @@ $ psql -h 10.111.11.50 -U appuser -d greenbook \
 
 If this fails, see the troubleshooting section at the end of this document — specifically "Cannot connect from the app VM to Postgres". Do not proceed until this test passes.
 
-### 4.9 Essential tuning
+### 2.9 Essential tuning
 
 Default PostgreSQL memory settings are conservative. Adjust based on available RAM on the DB VM. The values below are safe starting points for a 4 GB or 8 GB VM; scale up linearly for larger VMs.
 
@@ -406,4 +406,4 @@ $ sudo systemctl restart postgresql
 
 > **ℹ Time-zone handling**
 >
-> PostgreSQL stores "timestamp with time zone" values as UTC internally regardless of the server’s timezone setting. The session TimeZone affects only how values are displayed and parsed at the connection boundary. Best practice: always declare columns as "timestamptz" (not "timestamp") and store/process as UTC in application code. The DB VM’s system time zone (set in §3.3) affects Postgres logs and pg_dump timestamps but not your application data.
+> PostgreSQL stores "timestamp with time zone" values as UTC internally regardless of the server’s timezone setting. The session TimeZone affects only how values are displayed and parsed at the connection boundary. Best practice: always declare columns as "timestamptz" (not "timestamp") and store/process as UTC in application code. The DB VM’s system time zone (set in §1.3) affects Postgres logs and pg_dump timestamps but not your application data.

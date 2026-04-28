@@ -10,20 +10,20 @@
 
 ## Contents
 
-- [§13.1 DMZ VM pre-flight](#131-dmz-vm-pre-flight)
-- [§13.2 Install Nginx on the DMZ VM](#132-install-nginx-on-the-dmz-vm)
-- [§13.3 Open ports 80 and 443 in UFW](#133-open-ports-80-and-443-in-ufw)
-- [§13.4 Install the AU wildcard certificate](#134-install-the-au-wildcard-certificate)
-  - [§13.4.1 Copy the already-extracted cert from the app VM](#1341-copy-the-already-extracted-cert-from-the-app-vm)
-  - [§13.4.2 Import from a fresh PFX](#1342-import-from-a-fresh-pfx)
-- [§13.5 Shared edge configs (TLS + rate-limit zones)](#135-shared-edge-configs-tls--rate-limit-zones)
-- [§13.6 Add greenbook as the first proxied app](#136-add-greenbook-as-the-first-proxied-app)
-- [§13.7 Adding future apps behind the same proxy](#137-adding-future-apps-behind-the-same-proxy)
-- [§13.8 Modify the app VM for the two-tier topology](#138-modify-the-app-vm-for-the-two-tier-topology)
-- [§13.9 Test the TLS deployment](#139-test-the-tls-deployment)
-- [§13.10 Renewal](#1310-renewal)
+- [§12.1 DMZ VM pre-flight](#121-dmz-vm-pre-flight)
+- [§12.2 Install Nginx on the DMZ VM](#122-install-nginx-on-the-dmz-vm)
+- [§12.3 Open ports 80 and 443 in UFW](#123-open-ports-80-and-443-in-ufw)
+- [§12.4 Install the AU wildcard certificate](#124-install-the-au-wildcard-certificate)
+  - [§12.4.1 Copy the already-extracted cert from the app VM](#1241-copy-the-already-extracted-cert-from-the-app-vm)
+  - [§12.4.2 Import from a fresh PFX](#1242-import-from-a-fresh-pfx)
+- [§12.5 Shared edge configs (TLS + rate-limit zones)](#125-shared-edge-configs-tls--rate-limit-zones)
+- [§12.6 Add greenbook as the first proxied app](#126-add-greenbook-as-the-first-proxied-app)
+- [§12.7 Adding future apps behind the same proxy](#127-adding-future-apps-behind-the-same-proxy)
+- [§12.8 Modify the app VM for the two-tier topology](#128-modify-the-app-vm-for-the-two-tier-topology)
+- [§12.9 Test the TLS deployment](#129-test-the-tls-deployment)
+- [§12.10 Renewal](#1210-renewal)
 
-## 13. DMZ shared reverse proxy
+## 12. DMZ shared reverse proxy
 
 The DMZ VM `auishqosrarp01` sits in the AU DMZ subnet (172.16.177.0/24) with one foot in the public-facing path and one foot routable to the internal app subnet (10.111.11.0/24 where greenbook's app + DB VMs live). Its job is single-purpose:
 
@@ -50,13 +50,13 @@ Internet
 [ DB VM auishqosrgbdbs01 — 10.111.11.50 ]
 ```
 
-This chapter follows the same structural beats as [06 — Nginx and TLS](06-app-vm-nginx-tls.md) (install nginx, open ports, install cert, write config, test, renew), but the configs are shaped for a **multi-tenant edge**: shared TLS / rate-limit blocks under `/etc/nginx/conf.d/` plus one `sites-available/<app>.conf` per backend app. Adding the second AU app behind this proxy collapses to three commands ([§13.7](#137-adding-future-apps-behind-the-same-proxy)).
+This chapter follows the same structural beats as [06 — Nginx and TLS](06-app-vm-nginx-tls.md) (install nginx, open ports, install cert, write config, test, renew), but the configs are shaped for a **multi-tenant edge**: shared TLS / rate-limit blocks under `/etc/nginx/conf.d/` plus one `sites-available/<app>.conf` per backend app. Adding the second AU app behind this proxy collapses to three commands ([§12.7](#127-adding-future-apps-behind-the-same-proxy)).
 
-The companion change on the app VM side — drop TLS, listen on plain HTTP, pin source IP to the DMZ VM — is in [§13.8](#138-modify-the-app-vm-for-the-two-tier-topology).
+The companion change on the app VM side — drop TLS, listen on plain HTTP, pin source IP to the DMZ VM — is in [§12.8](#128-modify-the-app-vm-for-the-two-tier-topology).
 
-### 13.1 DMZ VM pre-flight
+### 12.1 DMZ VM pre-flight
 
-The DMZ VM gets the same hardened baseline as the other VMs (Ubuntu 24.04, SSH key auth, UFW restrictive defaults, fail2ban, unattended security updates), but **nothing else** — no Docker, no Postgres. Start from [01 — Pre-flight](01-pre-flight.md) §3.1 through §3.7. Skip §3.8 (the `deployer` user is for the app VMs only; the DMZ VM is operated by your sudo-capable admin account).
+The DMZ VM gets the same hardened baseline as the other VMs (Ubuntu 24.04, SSH key auth, UFW restrictive defaults, fail2ban, unattended security updates), but **nothing else** — no Docker, no Postgres. Start from [01 — Pre-flight](01-pre-flight.md) §1.1 through §1.7. Skip §1.8 (the `deployer` user is for the app VMs only; the DMZ VM is operated by your sudo-capable admin account).
 
 If the VM was already provisioned with hostname `auishqosrarp01` and internal IP `172.16.177.50`, you mostly just need to confirm the hardening is in place:
 
@@ -73,9 +73,9 @@ $ sudo sshd -T 2>/dev/null | grep -E "passwordauthentication|permitrootlogin|pub
 #   pubkeyauthentication yes
 ```
 
-### 13.2 Install Nginx on the DMZ VM
+### 12.2 Install Nginx on the DMZ VM
 
-Same as [06 §7.1](06-app-vm-nginx-tls.md#71-install-nginx) but on the DMZ VM. Pasted here for self-contained running:
+Same as [06 §6.1](06-app-vm-nginx-tls.md#61-install-nginx) but on the DMZ VM. Pasted here for self-contained running:
 
 ```bash
 # [auishqosrarp01]
@@ -86,12 +86,12 @@ $ sudo systemctl status nginx --no-pager               # active (running)
 $ curl -I http://127.0.0.1/                            # HTTP/1.1 200 OK (default)
 ```
 
-### 13.3 Open ports 80 and 443 in UFW
+### 12.3 Open ports 80 and 443 in UFW
 
 ```bash
 # [auishqosrarp01]
 $ sudo ufw allow 'Nginx Full'
-#   Same UFW profile 06 §7.2 uses on the app VM. Opens 80/tcp + 443/tcp
+#   Same UFW profile 06 §6.2 uses on the app VM. Opens 80/tcp + 443/tcp
 #   on both IPv4 and IPv6.
 
 $ sudo ufw status verbose
@@ -100,25 +100,25 @@ $ sudo ufw status verbose
 
 > **ℹ The DMZ VM's UFW is permissive on 80/443 by design**
 >
-> Unlike the app VM (where UFW pins 80 to a single source IP — see [§13.8](#138-modify-the-app-vm-for-the-two-tier-topology)), the DMZ VM accepts public traffic on 80/443 from anywhere. That's the whole point: it's the public-facing host. Defence in depth comes from (a) the edge rate-limit zones in [§13.5](#135-shared-edge-configs-tls--rate-limit-zones), (b) modern TLS only, (c) `fail2ban` watching `/var/log/nginx/error.log` for repeated bad-cert / bad-host probes if you choose to wire that up.
+> Unlike the app VM (where UFW pins 80 to a single source IP — see [§12.8](#128-modify-the-app-vm-for-the-two-tier-topology)), the DMZ VM accepts public traffic on 80/443 from anywhere. That's the whole point: it's the public-facing host. Defence in depth comes from (a) the edge rate-limit zones in [§12.5](#125-shared-edge-configs-tls--rate-limit-zones), (b) modern TLS only, (c) `fail2ban` watching `/var/log/nginx/error.log` for repeated bad-cert / bad-host probes if you choose to wire that up.
 
-### 13.4 Install the AU wildcard certificate
+### 12.4 Install the AU wildcard certificate
 
-The DMZ VM holds the **only copy** of the AU wildcard cert in production. Once [§13.6](#136-add-greenbook-as-the-first-proxied-app) onward bring up app server-blocks behind it, none of the internal app VMs need their own cert — TLS terminates here and the LAN between DMZ and apps is plain HTTP.
+The DMZ VM holds the **only copy** of the AU wildcard cert in production. Once [§12.6](#126-add-greenbook-as-the-first-proxied-app) onward bring up app server-blocks behind it, none of the internal app VMs need their own cert — TLS terminates here and the LAN between DMZ and apps is plain HTTP.
 
 **Two paths in**, depending on where the cert lives today:
 
-- **[§13.4.1](#1341-copy-the-already-extracted-cert-from-the-app-vm)** — copy from the app VM. Use this when [06 §7.7.3](06-app-vm-nginx-tls.md#773-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) has already run (the original single-tier setup) — the wildcard `.fullchain.pem` and `.key` are at `/etc/ssl/greenbook/` on the app VM and the PFX itself was shredded per §7.7.3 step 8. Faster (no `openssl pkcs12` extraction; no PFX password) and uses files you've already validated end-to-end on the app VM.
-- **[§13.4.2](#1342-import-from-a-fresh-pfx)** — import a fresh PFX bundle from AU IT. Use this for greenfield bring-up (DMZ is the first place the cert lands) and for annual renewals. Mirrors [06 §7.7.3](06-app-vm-nginx-tls.md#773-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) but lands files under `/etc/ssl/au/`.
+- **[§12.4.1](#1241-copy-the-already-extracted-cert-from-the-app-vm)** — copy from the app VM. Use this when [06 §6.7.3](06-app-vm-nginx-tls.md#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) has already run (the original single-tier setup) — the wildcard `.fullchain.pem` and `.key` are at `/etc/ssl/greenbook/` on the app VM and the PFX itself was shredded per §6.7.3 step 8. Faster (no `openssl pkcs12` extraction; no PFX password) and uses files you've already validated end-to-end on the app VM.
+- **[§12.4.2](#1242-import-from-a-fresh-pfx)** — import a fresh PFX bundle from AU IT. Use this for greenfield bring-up (DMZ is the first place the cert lands) and for annual renewals. Mirrors [06 §6.7.3](06-app-vm-nginx-tls.md#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) but lands files under `/etc/ssl/au/`.
 
-After either path, the DMZ VM has the cert at the canonical paths every per-app server block in [§13.5](#135-shared-edge-configs-tls--rate-limit-zones)+ expects:
+After either path, the DMZ VM has the cert at the canonical paths every per-app server block in [§12.5](#125-shared-edge-configs-tls--rate-limit-zones)+ expects:
 
 ```
 /etc/ssl/au/wildcard.africanunion.org.fullchain.pem    644 root:root
 /etc/ssl/au/wildcard.africanunion.org.key              640 root:www-data
 ```
 
-#### 13.4.1 Copy the already-extracted cert from the app VM
+#### 12.4.1 Copy the already-extracted cert from the app VM
 
 Two-hop the files via your laptop. (Direct VM-to-VM ssh would also work if your network allows it; via-laptop is the assumption-free version.)
 
@@ -157,13 +157,13 @@ $ sudo install -m 640 -o root -g www-data \
     /etc/ssl/au/wildcard.africanunion.org.key
 
 # (d) Shred staging copies on the DMZ home directory and back on the
-#     laptop. Same sensitivity reasoning as 06 §7.7.3 step 8.
+#     laptop. Same sensitivity reasoning as 06 §6.7.3 step 8.
 $ shred -u ~/wildcard.fullchain.pem ~/wildcard.key
 $ exit                                                # back to laptop
 $ shred -u /tmp/wildcard.fullchain.pem /tmp/wildcard.key
 
 # (e) Spot-check on the DMZ VM. Re-running the full chain / key-match /
-#     SAN verifications from 06 §7.7.3 steps 5-7 here is optional —
+#     SAN verifications from 06 §6.7.3 steps 5-7 here is optional —
 #     they passed when the files were first generated and bytes don't
 #     drift over scp. The lightweight smoke check below proves the
 #     files are at the right paths with the right contents:
@@ -181,21 +181,21 @@ $ openssl x509 -in /etc/ssl/au/wildcard.africanunion.org.fullchain.pem \
 # notAfter date matching what was on the app VM.
 ```
 
-> **ℹ Two copies during cutover, one copy after — don't skip §13.8(c)**
+> **ℹ Two copies during cutover, one copy after — don't skip §12.8(c)**
 >
-> While both VMs hold the cert, an issue at the DMZ falls back to a working app-VM TLS cert via DNS rollback. That's the right safety net during the cutover window. After [§13.8(c)](#138-modify-the-app-vm-for-the-two-tier-topology) deletes `/etc/ssl/greenbook/` on the app VM, you're back to a single copy on the DMZ — the steady state. Long-lived duplicate keys multiply the rotation surface area; do the cleanup once the DMZ is verified green.
+> While both VMs hold the cert, an issue at the DMZ falls back to a working app-VM TLS cert via DNS rollback. That's the right safety net during the cutover window. After [§12.8(c)](#128-modify-the-app-vm-for-the-two-tier-topology) deletes `/etc/ssl/greenbook/` on the app VM, you're back to a single copy on the DMZ — the steady state. Long-lived duplicate keys multiply the rotation surface area; do the cleanup once the DMZ is verified green.
 
-Continue with [§13.5](#135-shared-edge-configs-tls--rate-limit-zones).
+Continue with [§12.5](#125-shared-edge-configs-tls--rate-limit-zones).
 
-#### 13.4.2 Import from a fresh PFX
+#### 12.4.2 Import from a fresh PFX
 
-Use this when the DMZ VM is the first place the cert lands (greenfield, or annual renewal). The procedure mirrors [06 §7.7.3](06-app-vm-nginx-tls.md#773-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) but the destination directory is `/etc/ssl/au/` rather than `/etc/ssl/greenbook/`.
+Use this when the DMZ VM is the first place the cert lands (greenfield, or annual renewal). The procedure mirrors [06 §6.7.3](06-app-vm-nginx-tls.md#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) but the destination directory is `/etc/ssl/au/` rather than `/etc/ssl/greenbook/`.
 
 ```bash
 # (1a) On your laptop — scp the AU-supplied wildcard PFX to your sudo
 #      account on the DMZ VM. The PFX is delivered by AU IT with a
 #      separate password; rotate the password if both arrived in the
-#      same channel (06 §7.7.3 explains why).
+#      same channel (06 §6.7.3 explains why).
 $ scp wildcard.africanunion.org.pfx <admin>@172.16.177.50:~/
 
 # (1b) SSH to the DMZ VM as the same admin account:
@@ -210,7 +210,7 @@ $ rm ~/wildcard.africanunion.org.pfx
 
 # (2) Extract the private key. -legacy loads the OpenSSL 3 legacy
 #     provider so RC2-40-CBC PFX bundles (Windows / IIS / many CA
-#     portals) extract cleanly. Full background in 06 §7.7.3.
+#     portals) extract cleanly. Full background in 06 §6.7.3.
 $ sudo openssl pkcs12 -legacy \
     -in  /etc/ssl/au/wildcard.africanunion.org.pfx \
     -out /etc/ssl/au/wildcard.africanunion.org.key \
@@ -226,7 +226,7 @@ $ sudo openssl pkcs12 -legacy \
     -out /etc/ssl/au/wildcard.africanunion.org.fullchain.pem \
     -nokeys -clcerts -nodes
 
-# (4) Append the CA chain. Single-sudo bash -c (06 §7.7.3 explains
+# (4) Append the CA chain. Single-sudo bash -c (06 §6.7.3 explains
 #     why piping `sudo openssl ... | sudo tee -a` fails on /dev/tty
 #     contention).
 $ sudo bash -c 'openssl pkcs12 -legacy \
@@ -261,7 +261,7 @@ $ ls -l /etc/ssl/au/
 #   -rw-r--r-- root root      wildcard.africanunion.org.fullchain.pem  (644)
 ```
 
-### 13.5 Shared edge configs (TLS + rate-limit zones)
+### 12.5 Shared edge configs (TLS + rate-limit zones)
 
 Three files in [appendix/edge/](appendix/edge/) carry the canonical shared configuration for the DMZ proxy. Every per-app server block on the DMZ VM inherits these implicitly (nginx auto-loads `/etc/nginx/conf.d/*.conf` before any `sites-enabled/*` and `include`s the snippets in `location` blocks). Set these once; every onboarding app reuses them.
 
@@ -297,7 +297,7 @@ The `00-` and `01-` prefixes ensure these load before per-app `sites-enabled/` f
 >
 > Each file is single-concern (TLS terminator policy, rate-limit zones, proxy headers). A new AU app onboarding only needs to know about one file: its own `sites-available/<app>.conf`. The shared building blocks don't move. When an app eventually needs a per-app rate-limit zone (e.g. a public API that takes more traffic), you add a new line to `01-au-rate-limit.conf` and reference it from one server block — no change to TLS or proxy headers.
 
-### 13.6 Add greenbook as the first proxied app
+### 12.6 Add greenbook as the first proxied app
 
 The per-app server block lives at `/etc/nginx/sites-available/greenbook.conf`. It declares `server_name greenbook.africanunion.org` and proxies to the greenbook app VM at `10.111.11.51:80`. Canonical source: [appendix/edge/greenbook.conf](appendix/edge/greenbook.conf).
 
@@ -320,14 +320,14 @@ $ sudo rm -f /etc/nginx/sites-enabled/default
 
 $ sudo nginx -t
 # Expected: "syntax is ok" / "test is successful". The TLS cert paths
-# point at /etc/ssl/au/wildcard.africanunion.org.* which §13.4 already
-# created — no snake-oil bootstrap needed (unlike 06 §7.3, where TLS
+# point at /etc/ssl/au/wildcard.africanunion.org.* which §12.4 already
+# created — no snake-oil bootstrap needed (unlike 06 §6.3, where TLS
 # was bootstrapped against an as-yet-unissued Let's Encrypt cert).
 
 $ sudo systemctl reload nginx
 ```
 
-### 13.7 Adding future apps behind the same proxy
+### 12.7 Adding future apps behind the same proxy
 
 When a second AU app onboards, the DMZ work collapses to **three commands plus one edited config file**. The wildcard cert + shared TLS / rate-limit configs are already in place from greenbook's onboarding.
 
@@ -367,13 +367,13 @@ $ sudo nginx -t
 $ sudo systemctl reload nginx
 ```
 
-The new app's **internal-side configuration** (its own VM's nginx pinned to accept only DMZ traffic, its own UFW rule, its own `trust proxy` hop count) follows the same pattern as [§13.8](#138-modify-the-app-vm-for-the-two-tier-topology) and is **independent of greenbook's setup** — onboarding a new app doesn't disturb anything already running.
+The new app's **internal-side configuration** (its own VM's nginx pinned to accept only DMZ traffic, its own UFW rule, its own `trust proxy` hop count) follows the same pattern as [§12.8](#128-modify-the-app-vm-for-the-two-tier-topology) and is **independent of greenbook's setup** — onboarding a new app doesn't disturb anything already running.
 
 > **ℹ Add the new hostname to public DNS too**
 >
 > AU IT needs to add `<app>.africanunion.org` to the same public DNS zone that points greenbook at the DMZ VM's public IP. The wildcard cert already covers any `*.africanunion.org` hostname, so no new cert work — just the A / CNAME record.
 
-### 13.8 Modify the app VM for the two-tier topology
+### 12.8 Modify the app VM for the two-tier topology
 
 The greenbook app VM `auishqosrgbwbs01` was originally configured per [06 — Nginx and TLS](06-app-vm-nginx-tls.md) for the **single-tier** shape: TLS termination on :443 with the wildcard cert installed locally, public traffic accepted directly. With the DMZ in front, the app VM's role narrows: accept HTTP only from the DMZ VM's source IP, terminate no TLS, trust the DMZ VM's `X-Forwarded-*` headers.
 
@@ -401,7 +401,7 @@ set_real_ip_from 172.16.177.50;
 real_ip_header   X-Forwarded-For;
 real_ip_recursive on;
 
-# Inner-tier rate-limit zones (unchanged from 06 §7.3 single-tier
+# Inner-tier rate-limit zones (unchanged from 06 §6.3 single-tier
 # version — these stack with the DMZ's edge_general / edge_auth zones).
 limit_req_zone $binary_remote_addr zone=greenbook_general:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=greenbook_auth:1m    rate=5r/s;
@@ -428,7 +428,7 @@ server {
     access_log /var/log/nginx/greenbook.access.log;
     error_log  /var/log/nginx/greenbook.error.log warn;
 
-    # ----- Greenbook-specific routing (UNCHANGED from 06 §7.3) -----
+    # ----- Greenbook-specific routing (UNCHANGED from 06 §6.3) -----
     # sw.js — short cache, never stale (browser update check).
     location = /sw.js {
         proxy_pass            http://greenbook_upstream;
@@ -494,7 +494,7 @@ Revoke the public 80/443 allow; replace with a source-pinned rule for the DMZ VM
 ```bash
 # [auishqosrgbwbs01]
 $ sudo ufw delete allow 'Nginx Full'
-#   The 06 §7.2 rule that opened 80/443 to public.
+#   The 06 §6.2 rule that opened 80/443 to public.
 
 $ sudo ufw allow from 172.16.177.50 to any port 80 proto tcp
 #   New rule. ONLY the DMZ VM can reach :80 on the app VM.
@@ -514,7 +514,7 @@ Now that the DMZ VM has the wildcard cert and the app VM nginx no longer referen
 ```bash
 # [auishqosrgbwbs01]
 $ sudo rm -rf /etc/ssl/greenbook
-#   The wildcard cert + key from 06 §7.7. Removing one of two copies
+#   The wildcard cert + key from 06 §6.7. Removing one of two copies
 #   of secret material; the DMZ VM's copy is now the only one.
 ```
 
@@ -532,7 +532,7 @@ app.set("trust proxy", 1);
 app.set("trust proxy", Number(process.env.TRUSTED_PROXIES ?? 1));
 ```
 
-Then set `TRUSTED_PROXIES=2` in `/etc/greenbook.env` on the app VM and recreate the container ([07 §8.3.2](07-deploy-workflow.md#832-env-file-lifecycle-across-deploys) explains the env-file-recreate flow).
+Then set `TRUSTED_PROXIES=2` in `/etc/greenbook.env` on the app VM and recreate the container ([07 §7.3.2](07-deploy-workflow.md#732-env-file-lifecycle-across-deploys) explains the env-file-recreate flow).
 
 #### (e) Reload nginx + recreate the container
 
@@ -546,7 +546,7 @@ $ docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
 # Picks up TRUSTED_PROXIES=2 from the env file.
 ```
 
-### 13.9 Test the TLS deployment
+### 12.9 Test the TLS deployment
 
 Until AU IT cuts DNS over from Azure to the DMZ VM's public IP, the public hostname still resolves elsewhere. Test the DMZ proxy directly via its public IP with a `Host:` header override:
 
@@ -586,9 +586,9 @@ $ curl -s https://greenbook.africanunion.org/healthz | head -c 400
 # Confirms TLS + edge proxy + app VM proxy + container + DB are all alive.
 ```
 
-### 13.10 Renewal
+### 12.10 Renewal
 
-The wildcard cert in `/etc/ssl/au/` does not auto-renew. Set a calendar reminder 30 days before `notAfter`. The renewal procedure is the same shape as [§13.4](#134-install-the-au-wildcard-certificate): AU IT issues a new PFX, you scp + extract on the DMZ VM, replace the two files, `nginx -t && systemctl reload nginx`. <2 minutes per renewal.
+The wildcard cert in `/etc/ssl/au/` does not auto-renew. Set a calendar reminder 30 days before `notAfter`. The renewal procedure is the same shape as [§12.4](#124-install-the-au-wildcard-certificate): AU IT issues a new PFX, you scp + extract on the DMZ VM, replace the two files, `nginx -t && systemctl reload nginx`. <2 minutes per renewal.
 
 ```bash
 # [auishqosrarp01] — check expiry
@@ -597,6 +597,6 @@ $ sudo openssl x509 -in /etc/ssl/au/wildcard.africanunion.org.fullchain.pem \
 # Expected: notAfter date well in the future.
 ```
 
-The cert-expiry probe in [08 §9.3](08-day-2-operations.md#93-simple-monitoring-script) and the [09 §11.6](09-hardening-checklist.md#116-observability) hardening item both probe the public hostname (`greenbook.africanunion.org`) once DNS is cut over — they don't need DMZ-specific updates because they use `openssl s_client` against the public name, which lands at the DMZ VM and sees the wildcard cert.
+The cert-expiry probe in [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) and the [09 §9.6](09-hardening-checklist.md#96-observability) hardening item both probe the public hostname (`greenbook.africanunion.org`) once DNS is cut over — they don't need DMZ-specific updates because they use `openssl s_client` against the public name, which lands at the DMZ VM and sees the wildcard cert.
 
 ---

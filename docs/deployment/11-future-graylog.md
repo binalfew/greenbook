@@ -10,22 +10,22 @@
 
 ## Contents
 
-- [§10.1 Graylog architecture](#101-graylog-architecture)
-- [§10.2 Why a separate VM](#102-why-a-separate-vm)
-- [§10.3 Sizing guidance](#103-sizing-guidance)
-- [§10.4 Installation outline](#104-installation-outline)
-- [§10.5 Wiring Docker logs to Graylog](#105-wiring-docker-logs-to-graylog)
+- [§11.1 Graylog architecture](#111-graylog-architecture)
+- [§11.2 Why a separate VM](#112-why-a-separate-vm)
+- [§11.3 Sizing guidance](#113-sizing-guidance)
+- [§11.4 Installation outline](#114-installation-outline)
+- [§11.5 Wiring Docker logs to Graylog](#115-wiring-docker-logs-to-graylog)
   - [Option A: Docker's gelf log driver (direct)](#option-a-dockers-gelf-log-driver-direct)
   - [Option B: Keep json-file, run a log shipper (recommended)](#option-b-keep-json-file-run-a-log-shipper-recommended)
-- [§10.6 Shipping Node application logs directly](#106-shipping-node-application-logs-directly)
+- [§11.6 Shipping Node application logs directly](#116-shipping-node-application-logs-directly)
 
-## 10. Planning a future Graylog deployment
+## 11. Planning a future Graylog deployment
 
 Graylog is a log-aggregation platform: it ingests structured and unstructured log events from many sources, indexes them into OpenSearch, and gives you a web UI to search, filter, alert on, and dashboard them. It is the SIEM-adjacent open-source choice when you need something more than "tail the journal on each VM" but less than a commercial platform like Splunk or Datadog.
 
 This section is PLANNING only — no commands are run yet. The intent is that once your app is stable in production, you add a third VM for Graylog and wire the app VM to ship logs to it.
 
-### 10.1 Graylog architecture
+### 11.1 Graylog architecture
 
 ```
                  ┌────────────────────────────────┐
@@ -56,14 +56,14 @@ This section is PLANNING only — no commands are run yet. The intent is that on
     └────────────────────────────────────────────────────┘
 ```
 
-### 10.2 Why a separate VM
+### 11.2 Why a separate VM
 
 - Log ingestion spikes (e.g. during an incident) should not consume CPU or memory from the app.
 - OpenSearch is JVM-based and memory-hungry; giving it its own host lets you size it independently.
 - Log data is sensitive — it often contains user identifiers, request headers, and error context. Isolating it behind its own firewall boundary is cleaner than sharing with the app.
 - You can restart or upgrade Graylog without touching the app.
 
-### 10.3 Sizing guidance
+### 11.3 Sizing guidance
 
 | Volume        | CPU     | RAM   | Disk       | Notes                                               |
 | ------------- | ------- | ----- | ---------- | --------------------------------------------------- |
@@ -73,18 +73,18 @@ This section is PLANNING only — no commands are run yet. The intent is that on
 
 Rule of thumb for OpenSearch heap: half of system RAM, capped at 31 GB. Retention drives disk: with zstd compression (default) expect ~0.3–0.5x the raw log volume on disk, per day, per replica.
 
-### 10.4 Installation outline
+### 11.4 Installation outline
 
 Outline only — each step should be expanded and tested when you actually build this VM.
 
-- Provision Ubuntu 24.04 VM. Run the pre-flight steps in §3 to establish a hardened baseline.
+- Provision Ubuntu 24.04 VM. Run the pre-flight steps in §1 to establish a hardened baseline.
 - Install OpenSearch 2.x following the Graylog-recommended steps (disable swap, set vm.max_map_count, install via the OpenSearch apt repo, enable single-node discovery).
 - Install MongoDB 6+ or compatible (replica set of one for a single-host Graylog; sharded only at much larger scale).
 - Install Graylog Server via the graylog-6.x apt repo. Configure /etc/graylog/server/server.conf with a generated password_secret (pwgen -N 1 -s 96) and a sha2 hash of the admin password.
 - Install Nginx in front of Graylog Server for TLS termination — same pattern as the app VM.
 - Open UFW: 443/tcp for the UI, 12201/udp for GELF ingestion (or a different port if you choose).
 
-### 10.5 Wiring Docker logs to Graylog
+### 11.5 Wiring Docker logs to Graylog
 
 Two options for getting Docker container logs into Graylog. Picking between them is the main architectural decision and has meaningful operational consequences.
 
@@ -129,7 +129,7 @@ Leave the container on the default json-file driver. Deploy a separate shipper (
 
 The extra moving part (a shipper service) is worth the operational insurance. Vector and Fluent Bit are both lightweight and have good Docker inputs out of the box.
 
-### 10.6 Shipping Node application logs directly
+### 11.6 Shipping Node application logs directly
 
 For structured events from the Node app (business events, audit records), consider emitting GELF directly from application code using a library like `graygelf` or `winston-gelf-tcp`. This bypasses container logs entirely and lets you send richer structured fields. Keep one rule: never send secrets or full request bodies — redact before shipping.
 

@@ -154,7 +154,7 @@ services:
       - ALL
 ```
 
-Rationale for every field is in [07-deploy-workflow.md §8.2.3](../07-deploy-workflow.md).
+Rationale for every field is in [07-deploy-workflow.md §7.2.3](../07-deploy-workflow.md).
 
 ### B.6 /etc/pgbackrest.conf
 
@@ -200,7 +200,7 @@ WantedBy=multi-user.target
 
 ### B.8 /etc/nginx/sites-available/greenbook.conf
 
-The production nginx vhost is shipped as a standalone file in this directory: **[greenbook.conf](greenbook.conf)**. Copy it to the app VM in **two hops** — `/etc/nginx/sites-available/` is root-owned and `deployer` is intentionally no-sudo (09 §11.1). Use your personal sudo-capable admin account (`greenbook` in the AU's setup; substitute your own):
+The production nginx vhost is shipped as a standalone file in this directory: **[greenbook.conf](greenbook.conf)**. Copy it to the app VM in **two hops** — `/etc/nginx/sites-available/` is root-owned and `deployer` is intentionally no-sudo (09 §9.1). Use your personal sudo-capable admin account (`greenbook` in the AU's setup; substitute your own):
 
 ```bash
 # (a) From your laptop — scp into the admin account's home dir:
@@ -301,6 +301,6 @@ server {
 }
 ```
 
-Rationale for every directive is in [06-app-vm-nginx-tls.md §7.3](../06-app-vm-nginx-tls.md).
+Rationale for every directive is in [06-app-vm-nginx-tls.md §6.3](../06-app-vm-nginx-tls.md).
 
 ---

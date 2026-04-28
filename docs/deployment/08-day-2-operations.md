@@ -10,17 +10,17 @@
 
 ## Contents
 
-- [§9.1 Viewing logs](#91-viewing-logs)
-- [§9.2 Restarting services](#92-restarting-services)
-  - [§9.2.1 Reading pino JSON logs](#921-reading-pino-json-logs)
-- [§9.3 Simple monitoring script](#93-simple-monitoring-script)
-- [§9.4 Pruning old images](#94-pruning-old-images)
-- [§9.5 OS and Docker updates](#95-os-and-docker-updates)
-- [§9.6 PostgreSQL updates](#96-postgresql-updates)
+- [§8.1 Viewing logs](#81-viewing-logs)
+- [§8.2 Restarting services](#82-restarting-services)
+  - [§8.2.1 Reading pino JSON logs](#821-reading-pino-json-logs)
+- [§8.3 Simple monitoring script](#83-simple-monitoring-script)
+- [§8.4 Pruning old images](#84-pruning-old-images)
+- [§8.5 OS and Docker updates](#85-os-and-docker-updates)
+- [§8.6 PostgreSQL updates](#86-postgresql-updates)
 
-## 9. Day-2 operations
+## 8. Day-2 operations
 
-### 9.1 Viewing logs
+### 8.1 Viewing logs
 
 ```bash
 # [auishqosrgbwbs01] as deployer
@@ -42,7 +42,7 @@ $ sudo tail -F /var/log/nginx/greenbook.access.log
 $ sudo tail -F /var/log/nginx/greenbook.error.log
 ```
 
-### 9.2 Restarting services
+### 8.2 Restarting services
 
 | Thing               | Command                                                         | Side effect                                           |
 | ------------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
@@ -52,7 +52,7 @@ $ sudo tail -F /var/log/nginx/greenbook.error.log
 | Docker daemon       | sudo systemctl restart docker                                   | ALL containers restart; ~5-10s app downtime           |
 | Postgres (on DB VM) | sudo systemctl restart postgresql@16-main                       | ~2s downtime; Prisma pool reconnects                  |
 
-### 9.2.1 Reading pino JSON logs
+### 8.2.1 Reading pino JSON logs
 
 In production greenbook emits one JSON object per line via pino. Piping through `jq` gives you a readable view. Save these one-liners as shell aliases or use directly:
 
@@ -75,7 +75,7 @@ $ docker compose -f /opt/greenbook/docker-compose.yml logs --since 10m app \
   | jq -R 'try fromjson catch empty | select(.correlationId==\"'\"$CID\"'\")'
 ```
 
-### 9.3 Simple monitoring script
+### 8.3 Simple monitoring script
 
 Before investing in Prometheus + Grafana, even a bash script on cron covers the basics. Save as `/usr/local/bin/greenbook-health.sh`:
 
@@ -166,7 +166,7 @@ EOF
 #   need to install and configure one for this to actually send mail.
 ```
 
-### 9.4 Pruning old images
+### 8.4 Pruning old images
 
 Each build leaves a new image on disk. Docker never deletes them automatically. Run a weekly prune to stop the disk filling up.
 
@@ -187,10 +187,10 @@ $ docker builder prune --filter "until=168h" -f
 
 Safe cadence: weekly. Add to `/etc/cron.weekly/greenbook-prune`.
 
-### 9.5 OS and Docker updates
+### 8.5 OS and Docker updates
 
 ```bash
-# Security-only apt updates happen automatically (§3.4). For a full dist upgrade:
+# Security-only apt updates happen automatically (§1.4). For a full dist upgrade:
 $ sudo apt update
 $ sudo apt full-upgrade -y
 #   full-upgrade    like upgrade but CAN add/remove packages to satisfy new
@@ -209,7 +209,7 @@ $ sudo systemctl restart docker
 # All containers briefly stop, then restart (restart: unless-stopped).
 ```
 
-### 9.6 PostgreSQL updates
+### 8.6 PostgreSQL updates
 
 ```bash
 # [auishqosrgbdbs01]

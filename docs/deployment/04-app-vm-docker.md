@@ -10,18 +10,18 @@
 
 ## Contents
 
-- [§5.1 Remove any pre-installed Docker packages](#51-remove-any-pre-installed-docker-packages)
-- [§5.2 Add the Docker apt repository](#52-add-the-docker-apt-repository)
-- [§5.3 Install Docker Engine, CLI, Compose, and Buildx](#53-install-docker-engine-cli-compose-and-buildx)
-- [§5.4 Enable the Docker service and verify](#54-enable-the-docker-service-and-verify)
-- [§5.5 Grant the deploy user access to Docker](#55-grant-the-deploy-user-access-to-docker)
-- [§5.6 Lay out the app directory](#56-lay-out-the-app-directory)
+- [§4.1 Remove any pre-installed Docker packages](#41-remove-any-pre-installed-docker-packages)
+- [§4.2 Add the Docker apt repository](#42-add-the-docker-apt-repository)
+- [§4.3 Install Docker Engine, CLI, Compose, and Buildx](#43-install-docker-engine-cli-compose-and-buildx)
+- [§4.4 Enable the Docker service and verify](#44-enable-the-docker-service-and-verify)
+- [§4.5 Grant the deploy user access to Docker](#45-grant-the-deploy-user-access-to-docker)
+- [§4.6 Lay out the app directory](#46-lay-out-the-app-directory)
 
-## 5. App VM setup: Docker Engine
+## 4. App VM setup: Docker Engine
 
 This section installs Docker CE from Docker’s official apt repository. Ubuntu ships a docker.io package but it lags upstream significantly and does not include the Compose v2 plugin.
 
-### 5.1 Remove any pre-installed Docker packages
+### 4.1 Remove any pre-installed Docker packages
 
 ```bash
 # [auishqosrgbwbs01]
@@ -39,7 +39,7 @@ done
 # previous experiment. On a fresh 24.04 VM, no output.
 ```
 
-### 5.2 Add the Docker apt repository
+### 4.2 Add the Docker apt repository
 
 ```bash
 # [auishqosrgbwbs01]
@@ -89,7 +89,7 @@ $ sudo apt update
 # Refresh package lists so apt learns about the Docker repo contents.
 ```
 
-### 5.3 Install Docker Engine, CLI, Compose, and Buildx
+### 4.3 Install Docker Engine, CLI, Compose, and Buildx
 
 ```bash
 # [auishqosrgbwbs01]
@@ -117,7 +117,7 @@ $ docker compose version
 >
 > The modern tool is "docker compose" (a subcommand of the docker CLI, provided by the docker-compose-plugin package). The legacy Python tool "docker-compose" (hyphenated) is deprecated and should not be installed. Every compose command in this document uses the v2 syntax.
 
-### 5.4 Enable the Docker service and verify
+### 4.4 Enable the Docker service and verify
 
 ```bash
 # [auishqosrgbwbs01]
@@ -136,7 +136,7 @@ $ sudo docker run --rm hello-world
 # -it ubuntu bash'..." This proves: daemon works, can pull images, can run them.
 ```
 
-### 5.5 Grant the deploy user access to Docker
+### 4.5 Grant the deploy user access to Docker
 
 ```bash
 # [auishqosrgbwbs01]
@@ -162,9 +162,9 @@ $ exit
 
 > **⚠ The docker group is root-equivalent**
 >
-> Adding a user to the docker group effectively gives them root on the host, because they can mount arbitrary host paths into containers (for example, mount / into a container and read /etc/shadow). Only trusted deploy operators belong in this group. The deployer system user we created in §3.8 is specifically for this purpose — your personal admin account should stay out of the docker group.
+> Adding a user to the docker group effectively gives them root on the host, because they can mount arbitrary host paths into containers (for example, mount / into a container and read /etc/shadow). Only trusted deploy operators belong in this group. The deployer system user we created in §1.8 is specifically for this purpose — your personal admin account should stay out of the docker group.
 
-### 5.6 Lay out the app directory
+### 4.6 Lay out the app directory
 
 ```bash
 # [auishqosrgbwbs01]

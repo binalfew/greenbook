@@ -10,16 +10,15 @@
 
 ## Contents
 
-- [§4.10 Backup strategy](#410-backup-strategy)
-  - [§4.10.1 Nightly pg_dump (logical backup)](#4101-nightly-pg_dump-logical-backup)
-  - [§4.10.2 pgBackRest (physical + WAL, PITR-capable)](#4102-pgbackrest-physical--wal-pitr-capable)
-  - [§4.10.3 Offsite backup](#4103-offsite-backup)
+- [§3.1 Nightly pg_dump (logical backup)](#31-nightly-pg_dump-logical-backup)
+- [§3.2 pgBackRest (physical + WAL, PITR-capable)](#32-pgbackrest-physical--wal-pitr-capable)
+- [§3.3 Offsite backup](#33-offsite-backup)
 
-### 4.10 Backup strategy
+## 3. Backup strategy
 
 Two layers: a nightly logical dump (easy to move around, good for per-object restores), and a continuous physical + WAL backup via pgBackRest (allows point-in-time recovery to any moment, which pg_dump alone cannot do).
 
-#### 4.10.1 Nightly pg_dump (logical backup)
+### 3.1 Nightly pg_dump (logical backup)
 
 ```bash
 # [auishqosrgbdbs01]
@@ -92,7 +91,7 @@ $ sudo -u postgres rm /var/backups/postgres/greenbook-test.dump
 # Clean up the test dump.
 ```
 
-#### 4.10.2 pgBackRest (physical + WAL, PITR-capable)
+### 3.2 pgBackRest (physical + WAL, PITR-capable)
 
 pgBackRest is the standard tool for production PostgreSQL backup. It supports full, differential, and incremental backups; compresses and optionally encrypts backups; manages WAL archiving automatically; and handles PITR restore with a single command. Installing and configuring it now — before production data exists — is much easier than retrofitting later.
 
@@ -243,7 +242,7 @@ Schedule recurring backups. Full weekly, differential daily. WAL streams continu
 ```bash
 # [auishqosrgbdbs01]
 $ sudo -u postgres crontab -e
-# Add these two lines (the pg_dump line from §4.10.1 should already be there):
+# Add these two lines (the pg_dump line from §3.1 should already be there):
 
 30 1 * * 0   pgbackrest --stanza=main --type=full backup
 #   30 1 * * 0    = 01:30 every Sunday.
@@ -266,7 +265,7 @@ $ sudo -u postgres crontab -e
 >
 > Do this at least once per quarter and document the exact timings — those are your RTO.
 
-#### 4.10.3 Offsite backup
+### 3.3 Offsite backup
 
 The pgBackRest repository on the DB VM protects against PostgreSQL corruption or human error, but not against the VM itself being lost. A second repository on a different host or storage service is essential. pgBackRest supports multi-repository writes natively.
 

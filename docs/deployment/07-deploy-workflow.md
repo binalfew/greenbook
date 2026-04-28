@@ -2,9 +2,9 @@
 
 > **Phase**: bring-up + every deploy · **Run on**: App VM + (for Path B) build host · **Time**: ~45 min first time, ~5 min subsequent
 >
-> **Initial app VM setup (one-time)**: `/etc/greenbook.env`, `/opt/greenbook/docker-compose.yml`, directory layout — §8.2.
+> **Initial app VM setup (one-time)**: `/etc/greenbook.env`, `/opt/greenbook/docker-compose.yml`, directory layout — §7.2.
 >
-> **Deploy cycle (every deploy)**: two paths to get an image onto the VM (build-on-VM vs build-elsewhere-and-ship), the `prisma db push` vs `prisma migrate` schema decision, env-file lifecycle, the promote step, rollback, systemd autostart, the annotated `deploy.sh`, and the one-time first-run seed — §8.3 onward.
+> **Deploy cycle (every deploy)**: two paths to get an image onto the VM (build-on-VM vs build-elsewhere-and-ship), the `prisma db push` vs `prisma migrate` schema decision, env-file lifecycle, the promote step, rollback, systemd autostart, the annotated `deploy.sh`, and the one-time first-run seed — §7.3 onward.
 >
 > **Prev**: [06 — Nginx and TLS](06-app-vm-nginx-tls.md) · **Next**: [08 — Day-2 operations](08-day-2-operations.md) · **Index**: [README](README.md)
 
@@ -12,55 +12,55 @@
 
 ## Contents
 
-- [§8.1 App VM directory layout](#81-app-vm-directory-layout)
-- [§8.2 Initial app VM setup (one-time)](#82-initial-app-vm-setup-one-time)
-  - [§8.2.1 Create the deploy directory structure](#821-create-the-deploy-directory-structure)
-  - [§8.2.2 The environment file: /etc/greenbook.env](#822-the-environment-file-etcgreenbookenv)
-  - [§8.2.3 The compose file: /opt/greenbook/docker-compose.yml](#823-the-compose-file-optgreenbookdocker-composeyml)
-- [§8.3 Deploy: build the image and stage it on the app VM](#83-deploy-build-the-image-and-stage-it-on-the-app-vm)
+- [§7.1 App VM directory layout](#71-app-vm-directory-layout)
+- [§7.2 Initial app VM setup (one-time)](#72-initial-app-vm-setup-one-time)
+  - [§7.2.1 Create the deploy directory structure](#721-create-the-deploy-directory-structure)
+  - [§7.2.2 The environment file: /etc/greenbook.env](#722-the-environment-file-etcgreenbookenv)
+  - [§7.2.3 The compose file: /opt/greenbook/docker-compose.yml](#723-the-compose-file-optgreenbookdocker-composeyml)
+- [§7.3 Deploy: build the image and stage it on the app VM](#73-deploy-build-the-image-and-stage-it-on-the-app-vm)
   - [First-time deploy — the linear walkthrough](#first-time-deploy--the-linear-walkthrough)
   - [Re-deploy after a code change — the every-deploy walkthrough](#re-deploy-after-a-code-change--the-every-deploy-walkthrough)
-  - [§8.3.1 Apply schema changes — the greenbook reality check](#831-apply-schema-changes--the-greenbook-reality-check)
-  - [§8.3.2 Env file lifecycle across deploys](#832-env-file-lifecycle-across-deploys)
-  - [§8.3.3 Promote the new image](#833-promote-the-new-image)
-  - [§8.3.4 Post-deploy verification — what should be true now](#834-post-deploy-verification--what-should-be-true-now)
-- [§8.4 Rollback](#84-rollback)
-- [§8.5 Autostart on boot (systemd)](#85-autostart-on-boot-systemd)
-- [§8.6 Annotated deploy.sh](#86-annotated-deploysh)
-- [§8.7 First-run bootstrap (one-time)](#87-first-run-bootstrap-one-time)
+  - [§7.3.1 Apply schema changes — the greenbook reality check](#731-apply-schema-changes--the-greenbook-reality-check)
+  - [§7.3.2 Env file lifecycle across deploys](#732-env-file-lifecycle-across-deploys)
+  - [§7.3.3 Promote the new image](#733-promote-the-new-image)
+  - [§7.3.4 Post-deploy verification — what should be true now](#734-post-deploy-verification--what-should-be-true-now)
+- [§7.4 Rollback](#74-rollback)
+- [§7.5 Autostart on boot (systemd)](#75-autostart-on-boot-systemd)
+- [§7.6 Annotated deploy.sh](#76-annotated-deploysh)
+- [§7.7 First-run bootstrap (one-time)](#77-first-run-bootstrap-one-time)
 
-## 8. Deploy workflow
+## 7. Deploy workflow
 
 The goal of this workflow is that any deploy (including rollback) is: one command, fast, atomic-ish (clients either see the old version or the new one, not a broken one), and reversible without rebuilding.
 
-### 8.1 App VM directory layout
+### 7.1 App VM directory layout
 
 ```
 /opt/greenbook/
-├── docker-compose.yml        # one-time setup, see §8.2.3
+├── docker-compose.yml        # one-time setup, see §7.2.3
 ├── .env                      # written by deploy.sh; pins APP_VERSION
 ├── releases/
 │   ├── 2026-04-23-1430/      # git clone of the source, named by timestamp
 │   ├── 2026-04-22-0930/
 │   └── ...
-└── deploy.sh                 # the deploy script (§8.6)
+└── deploy.sh                 # the deploy script (§7.6)
 ```
 
-### 8.2 Initial app VM setup (one-time)
+### 7.2 Initial app VM setup (one-time)
 
-Three host-side files have to exist on the app VM before any deploy can succeed. These are configured ONCE per VM (or after a fresh provision); subsequent deploys read them but don't touch them. If you're past initial bring-up, skim and skip ahead to §8.3.
+Three host-side files have to exist on the app VM before any deploy can succeed. These are configured ONCE per VM (or after a fresh provision); subsequent deploys read them but don't touch them. If you're past initial bring-up, skim and skip ahead to §7.3.
 
 | Step   | What                                                             | Where             |
 | ------ | ---------------------------------------------------------------- | ----------------- |
-| §8.2.1 | Create `/opt/greenbook/` with the right ownership                | App VM filesystem |
-| §8.2.2 | Write `/etc/greenbook.env` with all required + optional env vars | App VM filesystem |
-| §8.2.3 | Place `/opt/greenbook/docker-compose.yml`                        | App VM filesystem |
+| §7.2.1 | Create `/opt/greenbook/` with the right ownership                | App VM filesystem |
+| §7.2.2 | Write `/etc/greenbook.env` with all required + optional env vars | App VM filesystem |
+| §7.2.3 | Place `/opt/greenbook/docker-compose.yml`                        | App VM filesystem |
 
-When all three are done, you're ready for §8.3 (the first deploy).
+When all three are done, you're ready for §7.3 (the first deploy).
 
-#### 8.2.1 Create the deploy directory structure
+#### 7.2.1 Create the deploy directory structure
 
-[01 §3.8](01-pre-flight.md) already created `/opt/greenbook/` with `deployer:deployer` ownership. The release-directory subtree is the only thing left:
+[01 §1.8](01-pre-flight.md) already created `/opt/greenbook/` with `deployer:deployer` ownership. The release-directory subtree is the only thing left:
 
 ```bash
 # [auishqosrgbwbs01] as deployer
@@ -72,7 +72,7 @@ $ ls -la /opt/greenbook/
 # Expected: drwxr-xr-x deployer deployer ... releases
 ```
 
-#### 8.2.2 The environment file: /etc/greenbook.env
+#### 7.2.2 The environment file: /etc/greenbook.env
 
 Runtime secrets live outside the image and outside the repository. Store them in `/etc/greenbook.env` on the host, readable only by root and the deployer group.
 
@@ -95,7 +95,7 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 | `PORT`                      | `3000`                  | `server.js`                            | Only change if you also change the compose publish line + nginx upstream.                                                                                                |
 | `APP_URL`                   | `http://localhost:5173` | `app/utils/config/env.server.ts`       | **Must** match the HTTPS URL nginx serves. Used to construct OIDC/SAML callback URLs and transactional-email links. Getting this wrong silently breaks SSO.              |
 | `APP_NAME`                  | `app`                   | `server/logger.js`                     | Appears as `service` in every pino log line + as a Sentry tag. Set to something identifying (`greenbook-prod`).                                                          |
-| `APP_VERSION`               | `dev`                   | `server/logger.js`, `server/sentry.js` | Appears as `version` in pino + as the Sentry `release`. The deploy script in §8.6 sets it to the release timestamp automatically.                                        |
+| `APP_VERSION`               | `dev`                   | `server/logger.js`, `server/sentry.js` | Appears as `version` in pino + as the Sentry `release`. The deploy script in §7.6 sets it to the release timestamp automatically.                                        |
 | `LOG_LEVEL`                 | `info`                  | `server/logger.js`                     | One of `fatal`, `error`, `warn`, `info`, `debug`, `trace`. Lower the threshold only temporarily during debugging — `debug`/`trace` are very chatty.                      |
 | `SENTRY_DSN`                | _(unset)_               | `server/sentry.js`, `app/root.tsx`     | Leave empty to disable error tracking. If set, also exposed to the browser bundle via `getEnv()`.                                                                        |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1`                   | `server/sentry.js`                     | Fraction (0.0–1.0) of transactions sampled. Keep low in prod.                                                                                                            |
@@ -134,7 +134,7 @@ $ openssl rand -base64 32
 $ echo ""
 $ echo "── DB password (postgres role, 32 bytes / 44 base64 chars) ──"
 $ openssl rand -base64 32
-# Use this for the `appuser` Postgres role created in 02 §4.3 — if you didn't
+# Use this for the `appuser` Postgres role created in 02 §2.3 — if you didn't
 # generate one there, generate it now and update the role:
 #   On the DB VM:
 #     sudo -u postgres psql -c "ALTER USER appuser WITH PASSWORD 'PASTE_HERE';"
@@ -255,7 +255,7 @@ Greenbook parses `SESSION_SECRET` as a comma-separated list and treats the first
 > 4. Force-push, and coordinate with the team to re-clone — every local clone still contains the secret.
 > 5. Audit access logs of the repository and the rotated service for any use of the leaked credential during the exposure window.
 
-#### 8.2.3 The compose file: /opt/greenbook/docker-compose.yml
+#### 7.2.3 The compose file: /opt/greenbook/docker-compose.yml
 
 This is a separate compose file for production (do **not** reuse the repo root `docker-compose.yml`, which is tuned for local Postgres dev on ports 5432/5433). The canonical source is shipped as a standalone file in [appendix/docker-compose.yml](appendix/docker-compose.yml) — copy it to the app VM with:
 
@@ -290,7 +290,7 @@ services:
     # explicitly ran "docker compose stop". Survives VM reboots.
 
     init: true
-    # Belt-and-braces with the dumb-init ENTRYPOINT in 05 §6.1. Compose's
+    # Belt-and-braces with the dumb-init ENTRYPOINT in 05 §5.1. Compose's
     # init: true runs docker-init (tini) as PID 1 if ENTRYPOINT is absent.
     # With our explicit dumb-init ENTRYPOINT this is redundant but harmless
     # and makes the behaviour visible to anyone skim-reading the compose file.
@@ -306,7 +306,7 @@ services:
       - /etc/greenbook.env
     # Loads VAR=value pairs from the file into the container's environment.
     # Variables here do NOT appear in compose.yml, keeping this file safe to
-    # commit to git. See §8.2.2 for the full env matrix.
+    # commit to git. See §7.2.2 for the full env matrix.
 
     environment:
       APP_VERSION: ${APP_VERSION:-dev}
@@ -334,7 +334,7 @@ services:
       #
       # REQUIRES greenbook to expose GET /healthz returning 200. The
       # `/healthz` and `/up` paths are already marked "skip rate-limit" in
-      # server/security.ts, but no route handler exists yet. 05 §6.3 includes
+      # server/security.ts, but no route handler exists yet. 05 §5.3 includes
       # a drop-in resource route that you MUST add before rolling this
       # compose file — otherwise the healthcheck will permanently fail
       # and the container will be marked unhealthy.
@@ -407,7 +407,7 @@ services:
 
 > **✓ Checkpoint: app VM is ready for first deploy**
 >
-> After §8.2.1–8.2.3 you should have:
+> After §7.2.1–8.2.3 you should have:
 >
 > ```bash
 > $ ls -la /opt/greenbook/
@@ -417,11 +417,11 @@ services:
 > # Expected: -rw-r----- 1 root deployer
 > ```
 >
-> If both pass, move on to §8.3.
+> If both pass, move on to §7.3.
 
-### 8.3 Deploy: build the image and stage it on the app VM
+### 7.3 Deploy: build the image and stage it on the app VM
 
-Greenbook can be deployed two ways. Pick the one that matches your network reality — they differ only in **where the image is built**; everything from §8.3.1 onward (schema, env, compose-up, healthcheck) is identical.
+Greenbook can be deployed two ways. Pick the one that matches your network reality — they differ only in **where the image is built**; everything from §7.3.1 onward (schema, env, compose-up, healthcheck) is identical.
 
 #### First-time deploy — the linear walkthrough
 
@@ -507,7 +507,7 @@ $ curl -sI https://greenbook.africanunion.org/  | grep -E "HTTP|strict-transport
 # Log into the admin UI as admin@africanunion.org / admin123,
 # IMMEDIATELY change the admin password, then delete the three demo
 # users (manager@, focal@, user@) before opening the URL to anyone
-# else. See §8.7 for details.
+# else. See §7.7 for details.
 ```
 
 That's it. From here on, re-deploys follow the six-command walkthrough below — same shape with steps 4 (seed) and 8 (rotate demo passwords) removed.
@@ -518,13 +518,13 @@ That's it. From here on, re-deploys follow the six-command walkthrough below —
 
 > **ℹ "Where do I get the env file from?" — STEP 0 if you haven't already**
 >
-> Steps 3, 4, and 6 all rely on `/etc/greenbook.env` existing on the VM. If you didn't create it during [05 — Application container §6.3](05-app-vm-container.md), do that BEFORE step 1: it's a 5-minute openssl + tee sequence.
+> Steps 3, 4, and 6 all rely on `/etc/greenbook.env` existing on the VM. If you didn't create it during [05 — Application container §5.3](05-app-vm-container.md), do that BEFORE step 1: it's a 5-minute openssl + tee sequence.
 
 #### Re-deploy after a code change — the every-deploy walkthrough
 
-For deploys after [§8.7 first-run bootstrap](#87-first-run-bootstrap-one-time) has already run on a fresh DB. ~5 minutes if the build is hot. Identical to the first-time walkthrough above with steps 4 (seed) and 8 (rotate demo passwords) removed.
+For deploys after [§7.7 first-run bootstrap](#77-first-run-bootstrap-one-time) has already run on a fresh DB. ~5 minutes if the build is hot. Identical to the first-time walkthrough above with steps 4 (seed) and 8 (rotate demo passwords) removed.
 
-There are **two shapes** of the build step depending on which path you set up in [§8.3 Path A vs Path B](#83-deploy-build-the-image-and-stage-it-on-the-app-vm) — Path A builds on the VM directly (egress to GitHub + npm + Docker Hub + Prisma whitelisted), Path B builds on a host with internet (laptop / CI) and ships the image as a tarball. The schema/promote/verify tail is identical for both. Pick the path that matches your VM's egress setup.
+There are **two shapes** of the build step depending on which path you set up in [§7.3 Path A vs Path B](#73-deploy-build-the-image-and-stage-it-on-the-app-vm) — Path A builds on the VM directly (egress to GitHub + npm + Docker Hub + Prisma whitelisted), Path B builds on a host with internet (laptop / CI) and ships the image as a tarball. The schema/promote/verify tail is identical for both. Pick the path that matches your VM's egress setup.
 
 The single biggest deploy mistake is `git pull` followed straight by `docker compose up -d`, expecting the change to take effect. It won't — nothing has rebuilt the image, so the same bytes are still running. The build step (Path A: STEP 1; Path B: STEPS 1–3) MUST produce a new tag with new bytes; the promote step (STEP 4 / 5 below) MUST point compose at that new tag.
 
@@ -549,7 +549,7 @@ Then jump to **STEP 4** below (schema → promote → verify).
 
 ##### Path B re-deploy — build on laptop, ship to VM
 
-For when the VM is fully air-gapped (the egress-test in §8.3 fails, or you're on a fork that hasn't done the firewall work).
+For when the VM is fully air-gapped (the egress-test in §7.3 fails, or you're on a fork that hasn't done the firewall work).
 
 ```bash
 # ── STEP 1 (B). Laptop — pull and rebuild ─────────────────────────
@@ -634,11 +634,11 @@ $ curl -sI https://greenbook.africanunion.org/ | grep -E "HTTP|strict-transport"
 
 > **ℹ When the schema changed (rare)**
 >
-> STEP 4's `prisma db push` is idempotent — running it on a code-only deploy is a no-op that completes in under a second. But if the schema changed and `db push` reports it would lose data (column dropped, type narrowed), it refuses and exits non-zero in non-TTY mode. Don't blindly add `--accept-data-loss`; either back-port the change to keep the old shape working alongside the new one ("expand → migrate code → contract"), or generate a proper migration baseline (§8.3.1 Path B). See [§8.3.1](#831-apply-schema-changes--the-greenbook-reality-check) for the full reasoning.
+> STEP 4's `prisma db push` is idempotent — running it on a code-only deploy is a no-op that completes in under a second. But if the schema changed and `db push` reports it would lose data (column dropped, type narrowed), it refuses and exits non-zero in non-TTY mode. Don't blindly add `--accept-data-loss`; either back-port the change to keep the old shape working alongside the new one ("expand → migrate code → contract"), or generate a proper migration baseline (§7.3.1 Path B). See [§7.3.1](#731-apply-schema-changes--the-greenbook-reality-check) for the full reasoning.
 
-For rollback if the new deploy regresses, see [§8.4](#84-rollback) — the previous `$VERSION` is still on disk, and the rollback collapses to two commands (rewrite `/opt/greenbook/.env`, `compose up -d`).
+For rollback if the new deploy regresses, see [§7.4](#74-rollback) — the previous `$VERSION` is still on disk, and the rollback collapses to two commands (rewrite `/opt/greenbook/.env`, `compose up -d`).
 
-The remaining sections in §8 (Path A/B detailed walk-throughs, schema-deploy variants, env-file model, deploy.sh, rollback) are the reference material that the two walkthroughs above abstract over. Read on if you want to know WHY each step exists.
+The remaining sections in §7 (Path A/B detailed walk-throughs, schema-deploy variants, env-file model, deploy.sh, rollback) are the reference material that the two walkthroughs above abstract over. Read on if you want to know WHY each step exists.
 
 > **ℹ Which path should I use?**
 >
@@ -705,7 +705,7 @@ $ docker tag greenbook:$VERSION greenbook:latest
 # when .env is missing. Not used by the deploy flow itself.
 ```
 
-The image is now in the local Docker store. Continue at §8.3.1 (schema changes) below.
+The image is now in the local Docker store. Continue at §7.3.1 (schema changes) below.
 
 #### Path B — Build elsewhere, ship the image (restricted-egress)
 
@@ -813,11 +813,11 @@ $ docker tag greenbook:$VERSION greenbook:latest
 $ rm /tmp/greenbook-$VERSION.tar.gz
 ```
 
-The image is now in the local Docker store. Continue at §8.3.1 (schema changes) below — exactly the same as Path A from this point on.
+The image is now in the local Docker store. Continue at §7.3.1 (schema changes) below — exactly the same as Path A from this point on.
 
 > **⚠ Don't fight the version skew**
 >
-> If you build on your laptop with `VERSION=2026-04-25-1030` and the app VM was last deployed at `VERSION=2026-04-23-1430`, the on-VM Docker image store still has the old image. Both will appear in `docker image ls greenbook`. That's fine and intentional — see §8.4 (rollback). Just make sure `/opt/greenbook/.env` (which §8.3.3 writes) points at the version you actually want compose to use.
+> If you build on your laptop with `VERSION=2026-04-25-1030` and the app VM was last deployed at `VERSION=2026-04-23-1430`, the on-VM Docker image store still has the old image. Both will appear in `docker image ls greenbook`. That's fine and intentional — see §7.4 (rollback). Just make sure `/opt/greenbook/.env` (which §7.3.3 writes) points at the version you actually want compose to use.
 
 > **ℹ When Path B becomes painful — switch to a private registry**
 >
@@ -830,7 +830,7 @@ The image is now in the local Docker store. Continue at §8.3.1 (schema changes)
 >
 > No tarballs, no scp. Defer this to post-MVP — don't hold up first production deploy on registry standup.
 
-### 8.3.1 Apply schema changes — the greenbook reality check
+### 7.3.1 Apply schema changes — the greenbook reality check
 
 Greenbook currently uses **`prisma db push`** as its schema workflow — no `prisma/migrations/` directory exists at this commit, and `npm run db:push` is the canonical way to get the schema into a new database. The deployment guide therefore ships TWO paths; pick the one that matches your current operational maturity.
 
@@ -870,7 +870,7 @@ $ docker run --rm \
 # 10.111.11.50:5432, Docker's iptables MASQUERADE rule rewrites the source
 # IP to the host's main interface IP (10.111.11.51). From Postgres's view,
 # the connection comes from 10.111.11.51 — which matches the pg_hba rule
-# we set up in §4.5.
+# we set up in §2.5.
 ```
 
 > **⚠ `db push` can drop data under your feet**
@@ -898,9 +898,9 @@ $ docker run --rm \
 >
 > Between the migration finishing and the new container starting, the OLD container is still serving traffic against the NEW schema. Always write migrations that the old code can tolerate. Add columns as nullable, then deploy code that writes to them, then backfill, then tighten the constraint in a later migration. Do NOT drop columns or rename them in a single step while the old code is still running — use the "expand → migrate code → contract" pattern.
 
-### 8.3.2 Env file lifecycle across deploys
+### 7.3.2 Env file lifecycle across deploys
 
-§8.2.2 covered the **initial setup** of `/etc/greenbook.env`. This subsection covers the **ongoing operations** — what happens during a re-deploy when env vars change, how the two env files relate, and the gotchas to watch for.
+§7.2.2 covered the **initial setup** of `/etc/greenbook.env`. This subsection covers the **ongoing operations** — what happens during a re-deploy when env vars change, how the two env files relate, and the gotchas to watch for.
 
 #### The two-file model (recap)
 
@@ -985,9 +985,9 @@ $ docker compose -f /opt/greenbook/docker-compose.yml logs --tail=50 app
 # crashes immediately — fix the env file and re-recreate.
 ```
 
-### 8.3.3 Promote the new image
+### 7.3.3 Promote the new image
 
-Now that the image is loaded (Path A or Path B), the schema is up to date (§8.3.1), and `/etc/greenbook.env` is present + correct (§8.2.2), pin the version and bring up the container:
+Now that the image is loaded (Path A or Path B), the schema is up to date (§7.3.1), and `/etc/greenbook.env` is present + correct (§7.2.2), pin the version and bring up the container:
 
 ```bash
 # [auishqosrgbwbs01] as deployer
@@ -995,7 +995,7 @@ $ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
 #   Writes the compose env file that docker compose reads automatically.
 #   Overwrites any previous value. After this, compose resolves
 #   ${APP_VERSION} (used in docker-compose.yml) to the new version tag.
-#   This is the file from §8.3.2's "two-file model" recap — the version-
+#   This is the file from §7.3.2's "two-file model" recap — the version-
 #   pin file, not the secrets file.
 
 $ docker compose -f /opt/greenbook/docker-compose.yml up -d
@@ -1011,16 +1011,16 @@ $ docker compose -f /opt/greenbook/docker-compose.yml up -d
 $ docker compose -f /opt/greenbook/docker-compose.yml ps
 # Check that STATE=running and HEALTH=healthy.
 # If HEALTH=starting longer than ~45 s, the healthcheck loop hasn't passed
-# yet — see §12.1 (502 Bad Gateway from Nginx) for diagnosis.
+# yet — see §10.1 (502 Bad Gateway from Nginx) for diagnosis.
 
 # Confirm the right version is actually serving:
 $ curl -s http://127.0.0.1:3000/healthz | grep -E '"version"'
 # Expected: "version":"<your VERSION>"
 ```
 
-### 8.3.4 Post-deploy verification — what should be true now
+### 7.3.4 Post-deploy verification — what should be true now
 
-After §8.3.3 promotes the new version, run all seven checks below on the app VM. Each one verifies a different production guarantee from [05 §6](05-app-vm-container.md) + [§8.2.3](#823-the-compose-file-optgreenbookdocker-composeyml); if any fails, the deploy is broken even if compose reports `running`.
+After §7.3.3 promotes the new version, run all seven checks below on the app VM. Each one verifies a different production guarantee from [05 §5](05-app-vm-container.md) + [§7.2.3](#723-the-compose-file-optgreenbookdocker-composeyml); if any fails, the deploy is broken even if compose reports `running`.
 
 ```bash
 # [auishqosrgbwbs01] as deployer
@@ -1042,8 +1042,8 @@ $ docker exec greenbook id
 $ curl -s http://127.0.0.1:3000/healthz | head -1
 # Pass: JSON with "status":"ok" and "checks":{"process":"ok","db":"ok"}.
 # "status":"degraded" with "db":"<error>" means Postgres is unreachable —
-# revisit pg_hba (02 §4.5), DATABASE_URL in /etc/greenbook.env (§8.2.2),
-# and the firewall rule on the DB VM (02 §4.7).
+# revisit pg_hba (02 §2.5), DATABASE_URL in /etc/greenbook.env (§7.2.2),
+# and the firewall rule on the DB VM (02 §2.7).
 
 # 5. The published port is loopback only.
 $ sudo ss -tlnp | grep ':3000'
@@ -1062,15 +1062,15 @@ $ docker exec greenbook touch /tmp/test && docker exec greenbook rm /tmp/test
 # Pass: both succeed silently (writable tmpfs at /tmp).
 ```
 
-If all seven pass, the deploy is production-ready. On a first deploy continue to [§8.7 First-run bootstrap](#87-first-run-bootstrap-one-time) to seed the database; on a re-deploy you're done — see [08 — Day-2 operations](08-day-2-operations.md).
+If all seven pass, the deploy is production-ready. On a first deploy continue to [§7.7 First-run bootstrap](#77-first-run-bootstrap-one-time) to seed the database; on a re-deploy you're done — see [08 — Day-2 operations](08-day-2-operations.md).
 
-### 8.4 Rollback
+### 7.4 Rollback
 
 ```bash
 # [auishqosrgbwbs01] as deployer — tags are still on disk from previous builds
 $ docker image ls greenbook
 #   Lists all greenbook images. The TAG column shows every version you've built.
-#   Retention depends on whether you prune (§9.4).
+#   Retention depends on whether you prune (§8.4).
 
 # Pick the previous version — e.g. 2026-04-22-0930 — and switch back:
 $ PREV=2026-04-22-0930
@@ -1082,9 +1082,9 @@ $ docker compose -f /opt/greenbook/docker-compose.yml up -d
 
 > **⚠ Rollback does not undo database migrations**
 >
-> Rolling back the container to a previous image brings back only the previous CODE. Any schema changes applied in §8.3.1 are still in the DB. If the schema change is incompatible with the old code (a column was dropped, a constraint added, etc.), the rolled-back container will fail at runtime. This is the single biggest reason to favour the "expand → migrate code → contract" pattern for any schema change that needs to be reversible.
+> Rolling back the container to a previous image brings back only the previous CODE. Any schema changes applied in §7.3.1 are still in the DB. If the schema change is incompatible with the old code (a column was dropped, a constraint added, etc.), the rolled-back container will fail at runtime. This is the single biggest reason to favour the "expand → migrate code → contract" pattern for any schema change that needs to be reversible.
 
-### 8.5 Autostart on boot (systemd)
+### 7.5 Autostart on boot (systemd)
 
 Docker already restarts containers on daemon start (thanks to `restart: unless-stopped` in compose). But if you want an explicit systemd unit that runs "docker compose up" on boot — useful for correct ordering relative to other services — create the unit:
 
@@ -1114,7 +1114,7 @@ ExecStart=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml up -d
 ExecStop=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml down
 # Full paths in systemd unit files — systemd doesn't read the user's PATH.
 # Note: `docker compose down` sends SIGTERM + waits stop_grace_period (30s
-# from §8.2.3) so in-flight jobs finish.
+# from §7.2.3) so in-flight jobs finish.
 
 [Install]
 WantedBy=multi-user.target
@@ -1127,10 +1127,10 @@ $ sudo systemctl daemon-reload
 $ sudo systemctl enable greenbook.service
 #   enable          create the WantedBy symlink. Unit will auto-start on boot.
 # Note: do NOT use --now, since "docker compose up -d" was already run
-# manually in §8.3 and the container is running.
+# manually in §7.3 and the container is running.
 ```
 
-### 8.6 Annotated deploy.sh
+### 7.6 Annotated deploy.sh
 
 Save as `/opt/greenbook/deploy.sh`, chmod +x. Usage: `./deploy.sh <git-ref>`.
 
@@ -1232,14 +1232,14 @@ $ /opt/greenbook/deploy.sh main
 $ SCHEMA_MODE=migrate /opt/greenbook/deploy.sh v1.3.0
 ```
 
-### 8.7 First-run bootstrap (one-time)
+### 7.7 First-run bootstrap (one-time)
 
 Greenbook ships a seed script (`prisma/seed.ts`) that creates the baseline data the app refuses to run without: roles, permissions, system tenant, feature-flag defaults, reference data (regional groups, member states, countries), directory types, and the demo AU Commission leadership structure. **Until seed runs, no user can log in.**
 
 Run this ONCE against a fresh database, before the first real deploy:
 
 ```bash
-# [auishqosrgbwbs01] as deployer — after §8.3 built the first image
+# [auishqosrgbwbs01] as deployer — after §7.3 built the first image
 $ VERSION=<your-first-image-tag>
 
 # Step 1 — apply the schema:

@@ -181,7 +181,7 @@ Docker is used on the app VM only. PostgreSQL is installed natively on the DB VM
 
 Nginx is installed on the host of the app VM, also not containerised. This keeps TLS certificates on the host filesystem (simple to manage with Certbot), lets Nginx survive container restarts, and makes it trivial to add rate limiting, access logs, or additional backends later.
 
-The offsite backup destination shown in the diagram is non-optional for a production deployment. The local pgBackRest repository on the DB VM protects against PostgreSQL corruption or human error, but not against the VM itself being lost (disk failure, ransomware, accidental deletion of the VM). [§4.10.3 in 03 — Database VM backups](03-db-vm-backups.md) covers how to configure a second repository.
+The offsite backup destination shown in the diagram is non-optional for a production deployment. The local pgBackRest repository on the DB VM protects against PostgreSQL corruption or human error, but not against the VM itself being lost (disk failure, ransomware, accidental deletion of the VM). [§3.3 in 03 — Database VM backups](03-db-vm-backups.md) covers how to configure a second repository.
 
 ### 2.3 Port map
 
@@ -213,7 +213,7 @@ Version 1.3 is a structural refactor of the v1.2 single-file guide. **No deploym
 
 - The 4,200-line single-file `deployment-guide.md` is now 11 numbered files covering bring-up + ops + troubleshooting, plus 3 appendices, plus this README as the index.
 - Files are grouped by **operator session**: a DBA can read [01](01-pre-flight.md) → [02](02-db-vm-setup.md) → [03](03-db-vm-backups.md) and never open the app-VM files. A platform engineer reads [04](04-app-vm-docker.md) → [07](07-deploy-workflow.md) for a deploy.
-- Section numbering inside each file is unchanged ("§4.1", "§6.3", etc.) so existing cross-references and bookmarks continue to work.
+- Section numbering inside each file is unchanged ("§2.1", "§5.3", etc.) so existing cross-references and bookmarks continue to work.
 - Every file has a nav header naming the phase, which VM, expected time, prev/next links, and a one-paragraph "what's in this file".
 - The `deployment-guide.md` filename in this directory is now a redirect stub pointing at `README.md` and the numbered files.
 
@@ -221,15 +221,15 @@ Version 1.3 is a structural refactor of the v1.2 single-file guide. **No deploym
 
 Version 1.2 took the generic v1.1 single-file document and validated every command, path, env var, and code snippet against the actual greenbook repository. Generic deployment advice that didn't match the codebase was replaced with the real shape. The substantive corrections are:
 
-- **Entrypoint**: v1.1 assumed `react-router-serve` (the default React Router framework server). Greenbook ships a custom Express server at `server.js` that wires correlation IDs, pino logging, rate limiting (3 tiers), CORS, Sentry, and an in-process Postgres-backed job queue. The Dockerfile `CMD` is `npm run start` → `node server.js`. [§6.1 in 05 — Application container](05-app-vm-container.md) is rewritten.
+- **Entrypoint**: v1.1 assumed `react-router-serve` (the default React Router framework server). Greenbook ships a custom Express server at `server.js` that wires correlation IDs, pino logging, rate limiting (3 tiers), CORS, Sentry, and an in-process Postgres-backed job queue. The Dockerfile `CMD` is `npm run start` → `node server.js`. [§5.1 in 05 — Application container](05-app-vm-container.md) is rewritten.
 - **Node version**: `node:22-alpine` matches `CLAUDE.md`'s recommendation.
-- **Environment variables**: greenbook's `app/utils/config/env.server.ts` validates five required (`NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `HONEYPOT_SECRET`, `RESEND_API_KEY`) plus ten optional via a Zod schema. [§6.3](05-app-vm-container.md) lists all of them with provenance and guidance.
-- **Schema workflow**: greenbook currently runs on `prisma db push` (no `prisma/migrations/` directory). [§8.3.1](07-deploy-workflow.md) presents both `db push` and `migrate deploy` paths.
-- **Seed / bootstrap**: greenbook's first-run requires `npm run db:seed`. [§8.7](07-deploy-workflow.md) covers it.
-- **Healthcheck route**: `server/security.ts` skips `/up` and `/healthz` from rate limiting, but no route file exists. [§6.3](05-app-vm-container.md) contains a greenbook-compatible resource route.
-- **SESSION_SECRET rotation**: greenbook parses it as a comma-separated list (`new,old`). [§6.3](05-app-vm-container.md) explains the rotation semantics.
+- **Environment variables**: greenbook's `app/utils/config/env.server.ts` validates five required (`NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `HONEYPOT_SECRET`, `RESEND_API_KEY`) plus ten optional via a Zod schema. [§5.3](05-app-vm-container.md) lists all of them with provenance and guidance.
+- **Schema workflow**: greenbook currently runs on `prisma db push` (no `prisma/migrations/` directory). [§7.3.1](07-deploy-workflow.md) presents both `db push` and `migrate deploy` paths.
+- **Seed / bootstrap**: greenbook's first-run requires `npm run db:seed`. [§7.7](07-deploy-workflow.md) covers it.
+- **Healthcheck route**: `server/security.ts` skips `/up` and `/healthz` from rate limiting, but no route file exists. [§5.3](05-app-vm-container.md) contains a greenbook-compatible resource route.
+- **SESSION_SECRET rotation**: greenbook parses it as a comma-separated list (`new,old`). [§5.3](05-app-vm-container.md) explains the rotation semantics.
 - **Trust proxy**: `server/app.ts` calls `app.set("trust proxy", 1)` — keep nginx as the only hop or update the count.
-- **Service Worker + static assets**: short Cache-Control on `sw.js`, immutable on `/assets/*` — [§7.3](06-app-vm-nginx-tls.md).
+- **Service Worker + static assets**: short Cache-Control on `sw.js`, immutable on `/assets/*` — [§6.3](06-app-vm-nginx-tls.md).
 - **SSE / streaming SSR**: `proxy_buffering off` is required.
 - **Graceful shutdown**: 30 s `stop_grace_period` for the in-process job queue.
 - **PID 1 signal handling**: `dumb-init` ENTRYPOINT so `docker stop` reaches Node.
@@ -247,7 +247,7 @@ Version 1.2 took the generic v1.1 single-file document and validated every comma
 These apply across every file in this guide:
 
 - **Numbered files (`01-…` through `11-…`)** are read in order for first-time bring-up. Each file is self-contained for its operator session.
-- **Section numbers inside files** (e.g. `§4.3`, `§6.1`) are stable references; cross-file links use the `[file.md§section]` convention.
+- **Section numbers inside files** (e.g. `§2.3`, `§5.1`) are stable references; cross-file links use the `[file.md§section]` convention.
 - **`[auishqosrgbwbs01]` and `[auishqosrgbdbs01]`** prefixes on commands indicate which VM to run them on. Unlabelled commands are generic.
 - **`⚠`** callouts mark things that will silently break a deployment if ignored. Read them.
 - **`ℹ`** callouts add context, alternatives, or "if you ever need to do X, here's how" notes.

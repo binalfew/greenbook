@@ -10,18 +10,18 @@
 
 ## Contents
 
-- [§12.1 "502 Bad Gateway" from Nginx](#121-502-bad-gateway-from-nginx)
-- [§12.2 Container keeps restarting](#122-container-keeps-restarting)
-- [§12.3 Cannot connect from the app VM to Postgres](#123-cannot-connect-from-the-app-vm-to-postgres)
-- [§12.4 TLS certificate did not renew](#124-tls-certificate-did-not-renew)
-- [§12.5 Disk full](#125-disk-full)
-- [§12.6 Slow queries / app latency](#126-slow-queries--app-latency)
+- [§10.1 "502 Bad Gateway" from Nginx](#101-502-bad-gateway-from-nginx)
+- [§10.2 Container keeps restarting](#102-container-keeps-restarting)
+- [§10.3 Cannot connect from the app VM to Postgres](#103-cannot-connect-from-the-app-vm-to-postgres)
+- [§10.4 TLS certificate did not renew](#104-tls-certificate-did-not-renew)
+- [§10.5 Disk full](#105-disk-full)
+- [§10.6 Slow queries / app latency](#106-slow-queries--app-latency)
 
-## 12. Troubleshooting
+## 10. Troubleshooting
 
 A directed set of diagnostic commands for the most common failure modes. The pattern in each case is: isolate which layer is broken (app → compose → Docker → Nginx → network → DB), then drill in.
 
-### 12.1 "502 Bad Gateway" from Nginx
+### 10.1 "502 Bad Gateway" from Nginx
 
 Nginx could not reach the backend. Verify the container is up and healthy:
 
@@ -44,7 +44,7 @@ $ sudo ss -tlnp | grep 3000
 # If absent, the container either isn't running or its ports: line is wrong.
 ```
 
-### 12.2 Container keeps restarting
+### 10.2 Container keeps restarting
 
 ```bash
 # [auishqosrgbwbs01]
@@ -64,7 +64,7 @@ $ docker events --filter "container=greenbook" --since 30m
 # Useful for tracking the sequence: create → start → die → restart.
 ```
 
-### 12.3 Cannot connect from the app VM to Postgres
+### 10.3 Cannot connect from the app VM to Postgres
 
 ```bash
 # 1. From the app VM, basic reachability:
@@ -86,7 +86,7 @@ $ psql -h 10.111.11.50 -U appuser -d greenbook \
 # 3. On the DB VM, check who's listening:
 $ sudo ss -tlnp | grep 5432
 # Must show 10.111.11.50:5432, not just 127.0.0.1. If only 127.0.0.1, the
-# listen_addresses change in §4.4 didn't take — was Postgres restarted?
+# listen_addresses change in §2.4 didn't take — was Postgres restarted?
 
 # 4. On the DB VM, check UFW:
 $ sudo ufw status verbose | grep 5432
@@ -99,7 +99,7 @@ $ sudo grep -v '^#' /etc/postgresql/16/main/pg_hba.conf | grep -v '^$'
 # present AND not shadowed by any earlier "host all all ..." reject rule.
 ```
 
-### 12.4 TLS certificate did not renew
+### 10.4 TLS certificate did not renew
 
 ```bash
 # [auishqosrgbwbs01]
@@ -118,7 +118,7 @@ $ sudo certbot renew --dry-run
 # Try a renewal now without persisting. Will reproduce the error.
 ```
 
-### 12.5 Disk full
+### 10.5 Disk full
 
 ```bash
 # [any VM]
@@ -134,7 +134,7 @@ $ sudo du -h --max-depth=1 / 2>/dev/null | sort -hr | head -20
 #   head -20        top 20 largest entries.
 
 # Common culprits:
-#   /var/lib/docker   old images (prune — §9.4)
+#   /var/lib/docker   old images (prune — §8.4)
 #                     or excessive container logs if you skipped rotation
 #   /var/log          service logs growing unbounded
 #   /var/lib/pgbackrest  too many retained backups — lower retention or move offsite
@@ -146,7 +146,7 @@ $ docker system df
 # Shows space used by images, containers, volumes, build cache.
 ```
 
-### 12.6 Slow queries / app latency
+### 10.6 Slow queries / app latency
 
 ```bash
 # [auishqosrgbdbs01] — turn on slow query logging
