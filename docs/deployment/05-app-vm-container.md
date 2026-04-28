@@ -71,15 +71,29 @@ COPY prisma.config.ts ./prisma.config.ts
 ARG DUMMY_DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy?schema=public
 ENV DATABASE_URL=${DUMMY_DATABASE_URL}
 
-RUN npm ci --include=dev
-#   npm ci              clean install: installs exact versions from
-#                        package-lock.json. Fails if the lockfile does not
-#                        agree with package.json. USE THIS in CI and
-#                        production — never "npm install", which may update
-#                        the lockfile unexpectedly.
-#   --include=dev       include devDependencies. We need build-time tools
-#                        (typescript, vite, @react-router/dev, @tailwindcss/vite,
-#                        etc.) for `npm run build`.
+RUN npm ci --include=dev --legacy-peer-deps
+#   npm ci                clean install: installs exact versions from
+#                          package-lock.json. Fails if the lockfile does not
+#                          agree with package.json. USE THIS in CI and
+#                          production — never "npm install", which may update
+#                          the lockfile unexpectedly.
+#   --include=dev         include devDependencies. We need build-time tools
+#                          (typescript, vite, @react-router/dev,
+#                          @tailwindcss/vite, etc.) for `npm run build`.
+#   --legacy-peer-deps    fall back to npm v6 peer-dep semantics (warn but
+#                          don't fail). Required because greenbook is on
+#                          React 19 but `use-resize-observer@9.x` declares
+#                          `react@"16.8 - 18"` as its peer — that package
+#                          hasn't shipped a release widening the range.
+#                          `npm install` (used in local dev) is forgiving
+#                          about this; `npm ci` is strict, so without the
+#                          flag the Docker build fails:
+#                            ERESOLVE could not resolve
+#                            peer react@"16.8.0 - 18" from use-resize-observer@9.1.0
+#                            Found: react@19.x
+#                          See the ⚠ callout below for long-term cleanup
+#                          options (package.json `overrides`, dropping
+#                          use-resize-observer for a hand-rolled hook).
 # Side effect via postinstall: `prisma generate` produces
 #   /app/app/generated/prisma/*   — the greenbook-specific client output path
 # declared in prisma/schema.prisma. This directory is later copied into the
@@ -180,6 +194,34 @@ CMD ["npm", "run", "start"]
 #   server.js under NODE_ENV=production imports ./build/server/index.js and
 #   listens on process.env.PORT || 3000.
 ```
+
+> **⚠ `--legacy-peer-deps` on `npm ci` — why it's there and how to retire it**
+>
+> The `RUN npm ci` line above passes `--legacy-peer-deps`. Without it the build fails on greenbook's first install step with:
+>
+> ```
+> ERESOLVE could not resolve
+> peer react@"16.8.0 - 18" from use-resize-observer@9.1.0
+> Found: react@19.x
+> ```
+>
+> Greenbook is on React 19; `use-resize-observer@9.1.0` (last released 2023) hasn't shipped a release that widens its peer-dep range to include React 19. `npm install` (used in local dev) tolerates this with a warning, but `npm ci` is strict and fails — which is why the local dev install works while the Docker build doesn't. `--legacy-peer-deps` falls back to npm v6 semantics (warn, don't fail) and applies to the whole install, so it's an ecosystem-wide blast radius.
+>
+> Two cleaner long-term fixes — pick one and drop `--legacy-peer-deps` afterwards:
+>
+> 1. **Surgical override in `package.json`.** Forces only `use-resize-observer` to accept whatever React the root project uses; every other peer-dep mismatch still surfaces as a real error.
+>
+>    ```json
+>    "overrides": {
+>      "use-resize-observer": {
+>        "react": "$react"
+>      }
+>    }
+>    ```
+>
+> 2. **Drop the dependency.** `use-resize-observer` is a thin wrapper over the native `ResizeObserver` API — a hand-rolled `useResizeObserver` hook is ~15 lines and removes the conflict at the source. Best when greenbook only uses one or two of the package's hooks.
+>
+> Until either (1) or (2) lands, leave the flag in place. Removing it on a fork that's still on React 18 is fine; on React 19 the build will fail the same way again.
 
 ### 6.2 The .dockerignore
 

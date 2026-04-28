@@ -38,13 +38,28 @@ COPY prisma.config.ts ./prisma.config.ts
 ARG DUMMY_DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy?schema=public
 ENV DATABASE_URL=${DUMMY_DATABASE_URL}
 
-RUN npm ci --include=dev
-#   npm ci              clean install: installs exact versions from
-#                        package-lock.json. Fails if the lockfile does not
-#                        agree with package.json.
-#   --include=dev       include devDependencies. We need build-time tools
-#                        (typescript, vite, @react-router/dev, @tailwindcss/vite,
-#                        etc.) for `npm run build`.
+RUN npm ci --include=dev --legacy-peer-deps
+#   npm ci                clean install: installs exact versions from
+#                          package-lock.json. Fails if the lockfile does not
+#                          agree with package.json.
+#   --include=dev         include devDependencies. We need build-time tools
+#                          (typescript, vite, @react-router/dev,
+#                          @tailwindcss/vite, etc.) for `npm run build`.
+#   --legacy-peer-deps    fall back to npm v6 peer-dep semantics (warn but
+#                          don't fail). Required because greenbook is on
+#                          React 19 but `use-resize-observer@9.x` declares
+#                          `react@"16.8 - 18"` as its peer — that package
+#                          hasn't shipped a release widening the range.
+#                          `npm install` is forgiving about this; `npm ci`
+#                          is strict, so without the flag the build fails:
+#                            ERESOLVE could not resolve
+#                            peer react@"16.8.0 - 18" from use-resize-observer@9.1.0
+#                            Found: react@19.x
+#                          Long-term fix is a `package.json` "overrides"
+#                          block forcing use-resize-observer to accept the
+#                          project's React (or replacing the package). The
+#                          flag is a small ecosystem-wide blast radius —
+#                          keep until the upstream peer-dep is widened.
 # Side effect via postinstall: `prisma generate` produces
 #   /app/app/generated/prisma/*   — the greenbook-specific client output path
 # declared in prisma/schema.prisma. This directory is later copied into the
