@@ -533,6 +533,19 @@ The remaining sections in §8 (Path A/B detailed walk-throughs, schema-deploy va
 >
 > If both lines print success, Path A is open. If either fails, use Path B.
 
+> **⚠ Recognising Path A failure on a restricted-egress VM**
+>
+> If you skipped the test above and ran `docker build` directly, here are the exact failure modes you'll see — every one means outbound HTTPS to the named endpoint is blocked. **None of them are Dockerfile bugs**; don't waste time editing the Dockerfile. Switch to Path B.
+>
+> | Build step                        | Endpoint that times out                                     | Error pattern                                                                                                                                                                                  |
+> | --------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | BuildKit frontend pull            | `production.cloudfront.docker.com`                          | `ERROR resolve image config for docker-image://docker.io/docker/dockerfile:1.7 ... DeadlineExceeded ... Get "https://production.cloudfront.docker.com/...": dial tcp X.X.X.X:443: i/o timeout` |
+> | Base image pull (`FROM ...`)      | `registry-1.docker.io` / `production.cloudfront.docker.com` | `ERROR [internal] load metadata for docker.io/library/node:22-alpine ... i/o timeout`                                                                                                          |
+> | `git clone` (in the Path A flow)  | `github.com:22` (ssh) or `github.com:443` (https)           | `ssh: connect to host github.com port 22: Connection timed out` / `Could not resolve host: github.com`                                                                                         |
+> | `npm ci` (during the build stage) | `registry.npmjs.org`                                        | `npm error code ETIMEDOUT ... npm error errno ETIMEDOUT ... npm error network request to https://registry.npmjs.org/...`                                                                       |
+>
+> Path B (build on your laptop, ship the tarball, `docker load` on the VM) sidesteps all four — the VM only needs to run `docker load`, with no outbound HTTPS to GitHub, npm, or Docker Hub. **For AU production VMs, treat Path B as the default; only use Path A on a fork where the test above passes.**
+
 #### Path A — Build on the VM (open-egress, simplest)
 
 All commands as the `deployer` user.
