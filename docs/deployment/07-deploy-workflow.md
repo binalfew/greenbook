@@ -461,7 +461,7 @@ $ docker image ls greenbook:$VERSION
 $ docker run --rm \
     --env-file /etc/greenbook.env \
     greenbook:$VERSION \
-    npx prisma db push
+    npx --no-install prisma db push
 # Expected: "The database is already in sync with the Prisma schema." (re-deploy)
 #       or  "🚀  Your database is now in sync with your schema." (first time)
 #
@@ -729,12 +729,19 @@ Greenbook currently uses **`prisma db push`** as its schema workflow — no `pri
 $ docker run --rm \
   --env-file /etc/greenbook.env \
   greenbook:$VERSION \
-  npx prisma db push
+  npx --no-install prisma db push
 #   docker run IMAGE CMD          run a new container for IMAGE, execute CMD.
 #   --rm                           delete the container when CMD finishes.
 #   --env-file /etc/greenbook.env  load env vars (DATABASE_URL, etc.) from file.
 #                                   Same file used by the main compose service.
-#   npx prisma db push             sync prisma/schema.prisma to the DB.
+#   npx --no-install prisma db push    sync prisma/schema.prisma to the DB.
+#   --no-install                       use the prisma CLI from
+#                                       node_modules/.bin (which the
+#                                       runtime image now ships, since
+#                                       prisma is a regular dependency,
+#                                       not devDep). Without this flag,
+#                                       npx falls back to fetching ~50 MB
+#                                       from registry.npmjs.org per call.
 #                                   (Prisma 7 dropped `--skip-generate`;
 #                                    not auto-generating is now the default.)
 #
@@ -761,7 +768,7 @@ $ docker run --rm \
 $ docker run --rm \
   --env-file /etc/greenbook.env \
   greenbook:$VERSION \
-  npx prisma migrate deploy
+  npx --no-install prisma migrate deploy
 # Applies every unapplied migration in prisma/migrations/ in order.
 # Idempotent (skips migrations already recorded in _prisma_migrations).
 # Exits non-zero if any migration fails — set -e in deploy.sh aborts here.
@@ -1058,14 +1065,14 @@ $ docker build -t "greenbook:$VERSION" .
 $ echo "==> applying schema changes ($SCHEMA_MODE)"
 $ if [ "$SCHEMA_MODE" = "migrate" ]; then
   docker run --rm --env-file "$ENV_RUNTIME" \
-    "greenbook:$VERSION" npx prisma migrate deploy
+    "greenbook:$VERSION" npx --no-install prisma migrate deploy
 else
   # Prisma 7 dropped `--skip-generate` (the no-auto-generate behaviour
   # it controlled is now the default). Do NOT add --accept-data-loss
   # without human review — that flag tells db push to drop columns /
   # tables without prompting.
   docker run --rm --env-file "$ENV_RUNTIME" \
-    "greenbook:$VERSION" npx prisma db push
+    "greenbook:$VERSION" npx --no-install prisma db push
 fi
 # Exits non-zero on failure — set -e aborts the deploy here.
 
@@ -1117,7 +1124,7 @@ $ VERSION=<your-first-image-tag>
 
 # Step 1 — apply the schema:
 $ docker run --rm --env-file /etc/greenbook.env \
-  greenbook:$VERSION npx prisma db push
+  greenbook:$VERSION npx --no-install prisma db push
 # Prisma 7: no `--skip-generate` flag any more; not generating is now default.
 
 # Step 2 — seed:

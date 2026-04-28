@@ -272,9 +272,14 @@ CMD ["npm", "run", "start"]
 >
 > Three follow-on observations the next operator should be aware of:
 >
-> 1. **`npx prisma db push` fetches the prisma CLI from npm at deploy time** — `npm prune --omit=dev` removed the CLI from `node_modules`, so `npx` falls back to the registry and pulls ~50 MB on every migration (visible as `npm warn exec ... will be installed: prisma@7.8.0` in the output). Works as long as the deploying VM can reach `registry.npmjs.org` (already whitelisted on the AU intranet — see the egress table below). To avoid the round-trip, move `prisma` from `devDependencies` to `dependencies` in `package.json`; the CLI will then survive the prune and you can switch the deploy command to `npx --no-install prisma db push`. Not blocking; flag for cleanup if you do many migrations.
-> 2. **`dotenv` is a runtime dependency for prisma.config.ts.** `prisma.config.ts` does `import "dotenv/config";` so the prisma CLI can load .env in local dev. In production, env vars come from docker's `--env-file` instead — but the static import still resolves at module-load time, so `dotenv` has to be present in the runtime image. It's listed in `package.json` `dependencies` (not `devDependencies`) so it survives `npm prune --omit=dev`. If you ever see `Failed to load config file ... Cannot find module 'dotenv/config'`, check that dotenv hasn't drifted back into devDeps.
-> 3. **Schema disclosure**: shipping `prisma/` in the runtime image means anyone with `docker exec` access can read the schema (table names, column types, comments). Acceptable for greenbook on an internal AU intranet; on a hostile-tenant host the cleaner pattern is to tag the **build stage** as a separate `greenbook-builder:$VERSION` image and run migrations from that, leaving the runtime image with no schema source at all.
+> 1. **`prisma`, `dotenv`, and the schema all live in the runtime image as direct dependencies.** Three things that started as devDependencies but are now in `package.json` `dependencies` because `prisma.config.ts` statically imports them at module-load time:
+>    - **`prisma`** — the CLI package, exports the `prisma/config` subpath used by `prisma.config.ts`. Also gives you `node_modules/.bin/prisma` so deploy commands can use `npx --no-install prisma db push` without re-fetching ~50 MB from npm on every migration.
+>    - **`dotenv`** — loaded by `prisma.config.ts` for local-dev .env convenience. In production, env vars come from docker's `--env-file`, but the static import still has to resolve.
+>    - **`prisma/` directory + `prisma.config.ts`** — copied into the runtime image (entries 6–7 in the COPY block above) so the prisma CLI can find the schema at deploy time.
+>
+>    Cost is ~80 MB of CLI + binaries shipped to runtime that the running server never executes. Acceptable for greenbook; if any of these drifts back into devDeps you'll see `Cannot find module '<x>'` from the prisma CLI on the next deploy.
+>
+> 2. **Schema disclosure**: shipping `prisma/` in the runtime image means anyone with `docker exec` access can read the schema (table names, column types, comments). Acceptable for greenbook on an internal AU intranet; on a hostile-tenant host the cleaner pattern is to tag the **build stage** as a separate `greenbook-builder:$VERSION` image and run migrations from that, leaving the runtime image with no schema source at all.
 
 > **ℹ Architectural follow-up: run migrations from a separate builder image**
 >
