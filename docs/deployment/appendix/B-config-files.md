@@ -207,7 +207,7 @@ The App VM's nginx is multi-tenant — shared `http {}`-scope config + shared sn
 | [`app-vm/00-app-vm-shared.conf`](app-vm/00-app-vm-shared.conf)             | `/etc/nginx/conf.d/00-app-vm-shared.conf`         | WebSocket upgrade `map`, shared rate-limit zones (`app_general`, `app_auth`)                                                                           |
 | [`app-vm/app-vm-proxy-headers.conf`](app-vm/app-vm-proxy-headers.conf)     | `/etc/nginx/snippets/app-vm-proxy-headers.conf`   | Shared `proxy_set_header` block + timeouts + buffering policy                                                                                          |
 | [`app-vm/greenbook-cache-policy.conf`](app-vm/greenbook-cache-policy.conf) | `/etc/nginx/snippets/greenbook-cache-policy.conf` | Greenbook PWA-specific (`/sw.js`, `/assets/*`, `/manifest.json`)                                                                                       |
-| [`app-vm/greenbook.conf`](app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — first of N (greenbook today; future apps onboard via [06 §6.8](../06-app-vm-nginx-tls.md#68-adding-a-second-app-on-the-app-vm)) |
+| [`app-vm/greenbook.conf`](app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — first of N (greenbook today; future apps onboard via [06 §6.6](../06-app-vm-nginx-tls.md#66-adding-a-second-app-on-the-app-vm)) |
 
 Install commands (two hops each — destination is root-owned and `deployer` is no-sudo per [09 §9.1](../09-hardening-checklist.md#91-operating-system); use your personal sudo-capable admin account on the App VM, `greenbook` in the AU's setup):
 

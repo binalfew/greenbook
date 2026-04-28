@@ -101,22 +101,25 @@ $ sudo grep -v '^#' /etc/postgresql/16/main/pg_hba.conf | grep -v '^$'
 
 ### 10.4 TLS certificate did not renew
 
+The AU wildcard does not auto-renew — renewal is a manual operation triggered by AU IT delivering a fresh PFX (annually, before `notAfter`). If the on-disk cert is approaching expiry without a renewal in flight:
+
 ```bash
-# [auishqosrgbwbs01]
-$ sudo certbot certificates
-# Lists every cert certbot manages with expiry and status. "VALID: <7 days"
-# is late for renewal; hunt for why.
+# [auishqosrgbwbs01 — single-tier; auishqosrarp01 — two-tier]
+$ sudo openssl x509 \
+    -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
+    -noout -dates
+# Single-tier path. For two-tier, the cert lives at
+# /etc/ssl/au/wildcard.africanunion.org.fullchain.pem on the DMZ VM.
+# Look at notAfter — anything inside ~14 days needs immediate action.
 
-$ sudo journalctl -u snap.certbot.renew.service --since '7 days ago'
-#   journalctl -u UNIT         show logs for a specific systemd unit.
-#   --since 'EXPRESSION'        filter by time — accepts relative expressions.
-# Look for the most recent renewal attempt and its error message. Typical
-# causes: port 80 blocked by a new firewall rule (HTTP-01), API token expired
-# (DNS-01), DNS record removed, rate limited by LE.
-
-$ sudo certbot renew --dry-run
-# Try a renewal now without persisting. Will reproduce the error.
+$ echo | openssl s_client -connect greenbook.africanunion.org:443 \
+    -servername greenbook.africanunion.org 2>/dev/null \
+  | openssl x509 -noout -subject -dates
+# Confirms what nginx is actually serving — useful to catch
+# "we replaced the file but never reloaded nginx".
 ```
+
+Renewal procedure: re-run [06 §6.4.3](06-app-vm-nginx-tls.md#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) (single-tier) or [12 §12.4.2](12-dmz-reverse-proxy.md#1242-import-from-a-fresh-pfx) (two-tier) against the new PFX, then `sudo nginx -t && sudo systemctl reload nginx`. Wire alerting via [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) so an unrenewed cert pages well before it expires.
 
 ### 10.5 Disk full
 

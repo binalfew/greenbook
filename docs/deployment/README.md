@@ -32,7 +32,7 @@ Prepared for: **Binalfew** — Senior Solutions & System Architect, MISD / AUC
 | 03  | [Database VM backups](03-db-vm-backups.md)          | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                                                                                                                           | DB VM                   |
 | 04  | [App VM Docker setup](04-app-vm-docker.md)          | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                                                                                                                         | App VM                  |
 | 05  | [Application container](05-app-vm-container.md)     | **Source-tree artefacts**: hardened Dockerfile, `.dockerignore`, `/healthz` route, post-build checkpoint, common build-failures playbook                                                                | Repo (laptop)           |
-| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)             | Nginx reverse proxy, streaming SSR / SSE / PWA tuning, Let's Encrypt or internal CA                                                                                                                     | App VM                  |
+| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)             | Multi-tenant nginx reverse proxy, streaming SSR / SSE / PWA tuning, AU wildcard cert (PFX), per-app onboarding                                                                                          | App VM                  |
 | 07  | [Deploy workflow](07-deploy-workflow.md)            | **App-VM-side**: initial setup (`/etc/greenbook.env`, `docker-compose.yml`), first-deploy walkthrough, build path A/B, schema (`db push` vs `migrate`), env-file lifecycle, `deploy.sh`, rollback, seed | App VM (+ build host)   |
 | 08  | [Day-2 operations](08-day-2-operations.md)          | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates                                                                                                      | BOTH VMs                |
 | 09  | [Hardening checklist](09-hardening-checklist.md)    | Pre-go-live audit and quarterly review                                                                                                                                                                  | BOTH VMs                |
@@ -71,7 +71,7 @@ Every command is followed by an explanation of what it does and why. Where a com
 - The first-run seed (`npm run db:seed`) that creates roles, permissions, feature flags, reference data, and the system tenant.
 - A greenbook-compatible `/healthz` resource route (none exists yet in the repo) and the container + external probes that use it.
 - Nginx installed directly on the host (not containerised) as the TLS-terminating reverse proxy, tuned for React Router's streaming SSR, Server-Sent Events, and greenbook's PWA service worker.
-- TLS certificates via Let's Encrypt (HTTP-01 and DNS-01 challenges), with guidance for using an internal CA on a closed AU intranet.
+- TLS certificates from the AU-procured wildcard for `*.africanunion.org`, delivered as a password-protected PFX bundle and installed on the App VM (single-tier) or the DMZ VM (two-tier).
 - A release-directory deployment workflow, rollback procedure, and systemd integration for boot-time startup.
 - Backups: daily logical (pg_dump) plus a production-grade physical + WAL strategy using pgBackRest, so point-in-time recovery is possible.
 - A planning section for adding Graylog (MongoDB + OpenSearch + Graylog Server) as a separate log-aggregation VM. Greenbook's pino JSON output drops straight into Graylog with no reformatting.
@@ -199,7 +199,7 @@ The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse
 
 > **ℹ Single-tier topology (no DMZ)**
 >
-> A simpler two-VM deployment collapses the DMZ tier into the App VM: the App VM's nginx terminates TLS itself (with the wildcard cert installed locally) and faces public traffic directly. Right for forks where there's no separate DMZ network, or for staging environments. To run that shape, follow chapters [01](01-pre-flight.md)–[09](09-hardening-checklist.md) only and skip chapter 12. Chapter 06 §6.7 documents the wildcard-cert path on the App VM directly. The diff between single-tier and two-tier App VM nginx configs is in [12 §12.8](12-dmz-reverse-proxy.md#128-modify-the-app-vm-for-the-two-tier-topology).
+> A simpler two-VM deployment collapses the DMZ tier into the App VM: the App VM's nginx terminates TLS itself (with the wildcard cert installed locally) and faces public traffic directly. Right for forks where there's no separate DMZ network, or for staging environments. To run that shape, follow chapters [01](01-pre-flight.md)–[09](09-hardening-checklist.md) only and skip chapter 12. Chapter 06 §6.4 documents the wildcard-cert path on the App VM directly. The diff between single-tier and two-tier App VM nginx configs is in [12 §12.8](12-dmz-reverse-proxy.md#128-modify-the-app-vm-for-the-two-tier-topology).
 
 ### 2.2 Why this split of responsibilities
 

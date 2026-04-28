@@ -79,7 +79,7 @@ services:
       #
       # REQUIRES greenbook to expose GET /healthz returning 200. The
       # `/healthz` and `/up` paths are already marked "skip rate-limit"
-      # in server/security.ts; deployment guide §6.7 includes the
+      # in server/security.ts; deployment guide 05 §5.3 includes the
       # drop-in resource route at app/routes/healthz.tsx that you MUST
       # add before rolling this compose file — otherwise the healthcheck
       # will permanently fail and the container will be marked unhealthy.

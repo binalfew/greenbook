@@ -2,7 +2,7 @@
 
 > **Phase**: bring-up · **Run on**: App VM (`auishqosrgbwbs01`) · **Time**: ~45 min
 >
-> Host-installed Nginx terminating TLS on 443 and reverse-proxying to the container at `127.0.0.1:3000`. Tuned for React Router 7's streaming SSR + SSE (`proxy_buffering off`, long `proxy_read_timeout`), greenbook's PWA service worker (short cache on `/sw.js`, immutable on `/assets/*`), and correlation-ID forwarding. Three TLS paths: Let's Encrypt HTTP-01, Let's Encrypt DNS-01, and an internal CA for air-gapped intranet.
+> Host-installed Nginx terminating TLS on 443 and reverse-proxying to the container at `127.0.0.1:3000`. Tuned for React Router 7's streaming SSR + SSE (`proxy_buffering off`, long `proxy_read_timeout`), greenbook's PWA service worker (short cache on `/sw.js`, immutable on `/assets/*`), and correlation-ID forwarding. TLS uses the AU-procured wildcard certificate for `*.africanunion.org`, delivered as a password-protected PFX bundle.
 >
 > **Prev**: [05 — Application container](05-app-vm-container.md) · **Next**: [07 — Deploy workflow](07-deploy-workflow.md) · **Index**: [README](README.md)
 
@@ -15,18 +15,14 @@
 - [§6.3 The Nginx server config](#63-the-nginx-server-config)
   - [§6.3.1 Install the shared App VM nginx configs](#631-install-the-shared-app-vm-nginx-configs)
   - [§6.3.2 Add greenbook as the first proxied app](#632-add-greenbook-as-the-first-proxied-app)
-- [§6.4 TLS with Let's Encrypt (public internet or public DNS)](#64-tls-with-lets-encrypt-public-internet-or-public-dns)
-  - [§6.4.1 HTTP-01 validation (VM reachable on public internet, port 80)](#641-http-01-validation-vm-reachable-on-public-internet-port-80)
-  - [§6.4.2 DNS-01 validation (VM not publicly reachable but has public DNS)](#642-dns-01-validation-vm-not-publicly-reachable-but-has-public-dns)
+- [§6.4 Install the AU wildcard TLS certificate](#64-install-the-au-wildcard-tls-certificate)
+  - [§6.4.1 Generate the CSR on the VM](#641-generate-the-csr-on-the-vm)
+  - [§6.4.2 Install the issued certificate (PEM bundle delivery)](#642-install-the-issued-certificate-pem-bundle-delivery)
+  - [§6.4.3 Install the wildcard certificate from a .pfx / .p12 bundle (AU's actual path)](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path)
+  - [§6.4.4 Point Nginx at the new files](#644-point-nginx-at-the-new-files)
+  - [§6.4.5 Renewal](#645-renewal)
 - [§6.5 Test the TLS deployment](#65-test-the-tls-deployment)
-- [§6.6 Using an internal CA instead of Let's Encrypt](#66-using-an-internal-ca-instead-of-lets-encrypt)
-- [§6.7 Using a pre-purchased commercial certificate](#67-using-a-pre-purchased-commercial-certificate)
-  - [§6.7.1 Generate the CSR on the VM](#671-generate-the-csr-on-the-vm)
-  - [§6.7.2 Install the issued certificate (PEM bundle delivery)](#672-install-the-issued-certificate-pem-bundle-delivery)
-  - [§6.7.3 Install the wildcard certificate from a .pfx / .p12 bundle (AU's actual path)](#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path)
-  - [§6.7.4 Point Nginx at the new files](#674-point-nginx-at-the-new-files)
-  - [§6.7.5 Renewal](#675-renewal)
-- [§6.8 Adding a second app on the App VM](#68-adding-a-second-app-on-the-app-vm)
+- [§6.6 Adding a second app on the App VM](#66-adding-a-second-app-on-the-app-vm)
 
 ## 6. Nginx and TLS
 
@@ -79,7 +75,7 @@ $ sudo ufw status verbose
 
 ### 6.3 The Nginx server config
 
-The App VM's nginx is a **multi-tenant reverse proxy** — it can host more than one docker app, each on its own port and `server_name`. Greenbook is the worked example throughout this chapter; if a second AU app later runs on the same App VM (e.g., `report-builder.africanunion.org` on `127.0.0.1:3001`), it onboards via [§6.8](#68-adding-a-second-app-on-the-app-vm) — three commands plus one edited per-app config file. The shape of the App VM's nginx mirrors the DMZ proxy in [chapter 12](12-dmz-reverse-proxy.md): shared `http {}` config + shared snippets + one `sites-available/<app>.conf` per backend.
+The App VM's nginx is a **multi-tenant reverse proxy** — it can host more than one docker app, each on its own port and `server_name`. Greenbook is the worked example throughout this chapter; if a second AU app later runs on the same App VM (e.g., `report-builder.africanunion.org` on `127.0.0.1:3001`), it onboards via [§6.6](#66-adding-a-second-app-on-the-app-vm) — three commands plus one edited per-app config file. The shape of the App VM's nginx mirrors the DMZ proxy in [chapter 12](12-dmz-reverse-proxy.md): shared `http {}` config + shared snippets + one `sites-available/<app>.conf` per backend.
 
 Three layers of config to install (under [`appendix/app-vm/`](appendix/app-vm/)):
 
@@ -88,7 +84,7 @@ Three layers of config to install (under [`appendix/app-vm/`](appendix/app-vm/))
 | [`appendix/app-vm/00-app-vm-shared.conf`](appendix/app-vm/00-app-vm-shared.conf)             | `/etc/nginx/conf.d/00-app-vm-shared.conf`         | WebSocket upgrade `map`, shared rate-limit zones (`app_general`, `app_auth`) |
 | [`appendix/app-vm/app-vm-proxy-headers.conf`](appendix/app-vm/app-vm-proxy-headers.conf)     | `/etc/nginx/snippets/app-vm-proxy-headers.conf`   | Shared `proxy_set_header` block + timeouts + buffering policy                |
 | [`appendix/app-vm/greenbook-cache-policy.conf`](appendix/app-vm/greenbook-cache-policy.conf) | `/etc/nginx/snippets/greenbook-cache-policy.conf` | Greenbook PWA-specific routing (`/sw.js`, `/assets/*`, `/manifest.json`)     |
-| [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — one of N (greenbook today; future apps in §6.8)       |
+| [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — one of N (greenbook today; future apps in §6.6)       |
 
 Rationale: shared concerns (rate-limit zones, proxy headers, WebSocket map) live in one place so a second app onboarding doesn't have to copy/paste them. Per-app concerns (cache policy for `/assets/*`, framework-specific URL patterns, the upstream port) stay in each app's own files.
 
@@ -176,9 +172,8 @@ server {
     listen      [::]:443 ssl http2;
     server_name greenbook.africanunion.org;
 
-    # TLS cert path. Default is the §6.7 wildcard (AU's actual production);
-    # change to /etc/letsencrypt/live/... for §6.4 LE, or to the per-host
-    # /etc/ssl/greenbook/<host>.{fullchain.pem,key} for §6.6 internal CA.
+    # TLS cert path — the AU wildcard (§6.4). Same two files serve every
+    # per-app server block on this VM (one wildcard, all hostnames).
     ssl_certificate     /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem;
     ssl_certificate_key /etc/ssl/greenbook/wildcard.africanunion.org.key;
 
@@ -227,36 +222,40 @@ server {
 
 The full annotated forms of all four files (`00-app-vm-shared.conf`, `app-vm-proxy-headers.conf`, `greenbook-cache-policy.conf`, and `greenbook.conf`) live in [`appendix/app-vm/`](appendix/app-vm/) — that's the canonical scp-able source.
 
-Bootstrap a placeholder certificate. The HTTPS server block above references `ssl_certificate` files that Certbot creates in §6.4 — but `nginx -t` opens those files at config-test time and refuses the whole config if either is missing. That means the test (and any reload) fails BEFORE you ever get to run Certbot. Drop in a 1-day self-signed cert at the exact paths the config expects; Certbot overwrites both files on first run, so the placeholder is genuinely temporary.
+**Two orderings depending on whether you have the cert files already.**
+
+The HTTPS server block above references `ssl_certificate` files at `/etc/ssl/greenbook/wildcard.africanunion.org.*`. `nginx -t` opens those files at config-test time and refuses the whole config if either is missing — so the test (and any reload) fails until the cert is on disk. Pick whichever order matches your situation:
+
+- **(A) Cert already extracted** — if AU IT delivered the PFX before nginx setup, run [§6.4.3](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) **first**, then come back here and `nginx -t && systemctl reload nginx`. No placeholder needed; this is the recommended path.
+- **(B) Cert not yet in hand** — if you're doing infrastructure setup ahead of cert procurement, drop a 1-day self-signed placeholder at the exact paths the config expects, get nginx running, then replace the placeholder when [§6.4.3](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) lands. The 1-day expiry forces the issue if cert procurement stalls.
+
+Path (B) — the placeholder bootstrap:
 
 ```bash
 # [auishqosrgbwbs01]
-$ sudo mkdir -p /etc/letsencrypt/live/greenbook.africanunion.org
+$ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
 
 $ sudo openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
-    -keyout /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem \
-    -out    /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem \
+    -keyout /etc/ssl/greenbook/wildcard.africanunion.org.key \
+    -out    /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
     -subj   "/CN=greenbook.africanunion.org"
 #   req -x509 -nodes    self-signed cert, no passphrase on the key.
 #   -newkey rsa:2048    generate a fresh 2048-bit RSA key alongside the cert.
-#                        The real Let's Encrypt cert in §6.4 may land as ECDSA
-#                        — fine, nginx loads whichever algorithm the file holds.
+#                        The real wildcard cert in §6.4.3 lands as RSA-2048
+#                        or RSA-4096 from AU IT's PKI; nginx loads whichever
+#                        algorithm the file holds.
 #   -days 1             expires in 24 hours. Short on purpose: if you forget
-#                        to run Certbot, browsers will scream loudly.
+#                        to install the real cert, browsers will scream loudly.
 #   -subj "/CN=..."     non-interactive subject. Skips the DN prompts.
 
-$ sudo chmod 600 /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem
-#   Lock the placeholder key down to root-only — same mode Certbot uses
-#   when it overwrites the file.
+$ sudo chmod 640 /etc/ssl/greenbook/wildcard.africanunion.org.key
+$ sudo chown root:www-data /etc/ssl/greenbook/wildcard.africanunion.org.key
+#   Same perms the real key uses (§6.4.3), so the swap-in is a no-op for nginx.
 ```
 
 > **ℹ Expect an `"ssl_stapling" ignored, issuer certificate not found` warning**
 >
-> The next `nginx -t` will print that warning against the placeholder cert. It is benign and self-resolving: OCSP stapling needs the issuer's intermediate cert to fetch a revocation response, and a self-signed cert has no separate issuer. Nginx silently disables stapling for the placeholder and continues loading the config — that's why the test still ends in "syntax is ok / test is successful." Once Certbot installs the real Let's Encrypt chain in §6.4, OCSP stapling activates and the warning disappears.
-
-> **ℹ Skip the snake-oil if you already have the AU's wildcard PFX on disk**
->
-> The placeholder above exists because Let's Encrypt creates the cert files only AFTER `nginx -t` runs. If you're using the AU-procured wildcard certificate (§6.7) — delivered as `wildcard.africanunion.org.pfx` with a separately-supplied password — extract it now per [§6.7.3](#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) and change the two `ssl_certificate` paths in greenbook.conf to `/etc/ssl/greenbook/wildcard.africanunion.org.*` per [§6.7.4](#674-point-nginx-at-the-new-files). `nginx -t` then passes against the real cert directly, no snake-oil needed. The placeholder is only useful when cert acquisition (Certbot, an in-flight CSR) hasn't completed.
+> The next `nginx -t` will print that warning against the placeholder cert. It is benign and self-resolving: OCSP stapling needs the issuer's intermediate cert to fetch a revocation response, and a self-signed cert has no separate issuer. Nginx silently disables stapling for the placeholder and continues loading the config — that's why the test still ends in "syntax is ok / test is successful." Once §6.4.3 installs the real wildcard chain, OCSP stapling activates and the warning disappears.
 
 Test the config and reload:
 
@@ -273,244 +272,35 @@ $ sudo systemctl reload nginx
 #                   requests. No dropped connections.
 ```
 
-> **⚠ HTTPS will show a "not trusted" warning until Certbot runs**
+> **⚠ HTTPS will show a "not trusted" warning until §6.4 installs the real cert**
 >
-> The placeholder cert above lets `nginx -t` pass and lets nginx start, but a browser visiting `https://greenbook.africanunion.org` will see a self-signed / "not trusted" warning until §6.4 issues the real Let's Encrypt cert. The HTTP site on port 80 works already (it 301-redirects to HTTPS, where the browser then warns). **Don't share the public URL with anyone before §6.4 completes.**
+> The placeholder cert above lets `nginx -t` pass and lets nginx start, but a browser visiting `https://greenbook.africanunion.org` will see a self-signed / "not trusted" warning until §6.4 installs the AU wildcard. The HTTP site on port 80 works already (it 301-redirects to HTTPS, where the browser then warns). **Don't share the public URL with anyone before §6.4 completes.**
 
-### 6.4 TLS with Let’s Encrypt (public internet or public DNS)
+### 6.4 Install the AU wildcard TLS certificate
 
-Let’s Encrypt issues free, automatically-renewing TLS certificates. It offers two validation methods: HTTP-01 (the default, used by certbot --nginx) and DNS-01 (for servers that are not reachable from the public internet). Which one you can use depends on how the VM is networked.
+This is the African Union's chosen TLS path: a commercial wildcard certificate procured from a public CA (DigiCert, Sectigo, GlobalSign, GoDaddy — depends on the AU's current vendor). Wildcard `*.africanunion.org` covers `greenbook.africanunion.org` AND every other host under the same apex (a future internal app, staging, etc.), so the file naming below uses `wildcard.africanunion.org.*` rather than a per-host name. Trusted by every browser and OS out of the box, so there is no client-side trust step.
 
-> **ℹ Which validation method applies to your deployment?**
+**Three sub-paths depending on how AU IT delivers the cert:**
+
+- **PFX / `.p12` bundle (the actual AU path).** AU IT generated the CSR centrally and delivers a single password-protected `.pfx` containing leaf + chain + private key. **Skip §6.4.1 + §6.4.2 — go directly to [§6.4.3](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) → [§6.4.4](#644-point-nginx-at-the-new-files) → [§6.4.5](#645-renewal).**
+- **PEM bundle delivery.** AU IT (or the CA portal) delivers a `fullchain.pem` + `privkey.pem` directly. Skip §6.4.1, follow §6.4.2 + §6.4.4 + §6.4.5.
+- **CSR-on-VM.** You generate the CSR locally, hand it to AU IT, get back the signed cert. Follow §6.4.1 + §6.4.2 + §6.4.4 + §6.4.5.
+
+The Nginx config in §6.3 needs **only one change** for any of these paths: the two `ssl_certificate` paths in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf) point at `/etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem` and `.key` by default — that's already correct. TLS protocols, ciphers, OCSP stapling, security headers, and every `location` block stay identical.
+
+> **ℹ If you don't have an AU wildcard PFX (forks / non-AU deployments)**
 >
-> HTTP-01 requires that Let’s Encrypt’s servers can reach your VM over plain HTTP on port 80. That means (a) your public DNS record must resolve to a publicly-routable IP, and (b) port 80 on that IP must be open to the internet.
->
-> If your VM has only an internal IP (e.g. 10.111.11.x) and your DNS record resolves to that internal IP, HTTP-01 WILL FAIL. Let's Encrypt's servers cannot reach 10.111.11.x (or any RFC 1918 private range) from the public internet regardless of how accessible port 80 is on the intranet.
->
-> If your VM has an internal IP but the domain has PUBLIC DNS records (a common AU setup — public greenbook.africanunion.org record pointing at a publicly-routable IP that is routed to the VM via a NAT or reverse proxy), both methods can work.
->
-> If your VM is air-gapped from the internet entirely, use an internal CA instead (§6.6).
+> The deployment guide is intentionally focused on AU's procurement reality. If you're forking greenbook for a different organisation: (a) for free auto-renewing certs against a public domain, see [Certbot's official guide](https://certbot.eff.org/instructions); (b) for an internal/air-gapped CA, generate a key + CSR per §6.4.1, submit it to your PKI team, then install the returned PEM bundle per §6.4.2. Either way the Nginx config in §6.3 stays the same — only the `ssl_certificate` paths change.
 
-#### 6.4.1 HTTP-01 validation (VM reachable on public internet, port 80)
+#### 6.4.1 Generate the CSR on the VM
 
-Certbot is best installed from snap rather than apt. The apt version lags upstream and the snap version is the method officially recommended by Let’s Encrypt.
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo snap install core
-$ sudo snap refresh core
-#   snap install NAME    install a snap package. "core" is the snap runtime.
-#   snap refresh NAME    update snap-managed packages.
-
-$ sudo snap install --classic certbot
-#   --classic            certbot needs to break out of snap's strict sandbox
-#                         to write files under /etc/letsencrypt.
-
-$ sudo ln -s /snap/bin/certbot /usr/bin/certbot
-#   Put certbot on PATH under /usr/bin/ so bare "certbot" works without
-#   qualifying /snap/bin/certbot.
-
-$ certbot --version
-# Expected: "certbot 3.x.x" (or newer).
-```
-
-Create the webroot that Nginx serves the ACME challenges from (the /.well-known/acme-challenge location in §6.3):
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo mkdir -p /var/www/certbot
-$ sudo chown www-data:www-data /var/www/certbot
-#   www-data    the user Nginx runs as on Ubuntu. Certbot will write challenge
-#               files here that Nginx serves on plain HTTP.
-```
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo certbot --nginx -d greenbook.africanunion.org \
-  --email ops@africanunion.org --agree-tos --no-eff-email --redirect
-#   --nginx              use the nginx plugin: certbot reads and edits the
-#                         nginx config automatically.
-#   -d DOMAIN             domain to certify. Repeat -d for multi-SAN certs.
-#   --email ADDRESS       Let's Encrypt uses this for renewal failure notices.
-#   --agree-tos           accept the Let's Encrypt subscriber agreement.
-#   --no-eff-email        don't sign up for EFF newsletters.
-#   --redirect            add an HTTP→HTTPS redirect if not present. (Ours
-#                          already has one, so this is a no-op.)
-# Runtime: 15-30 seconds. Certbot will write certificate files, edit
-# /etc/nginx/sites-enabled/greenbook.conf to point at them, and reload nginx.
-
-$ sudo certbot renew --dry-run
-#   renew               test all installed certs can be renewed.
-#   --dry-run           go through the motions against LE's staging server;
-#                        nothing is persisted.
-# Expected: "Congratulations, all simulated renewals succeeded".
-```
-
-The snap version of Certbot installs a systemd timer that attempts renewal twice per day — check with:
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo systemctl list-timers | grep -i certbot
-# Expected: an active "snap.certbot.renew.timer" entry.
-```
-
-#### 6.4.2 DNS-01 validation (VM not publicly reachable but has public DNS)
-
-DNS-01 works entirely over outbound HTTPS — Let’s Encrypt never contacts the VM. It validates the certificate request by checking a DNS TXT record, which your DNS provider’s API creates on the fly. This is the right choice when:
-
-- The VM has only an internal IP (no public port 80 reachability).
-- Your DNS records are public (resolvable on the internet) even if the target IPs are not.
-- You need wildcard certificates (\*.africanunion.org) — HTTP-01 cannot issue wildcards; DNS-01 can.
-
-Certbot ships DNS plugins for the major providers. Install the plugin for your DNS host:
-
-```bash
-# [auishqosrgbwbs01] — examples of DNS plugins; install only the one that matches your provider
-$ sudo snap install certbot-dns-route53     # AWS Route 53
-$ sudo snap install certbot-dns-cloudflare  # Cloudflare
-$ sudo snap install certbot-dns-google      # Google Cloud DNS
-$ sudo snap install certbot-dns-rfc2136     # generic RFC2136 (e.g. PowerDNS, BIND with TSIG)
-# For other providers, see:  certbot plugins
-```
-
-Create a credentials file for the plugin (Cloudflare example):
-
-```bash
-# [auishqosrgbwbs01] — as root
-$ sudo install -d -m 700 /etc/letsencrypt/secrets
-#   /etc/letsencrypt/secrets    directory for credential files. 700 locks it
-#                                down to root — plugin auth tokens live here.
-
-$ sudo tee /etc/letsencrypt/secrets/cloudflare.ini <<'EOF'
-# Cloudflare API token with Zone:DNS:Edit scope for your zone.
-# Create at: https://dash.cloudflare.com/profile/api-tokens
-dns_cloudflare_api_token = YOUR_SCOPED_TOKEN_HERE
-EOF
-
-$ sudo chmod 600 /etc/letsencrypt/secrets/cloudflare.ini
-# 600 is REQUIRED — the cloudflare plugin refuses to use group/world-readable
-# credentials. Good hygiene; do not override.
-```
-
-Request the cert. Note: DNS-01 does NOT need the --nginx plugin (no ACME challenge over HTTP) — we let certbot obtain the cert standalone and point Nginx at it ourselves:
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo certbot certonly \
-  --dns-cloudflare \
-  --dns-cloudflare-credentials /etc/letsencrypt/secrets/cloudflare.ini \
-  --dns-cloudflare-propagation-seconds 30 \
-  -d greenbook.africanunion.org \
-  --email ops@africanunion.org --agree-tos --no-eff-email
-#   certonly                            obtain the cert but don't edit any
-#                                        webserver config.
-#   --dns-cloudflare                     use the Cloudflare DNS plugin.
-#   --dns-cloudflare-credentials FILE    the API token file above.
-#   --dns-cloudflare-propagation-seconds N
-#                                        wait N seconds after creating the
-#                                        TXT record before asking LE to
-#                                        verify it. 30s is typical for
-#                                        Cloudflare; slower providers may
-#                                        need 60-120s.
-#   -d DOMAIN                             domain to certify. Can also be
-#                                         "-d *.africanunion.org" for a wildcard
-#                                         (DNS-01 supports wildcards).
-# Certificate files land under /etc/letsencrypt/live/greenbook.africanunion.org/ —
-# exactly where the Nginx config in §6.3 expects them. After success:
-
-$ sudo nginx -t && sudo systemctl reload nginx
-# Test and reload. Nginx now serves the real cert.
-
-# The same "certbot renew --dry-run" applies; the plugin remembers the
-# DNS method used to issue each cert and renews it the same way.
-```
-
-### 6.5 Test the TLS deployment
-
-```bash
-# From your workstation (not the VM):
-$ curl -I https://greenbook.africanunion.org/
-# Expected: HTTP/2 200  (or an application redirect).
-# Expected header: strict-transport-security: max-age=31536000; includeSubDomains
-
-$ openssl s_client -connect greenbook.africanunion.org:443 \
-  -servername greenbook.africanunion.org </dev/null 2>/dev/null | \
-  openssl x509 -noout -subject -issuer -dates
-#   openssl s_client        open a raw TLS connection.
-#   -connect HOST:PORT      what to connect to.
-#   -servername NAME        SNI — indicate which vhost the connection is for.
-#                            REQUIRED if multiple HTTPS sites live on the same IP.
-#   </dev/null              empty stdin — don't wait for interactive input.
-#   2>/dev/null             discard stderr (progress chatter).
-#   | openssl x509 -noout -subject -issuer -dates
-#                            parse the server cert from s_client's output
-#                            and show who issued it, for whom, and validity.
-# Expected:
-#   subject=CN = greenbook.africanunion.org
-#   issuer=C = US, O = Let's Encrypt, CN = R10  (or similar)
-#   notBefore=...   notAfter=...   (typically 90 days apart)
-```
-
-> **✓ Check your grade**
->
-> Test the HTTPS config at https://www.ssllabs.com/ssltest/ (public) or a private equivalent for internal hosts. With the config in §6.3, expect a solid "A" rating.
-
-### 6.6 Using an internal CA instead of Let’s Encrypt
-
-For an air-gapped AU intranet where neither HTTP-01 nor DNS-01 is workable (no outbound internet, no public DNS), use certificates issued by your organisation’s internal CA. The Nginx config in §6.3 is unchanged apart from the certificate paths.
+Generating the CSR on the target server is preferred over receiving a pre-generated key from AU IT, because the private key never leaves the VM and you don't have to trust the channel that delivers it. Skip to §6.4.3 if AU IT generated the CSR centrally and is delivering you a `.pfx` / `.p12` bundle.
 
 ```bash
 # [auishqosrgbwbs01]
 $ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
 #   -m 750 owned by root:www-data. www-data (nginx worker) can read but
 #   not write; root can do both.
-
-# Place your cert bundle and private key here. Exact method depends on your
-# CA — typical approach with an internal PKI is to generate a CSR on the VM,
-# submit it to the CA, and install the returned cert:
-
-# Generate an ECDSA private key (smaller, faster, equal security to RSA-3072).
-$ sudo openssl ecparam -name prime256v1 -genkey \
-  -out /etc/ssl/greenbook/greenbook.africanunion.org.key
-# Then create a CSR (certificate signing request), submit it to your CA, and
-# install the signed cert plus intermediate chain at /etc/ssl/greenbook/.
-
-# In the Nginx server block in §6.3, change the ssl_certificate paths:
-#   ssl_certificate     /etc/ssl/greenbook/greenbook.africanunion.org.fullchain.pem;
-#   ssl_certificate_key /etc/ssl/greenbook/greenbook.africanunion.org.key;
-# (fullchain = server cert FOLLOWED BY the intermediate chain, in one file)
-
-$ sudo chmod 640 /etc/ssl/greenbook/*.key
-$ sudo chmod 644 /etc/ssl/greenbook/*.pem
-
-$ sudo nginx -t && sudo systemctl reload nginx
-```
-
-Every workstation that will visit the site must trust your internal CA’s root certificate. AU-managed endpoints should have this deployed via the OS image or MDM; for one-off devices, import the root cert into the OS trust store manually.
-
-### 6.7 Using a pre-purchased commercial certificate
-
-This is the African Union's chosen TLS path: a commercial certificate procured from a public CA (e.g. DigiCert, Sectigo, GlobalSign, GoDaddy). Commercial certs are trusted by every browser and OS out of the box, so unlike §6.6 there is no client-side trust step.
-
-**AU's actual delivery — what to read first**
-
-The AU has a **wildcard certificate** for `*.africanunion.org` delivered as a single password-protected `.pfx` (PKCS#12) bundle. The wildcard means the same cert covers `greenbook.africanunion.org` AND any future host under `africanunion.org` (e.g. another internal app), so the file naming below uses `wildcard.africanunion.org.*` rather than a per-host name. AU operators on this path:
-
-- Skip [§6.7.1](#671-generate-the-csr-on-the-vm) — the CSR was generated centrally by AU IT, not on the VM.
-- Skip [§6.7.2](#672-install-the-issued-certificate-pem-bundle-delivery) — that's the PEM-bundle delivery shape; you have a PFX.
-- Go to **[§6.7.3 (Install from `.pfx` / `.p12`)](#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path)** + **[§6.7.4 (Point Nginx at the new files)](#674-point-nginx-at-the-new-files)** + **[§6.7.5 (Renewal)](#675-renewal)**.
-
-The Nginx config in §6.3 needs **only one change** for any of these paths: the two `ssl_certificate` paths at the bottom of the HTTPS server block, swapped from `/etc/letsencrypt/live/...` to `/etc/ssl/greenbook/wildcard.africanunion.org.*` (matching §6.6's convention for hand-installed certs). TLS protocols, ciphers, OCSP stapling, security headers, the `/sw.js` / `/assets/` / `/manifest.json` / `/` location blocks all stay identical.
-
-#### 6.7.1 Generate the CSR on the VM
-
-Generating the CSR on the target server is preferred over receiving a pre-generated key from AU IT, because the private key never leaves the VM and you don't have to trust the channel that delivers it. Skip to §6.7.3 if AU IT generated the CSR centrally and is delivering you a `.pfx` / `.p12` bundle.
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
-#   Same directory + perms as §6.6 — owned root, readable by nginx (www-data),
-#   not world-readable.
 
 # Generate an ECDSA P-256 private key (smaller, faster, equal security to RSA-3072).
 $ sudo openssl ecparam -name prime256v1 -genkey -noout \
@@ -543,7 +333,7 @@ $ openssl req -in /etc/ssl/greenbook/greenbook.africanunion.org.csr -noout -text
 $ sudo cat /etc/ssl/greenbook/greenbook.africanunion.org.csr
 ```
 
-#### 6.7.2 Install the issued certificate (PEM bundle delivery)
+#### 6.4.2 Install the issued certificate (PEM bundle delivery)
 
 The CA returns the signed certificate, typically with the issuer's intermediate(s). Common file shapes:
 
@@ -596,9 +386,9 @@ $ ls -l /etc/ssl/greenbook/
 #   -rw-r--r-- root www-data  greenbook.africanunion.org.fullchain.pem  (644)
 ```
 
-#### 6.7.3 Install the wildcard certificate from a `.pfx` / `.p12` bundle (AU's actual path)
+#### 6.4.3 Install the wildcard certificate from a `.pfx` / `.p12` bundle (AU's actual path)
 
-This is what to do when AU IT delivers a `wildcard.africanunion.org.pfx` (or similarly-named) file plus a password. The PFX contains three things in one encrypted blob: the wildcard certificate, its private key, and the CA chain. The procedure below extracts each part to a separate file on disk, in the conventional layout that the Nginx config in §6.7.4 expects.
+This is what to do when AU IT delivers a `wildcard.africanunion.org.pfx` (or similarly-named) file plus a password. The PFX contains three things in one encrypted blob: the wildcard certificate, its private key, and the CA chain. The procedure below extracts each part to a separate file on disk, in the conventional layout that the Nginx config in §6.4.4 expects.
 
 > **⚠ Handle the PFX password carefully**
 >
@@ -698,7 +488,7 @@ $ sudo openssl pkcs12 -legacy \
 $ sudo chmod 640 /etc/ssl/greenbook/wildcard.africanunion.org.key
 $ sudo chown root:www-data /etc/ssl/greenbook/wildcard.africanunion.org.key
 #   640 root:www-data so nginx (running as www-data) can read it but no
-#   other unprivileged user can. Same convention as §6.6.
+#   other unprivileged user can. Same perms as the placeholder in §6.3.2.
 
 # 3. Extract the leaf (wildcard) certificate. Prompts for the password again.
 $ sudo openssl pkcs12 -legacy \
@@ -762,7 +552,7 @@ $ ls -l /etc/ssl/greenbook/
 #   -rw-r--r-- root root      wildcard.africanunion.org.fullchain.pem  (644)
 ```
 
-#### 6.7.4 Point Nginx at the new files
+#### 6.4.4 Point Nginx at the new files
 
 Edit `/etc/nginx/sites-available/greenbook.conf` (or rerun `scp` with an updated [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)). Change the two `ssl_certificate` paths in the HTTPS server block:
 
@@ -800,13 +590,13 @@ $ echo | openssl s_client -connect 127.0.0.1:443 \
 
 If the snake-oil from §6.3 is still on disk (it expires in 24h anyway), it's harmless once nginx is pointed elsewhere. You can delete `/etc/letsencrypt/live/greenbook.africanunion.org/` if you'd rather keep `/etc/letsencrypt/` reserved for actual Let's Encrypt material.
 
-#### 6.7.5 Renewal
+#### 6.4.5 Renewal
 
 Commercial certificates do **not** auto-renew. Validity is typically 1 year (with a 397-day cap per Apple/Google policies; some vendors now offer 90-day commercial certs to align with industry direction). Two paths:
 
-1. **Manual renewal** — set a calendar reminder 30 days before `notAfter`. The renewal flow is identical to §6.7.1: reuse the existing key (or rotate it as a discipline), submit a fresh CSR, install per §6.7.2, `nginx -t && systemctl reload nginx`. AU IT may supply the renewed cert without a new CSR if they retained the original key — confirm their procurement workflow up front.
+1. **Manual renewal** — set a calendar reminder 30 days before `notAfter`. The renewal flow is identical to §6.4.1: reuse the existing key (or rotate it as a discipline), submit a fresh CSR, install per §6.4.2, `nginx -t && systemctl reload nginx`. AU IT may supply the renewed cert without a new CSR if they retained the original key — confirm their procurement workflow up front. For PFX renewal (the AU's actual path) re-run §6.4.3 against the new bundle, then `nginx -t && systemctl reload nginx`.
 
-2. **Vendor ACME** — some commercial CAs now expose ACME endpoints (Sectigo, ZeroSSL, BuyPass, DigiCert all do at the time of writing). If yours does and AU IT enables ACME on the AU account, you can drive renewals with Certbot or `acme.sh` against the vendor's ACME URL via `--server`. Renewal becomes automated, like §6.4. Confirm with AU IT whether ACME is enabled.
+2. **Vendor ACME** — some commercial CAs now expose ACME endpoints (Sectigo, ZeroSSL, BuyPass, DigiCert all do at the time of writing). If yours does and AU IT enables ACME on the AU account, you can drive renewals with Certbot or `acme.sh` against the vendor's ACME URL via `--server`. Renewal becomes automated. Confirm with AU IT whether ACME is enabled.
 
 Check current expiry on demand:
 
@@ -825,7 +615,39 @@ Both [§8.3 (monitoring script)](08-day-2-operations.md#83-simple-monitoring-scr
 >
 > The Nginx config has `ssl_stapling on; resolver 1.1.1.1 9.9.9.9` so it can fetch OCSP responses from the CA. If outbound HTTPS to the CA's OCSP responder is blocked from the VM (common on locked-down intranets), nginx logs `ssl_stapling_responder failed` or `OCSP_basic_verify() failed` warnings — the config still loads, but stapling is silently off and clients fall back to fetching OCSP themselves. Two fixes: (a) ask network ops to allow outbound HTTPS to your CA's OCSP URL (DigiCert: `ocsp.digicert.com`, Sectigo: `ocsp.sectigo.com`, GlobalSign: `ocsp.globalsign.com`); or (b) accept the regression and disable stapling in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf) by setting `ssl_stapling off; ssl_stapling_verify off;`. Stapling is a latency optimisation, not a security feature — modern clients cope fine without it.
 
-### 6.8 Adding a second app on the App VM
+### 6.5 Test the TLS deployment
+
+```bash
+# From your workstation (not the VM):
+$ curl -I https://greenbook.africanunion.org/
+# Expected: HTTP/2 200  (or an application redirect).
+# Expected header: strict-transport-security: max-age=31536000; includeSubDomains
+
+$ openssl s_client -connect greenbook.africanunion.org:443 \
+  -servername greenbook.africanunion.org </dev/null 2>/dev/null | \
+  openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+#   openssl s_client        open a raw TLS connection.
+#   -connect HOST:PORT      what to connect to.
+#   -servername NAME        SNI — indicate which vhost the connection is for.
+#                            REQUIRED if multiple HTTPS sites live on the same IP.
+#   </dev/null              empty stdin — don't wait for interactive input.
+#   2>/dev/null             discard stderr (progress chatter).
+#   | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+#                            parse the server cert from s_client's output
+#                            and show who issued it, for whom, validity, and SAN.
+# Expected (AU wildcard):
+#   subject=CN = *.africanunion.org
+#   issuer=    AU's CA's intermediate (DigiCert/Sectigo/etc.)
+#   notBefore=...   notAfter=...   (typically 1 year apart)
+#   X509v3 Subject Alternative Name:
+#       DNS:*.africanunion.org, DNS:africanunion.org
+```
+
+> **✓ Check your grade**
+>
+> Test the HTTPS config at https://www.ssllabs.com/ssltest/ (public) or a private equivalent for internal hosts. With the config in §6.3, expect a solid "A" rating.
+
+### 6.6 Adding a second app on the App VM
 
 When a second AU app onboards on the same App VM, the work collapses to **three commands plus one edited per-app config file**. The shared configs (`/etc/nginx/conf.d/00-app-vm-shared.conf`, `/etc/nginx/snippets/app-vm-proxy-headers.conf`) are already in place from greenbook's onboarding (§6.3.1) and are reused as-is — no edits.
 
@@ -874,7 +696,7 @@ The new app inherits the shared rate-limit zones (`app_general`, `app_auth`), th
 
 > **ℹ Wildcard cert covers any `*.africanunion.org` hostname**
 >
-> The `ssl_certificate` paths in `<app>.conf` stay pointed at `/etc/ssl/greenbook/wildcard.africanunion.org.{fullchain.pem,key}` (the same files greenbook uses, per §6.7). One cert serves every per-app server block on this VM, so adding `<app>.africanunion.org` needs no new cert work — just the public DNS A / CNAME record from AU IT.
+> The `ssl_certificate` paths in `<app>.conf` stay pointed at `/etc/ssl/greenbook/wildcard.africanunion.org.{fullchain.pem,key}` (the same files greenbook uses, per §6.4). One cert serves every per-app server block on this VM, so adding `<app>.africanunion.org` needs no new cert work — just the public DNS A / CNAME record from AU IT.
 
 > **ℹ For the two-tier (DMZ-fronted) topology, see [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy)**
 >
