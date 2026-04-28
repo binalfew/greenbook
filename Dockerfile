@@ -145,7 +145,9 @@ COPY --from=build --chown=node:node /app/build             ./build
 COPY --from=build --chown=node:node /app/server.js         ./server.js
 COPY --from=build --chown=node:node /app/server            ./server
 COPY --from=build --chown=node:node /app/app/generated     ./app/generated
-# Five things must land in the runtime image, in order of importance:
+COPY --from=build --chown=node:node /app/prisma            ./prisma
+COPY --from=build --chown=node:node /app/prisma.config.ts  ./prisma.config.ts
+# Seven things must land in the runtime image, in order of importance:
 #   1. server.js         — root-level Express bootstrap (npm run start target)
 #   2. server/           — correlation, logger, rate-limit, security, sentry,
 #                           shutdown, request-logger — all imported by server.js
@@ -153,8 +155,24 @@ COPY --from=build --chown=node:node /app/app/generated     ./app/generated
 #   3. build/            — compiled SSR bundle + hashed client assets
 #   4. node_modules/     — production deps (pruned via npm prune --omit=dev)
 #   5. app/generated/    — Prisma 7 client (output path declared in schema)
+#   6. prisma/           — schema.prisma (+ migrations/ if you've baselined).
+#                           Not needed by the running server (which uses the
+#                           pre-generated client in app/generated/), BUT
+#                           required by `npx prisma db push` and
+#                           `prisma migrate deploy` at deploy time. Without
+#                           it, the schema-deploy step in 07 §8.3.1 fails
+#                           with "Could not find Prisma Schema".
+#   7. prisma.config.ts  — Prisma 7 datasource configuration. Same reason as
+#                           prisma/: only needed by the prisma CLI at deploy
+#                           time, not by request handling.
 # package.json is needed so `npm run start` resolves. package-lock.json is
 # not strictly required at runtime but keeps `npm rebuild` usable for diag.
+#
+# Schema disclosure note: shipping prisma/ in the runtime image means
+# anyone with `docker exec` access can read the schema (table names,
+# column types, comments). Acceptable for greenbook on an internal AU
+# intranet; on a hostile-tenant host you'd run migrations from the build
+# stage image instead (see 05 §6.1 commentary).
 
 STOPSIGNAL SIGTERM
 # Signal Docker sends on `docker stop`. greenbook's server/app.ts installs

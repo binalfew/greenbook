@@ -461,9 +461,12 @@ $ docker image ls greenbook:$VERSION
 $ docker run --rm \
     --env-file /etc/greenbook.env \
     greenbook:$VERSION \
-    npx prisma db push --skip-generate
+    npx prisma db push
 # Expected: "The database is already in sync with the Prisma schema." (re-deploy)
 #       or  "🚀  Your database is now in sync with your schema." (first time)
+#
+# Prisma 7 note: `--skip-generate` was removed in Prisma 7 — it's now
+# the default behaviour for `db push` (no auto-generate). Don't add it.
 
 # ────────────────────────────────────────────────────────────────
 # STEP 4. Seed the DB (FIRST DEPLOY ONLY — skip on re-deploys).
@@ -726,14 +729,14 @@ Greenbook currently uses **`prisma db push`** as its schema workflow — no `pri
 $ docker run --rm \
   --env-file /etc/greenbook.env \
   greenbook:$VERSION \
-  npx prisma db push --skip-generate
+  npx prisma db push
 #   docker run IMAGE CMD          run a new container for IMAGE, execute CMD.
 #   --rm                           delete the container when CMD finishes.
 #   --env-file /etc/greenbook.env  load env vars (DATABASE_URL, etc.) from file.
 #                                   Same file used by the main compose service.
 #   npx prisma db push             sync prisma/schema.prisma to the DB.
-#   --skip-generate                don't re-run prisma generate; the image
-#                                   already has a generated client from build.
+#                                   (Prisma 7 dropped `--skip-generate`;
+#                                    not auto-generating is now the default.)
 #
 # Network note: we do NOT pass --network host. The default Docker bridge
 # network is sufficient. When the container opens a TCP connection to
@@ -1057,10 +1060,12 @@ $ if [ "$SCHEMA_MODE" = "migrate" ]; then
   docker run --rm --env-file "$ENV_RUNTIME" \
     "greenbook:$VERSION" npx prisma migrate deploy
 else
-  # --skip-generate because the image already has a generated client.
-  # Do NOT add --accept-data-loss without human review.
+  # Prisma 7 dropped `--skip-generate` (the no-auto-generate behaviour
+  # it controlled is now the default). Do NOT add --accept-data-loss
+  # without human review — that flag tells db push to drop columns /
+  # tables without prompting.
   docker run --rm --env-file "$ENV_RUNTIME" \
-    "greenbook:$VERSION" npx prisma db push --skip-generate
+    "greenbook:$VERSION" npx prisma db push
 fi
 # Exits non-zero on failure — set -e aborts the deploy here.
 
@@ -1112,7 +1117,8 @@ $ VERSION=<your-first-image-tag>
 
 # Step 1 — apply the schema:
 $ docker run --rm --env-file /etc/greenbook.env \
-  greenbook:$VERSION npx prisma db push --skip-generate
+  greenbook:$VERSION npx prisma db push
+# Prisma 7: no `--skip-generate` flag any more; not generating is now default.
 
 # Step 2 — seed:
 $ docker run --rm --env-file /etc/greenbook.env \

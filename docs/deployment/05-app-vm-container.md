@@ -179,7 +179,9 @@ COPY --from=build --chown=node:node /app/build             ./build
 COPY --from=build --chown=node:node /app/server.js         ./server.js
 COPY --from=build --chown=node:node /app/server            ./server
 COPY --from=build --chown=node:node /app/app/generated     ./app/generated
-# Five things must land in the runtime image, in order of importance:
+COPY --from=build --chown=node:node /app/prisma            ./prisma
+COPY --from=build --chown=node:node /app/prisma.config.ts  ./prisma.config.ts
+# Seven things must land in the runtime image, in order of importance:
 #   1. server.js         — root-level Express bootstrap (npm run start target)
 #   2. server/           — correlation, logger, rate-limit, security, sentry,
 #                           shutdown, request-logger — all imported by server.js
@@ -187,8 +189,24 @@ COPY --from=build --chown=node:node /app/app/generated     ./app/generated
 #   3. build/            — compiled SSR bundle + hashed client assets
 #   4. node_modules/     — production deps (pruned via npm prune --omit=dev)
 #   5. app/generated/    — Prisma 7 client (output path declared in schema)
+#   6. prisma/           — schema.prisma (+ migrations/ if you've baselined).
+#                           Not needed by the running server (which uses the
+#                           pre-generated client in app/generated/), BUT
+#                           required by `npx prisma db push` and
+#                           `prisma migrate deploy` at deploy time. Without
+#                           it, the schema-deploy step in 07 §8.3.1 fails
+#                           with "Could not find Prisma Schema".
+#   7. prisma.config.ts  — Prisma 7 datasource configuration. Same reason as
+#                           prisma/: only needed by the prisma CLI at deploy
+#                           time, not by request handling.
 # package.json is needed so `npm run start` resolves. package-lock.json is
 # not strictly required at runtime but keeps `npm rebuild` usable for diag.
+#
+# Schema disclosure note: shipping prisma/ in the runtime image means
+# anyone with `docker exec` access can read the schema (table names,
+# column types, comments). Acceptable for greenbook on an internal AU
+# intranet; on a hostile-tenant host you'd run migrations from the build
+# stage image instead (see the ⚠ callout below).
 
 STOPSIGNAL SIGTERM
 # Signal Docker sends on `docker stop`. greenbook's server/app.ts installs
@@ -240,6 +258,22 @@ CMD ["npm", "run", "start"]
 > 2. **Drop the dependency.** `use-resize-observer` is a thin wrapper over the native `ResizeObserver` API — a hand-rolled `useResizeObserver` hook is ~15 lines and removes the conflict at the source. Best when greenbook only uses one or two of the package's hooks.
 >
 > Until either (1) or (2) lands, leave the flag in place. Removing it on a fork that's still on React 18 is fine; on React 19 the build will fail the same way again.
+
+> **ℹ Why `prisma/` and `prisma.config.ts` are in the runtime image (and how migrations actually run)**
+>
+> The runtime stage copies seven things from the build stage; two of them — `prisma/` and `prisma.config.ts` — are **not used at request-handling time**. The running server queries the DB through the pre-generated client in `app/generated/` plus `@prisma/adapter-pg`; neither the schema source nor the config file is opened on a hot path. They're in the image **only so the prisma CLI can find them** when you run `npx prisma db push` (07 §8.3.1) or `prisma migrate deploy` against a deployed image. Without them you'd see:
+>
+> ```
+> Error: Could not find Prisma Schema that is required for this command.
+> Checked following paths:
+>   schema.prisma: file not found
+>   prisma/schema.prisma: file not found
+> ```
+>
+> Two follow-on observations the next operator should be aware of:
+>
+> 1. **`npx prisma db push` fetches the prisma CLI from npm at deploy time** — `npm prune --omit=dev` removed the CLI from `node_modules`, so `npx` falls back to the registry and pulls ~50 MB on every migration (visible as `npm warn exec ... will be installed: prisma@7.8.0` in the output). Works as long as the deploying VM can reach `registry.npmjs.org` (already whitelisted on the AU intranet — see the egress table below). To avoid the round-trip, move `prisma` from `devDependencies` to `dependencies` in `package.json`; the CLI will then survive the prune and you can switch the deploy command to `npx --no-install prisma db push`. Not blocking; flag for cleanup if you do many migrations.
+> 2. **Schema disclosure**: shipping `prisma/` in the runtime image means anyone with `docker exec` access can read the schema (table names, column types, comments). Acceptable for greenbook on an internal AU intranet; on a hostile-tenant host the cleaner pattern is to tag the **build stage** as a separate `greenbook-builder:$VERSION` image and run migrations from that, leaving the runtime image with no schema source at all.
 
 > **ℹ Build-time egress requirements (for air-gapped / restricted-egress build hosts)**
 >
