@@ -29,6 +29,12 @@
 
 Nginx sits on the host (not in a container) and terminates TLS on port 443. It forwards decrypted HTTP to the Node container at 127.0.0.1:3000 and adds security headers. Putting Nginx on the host (not in a container) keeps TLS certificates on the host filesystem, makes Certbot integration straightforward, and lets Nginx survive app container restarts.
 
+> **ℹ Single-tier (this chapter) vs two-tier (chapter 12) topology**
+>
+> This chapter documents the **single-tier** shape — nginx on the app VM faces the public internet directly, terminates TLS, and proxies to the container. That's the simplest deployment and what you'll have at the end of the bring-up.
+>
+> If you're running greenbook behind a separate **DMZ reverse proxy** ([12 — DMZ shared reverse proxy](12-dmz-reverse-proxy.md)), the app VM nginx role narrows: TLS terminates at the DMZ edge, the app VM listens on plain HTTP only, and UFW pins :80 to the DMZ VM's source IP. The configs in this chapter are the right starting point either way; chapter 12 §13.8 lists the four diffs to apply on the app VM after the DMZ tier is in place (drop the HTTPS server block, add `set_real_ip_from`, swap UFW rules, drop the security headers — they move to the edge).
+
 ### 7.1 Install Nginx
 
 ```bash

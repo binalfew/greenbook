@@ -72,11 +72,18 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   ```bash
   $ sudo ufw status verbose | grep -E "Status|Default|To"
   # Pass: "Status: active", default "deny (incoming)", and ONLY:
+  #
+  # SINGLE-TIER topology (no DMZ — chapter 06 only):
   #   - app VM:  22/tcp, 80/tcp, 443/tcp
   #   - DB  VM:  22/tcp, 5432/tcp from 10.111.11.51 only
+  #
+  # TWO-TIER topology (with chapter 12 DMZ proxy):
+  #   - DMZ VM:  22/tcp, 80/tcp, 443/tcp                 (public-facing)
+  #   - app VM:  22/tcp, 80/tcp from 172.16.177.50 only  (NO public 80/443)
+  #   - DB  VM:  22/tcp, 5432/tcp from 10.111.11.51 only (unchanged)
   ```
 
-  Set in: [01-pre-flight.md §3.6](01-pre-flight.md), [02-db-vm-setup.md §4.7](02-db-vm-setup.md), [06-app-vm-nginx-tls.md §7.2](06-app-vm-nginx-tls.md)
+  Set in: [01-pre-flight.md §3.6](01-pre-flight.md), [02-db-vm-setup.md §4.7](02-db-vm-setup.md), [06-app-vm-nginx-tls.md §7.2](06-app-vm-nginx-tls.md) (single-tier), [12-dmz-reverse-proxy.md §13.3 + §13.8](12-dmz-reverse-proxy.md) (two-tier)
 
 - **SSH: password auth OFF, root login OFF, key-only.**
   Why: SSH brute-force is the most common automated compromise vector for internet-reachable hosts.
