@@ -698,6 +698,18 @@ This is what to do when AU IT delivers a `wildcard.africanunion.org.pfx` (or sim
 > 1. **Don't pass the password on the command line** with `-passin pass:<value>` — it lands in shell history (`.bash_history` / `.zsh_history`) and `ps auxf` for any other user during the brief moment openssl is running. Use the interactive prompt below (default behaviour: openssl asks for "Enter Import Password:") or the `-passin file:<path>` form pointing at a 600-mode root-owned file you `shred -u` after.
 > 2. **If the .pfx and the password arrived through the same channel** (e.g. both in a single email, or both attached to the same ticket), rotate before installing — the cert+password pair is one factor, not two, when they share a delivery path. AU IT can re-export the bundle with a new password without reissuing the cert.
 
+> **⚠ Add `-legacy` to every `openssl pkcs12` invocation below**
+>
+> PKCS#12 bundles produced by Windows Server / IIS and several commercial CA portals (including DigiCert and Sectigo) encrypt the certificate portion with `RC2-40-CBC` by default. OpenSSL 3.0+ — which Ubuntu 24.04 ships as 3.0.x — moved RC2 into the "legacy" provider, which is **not loaded by default** anymore. Without `-legacy` you'll see:
+>
+> ```
+> Error outputting keys and certificates
+> error:0308010C:digital envelope routines:inner_evp_generic_fetch:unsupported
+>     Algorithm (RC2-40-CBC : 0), Properties ()
+> ```
+>
+> Adding `-legacy` to `openssl pkcs12 -in ...` loads the legacy provider on top of the default provider — modern algorithms still work, RC2 also works. The flag is a no-op on PFX bundles that don't use legacy ciphers, so the procedure below leaves it on unconditionally. (You don't need to pre-register the legacy provider in `/etc/ssl/openssl.cnf`; the `-legacy` flag is per-command.)
+
 ```bash
 # 1. Transfer the PFX from your laptop to the VM, then move it into
 #    /etc/ssl/greenbook/ with restrictive ownership.
@@ -759,10 +771,14 @@ $ rm ~/wildcard.africanunion.org.pfx
 
 # 2. Extract the private key. openssl prompts for the PFX password
 #    interactively — type it, hit enter, no shell history exposure.
-$ sudo openssl pkcs12 \
+$ sudo openssl pkcs12 -legacy \
     -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
     -out /etc/ssl/greenbook/wildcard.africanunion.org.key \
     -nocerts -nodes
+#   -legacy      load the legacy provider so RC2-40-CBC (the default cert
+#                 encryption algorithm in PFX exports from Windows / IIS /
+#                 several commercial CA portals) is recognised. See the ⚠
+#                 callout above. No-op on modern PFX exports.
 #   -nocerts     only output the private key, no certs.
 #   -nodes       do NOT encrypt the output key. nginx won't prompt for a
 #                 passphrase at startup; encrypted-on-disk keys would need
@@ -776,13 +792,13 @@ $ sudo chown root:www-data /etc/ssl/greenbook/wildcard.africanunion.org.key
 #   other unprivileged user can. Same convention as §7.6.
 
 # 3. Extract the leaf (wildcard) certificate. Prompts for the password again.
-$ sudo openssl pkcs12 \
+$ sudo openssl pkcs12 -legacy \
     -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
     -out /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
     -nokeys -clcerts -nodes
 
 # 4. Append the CA chain from the same PFX. Prompts for the password again.
-$ sudo openssl pkcs12 \
+$ sudo openssl pkcs12 -legacy \
     -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
     -nokeys -cacerts -nodes \
   | sudo tee -a /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem >/dev/null
