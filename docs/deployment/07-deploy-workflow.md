@@ -522,12 +522,37 @@ That's it. From here on, re-deploys follow the six-command walkthrough below —
 
 #### Re-deploy after a code change — the every-deploy walkthrough
 
-For deploys after [§8.7 first-run bootstrap](#87-first-run-bootstrap-one-time) has already run on a fresh DB. Six commands; ~5 minutes if the build is hot. Identical to the first-time walkthrough above with steps 4 (seed) and 8 (rotate demo passwords) removed.
+For deploys after [§8.7 first-run bootstrap](#87-first-run-bootstrap-one-time) has already run on a fresh DB. ~5 minutes if the build is hot. Identical to the first-time walkthrough above with steps 4 (seed) and 8 (rotate demo passwords) removed.
 
-The single biggest deploy mistake is `git pull` on the laptop followed straight by `docker compose up -d` on the VM, expecting the change to take effect. It won't — nothing has rebuilt the image, so the same bytes are still running. STEP 1 must produce a new tag with new bytes; STEP 5 must point compose at that new tag.
+There are **two shapes** of the build step depending on which path you set up in [§8.3 Path A vs Path B](#83-deploy-build-the-image-and-stage-it-on-the-app-vm) — Path A builds on the VM directly (egress to GitHub + npm + Docker Hub + Prisma whitelisted), Path B builds on a host with internet (laptop / CI) and ships the image as a tarball. The schema/promote/verify tail is identical for both. Pick the path that matches your VM's egress setup.
+
+The single biggest deploy mistake is `git pull` followed straight by `docker compose up -d`, expecting the change to take effect. It won't — nothing has rebuilt the image, so the same bytes are still running. The build step (Path A: STEP 1; Path B: STEPS 1–3) MUST produce a new tag with new bytes; the promote step (STEP 4 / 5 below) MUST point compose at that new tag.
+
+##### Path A re-deploy — build on the VM (greenbook's actual setup)
+
+For when the VM has whitelisted egress to GitHub + npm + Docker Hub + Prisma. Image lands directly in the VM's local Docker store; no laptop, no scp, no `docker load`.
 
 ```bash
-# ── STEP 1. Laptop — pull and rebuild ─────────────────────────────
+# ── STEP 1 (A). VM — pull and rebuild ─────────────────────────────
+$ ssh greenbook@10.111.11.51
+$ cd /opt/greenbook/releases
+$ VERSION=$(date -u +%Y-%m-%d-%H%M)
+$ git clone --depth 1 --branch main git@github.com:binalfew/greenbook.git $VERSION
+$ cd $VERSION
+$ docker build -t greenbook:$VERSION .
+# (If you keep a single working clone instead of one timestamped dir per
+#  release, cd into it, run `git pull origin main`, then `docker build`.)
+$ docker image ls greenbook:$VERSION   # confirm new tag is registered
+```
+
+Then jump to **STEP 4** below (schema → promote → verify).
+
+##### Path B re-deploy — build on laptop, ship to VM
+
+For when the VM is fully air-gapped (the egress-test in §8.3 fails, or you're on a fork that hasn't done the firewall work).
+
+```bash
+# ── STEP 1 (B). Laptop — pull and rebuild ─────────────────────────
 $ cd ~/greenbook-builds/src
 $ git pull origin main
 $ VERSION=$(date -u +%Y-%m-%d-%H%M)
@@ -535,19 +560,27 @@ $ docker build -t greenbook:$VERSION .
 # Apple Silicon: replace with
 #   docker buildx build --platform=linux/amd64 -t greenbook:$VERSION --load .
 
-# ── STEP 2. Laptop — save and ship ────────────────────────────────
+# ── STEP 2 (B). Laptop — save and ship ────────────────────────────
 $ cd ..
 $ docker save greenbook:$VERSION | gzip > greenbook-$VERSION.tar.gz
 $ scp greenbook-$VERSION.tar.gz greenbook@10.111.11.51:/tmp/
 
-# ── STEP 3. App VM — load the new image ───────────────────────────
+# ── STEP 3 (B). App VM — load the new image ───────────────────────
 $ ssh greenbook@10.111.11.51
 $ VERSION=2026-04-28-XXXX             # paste the timestamp from STEP 1;
                                        # shell vars don't survive ssh
 $ gunzip -c /tmp/greenbook-$VERSION.tar.gz | docker load
 $ docker image ls greenbook:$VERSION  # confirm tag is registered
 $ rm /tmp/greenbook-$VERSION.tar.gz
+```
 
+Then continue with **STEP 4** below.
+
+##### Both paths converge here — schema → promote → verify
+
+The image is now in the VM's local Docker store, regardless of how it got there. Run these on the VM as your admin user (`greenbook`).
+
+```bash
 # ── STEP 4. Apply schema changes (idempotent) ─────────────────────
 $ docker run --rm \
     --env-file /etc/greenbook.env \
@@ -587,7 +620,7 @@ $ curl -sI https://greenbook.africanunion.org/ | grep -E "HTTP|strict-transport"
 >
 > Two failure modes account for ~all instances of this:
 >
-> 1. **Forgot STEP 1 (the rebuild).** `docker build` is the only thing that turns new git commits into image bytes. Without it, the rest of the steps just relaunch the same image. Symptom: STEP 6's `version` field shows the OLD timestamp.
+> 1. **Forgot the rebuild step.** Path A's STEP 1 / Path B's STEP 1 is the only thing that turns new git commits into image bytes. Without it, the rest of the steps just relaunch the same image. Symptom: STEP 6's `version` field shows the OLD timestamp.
 > 2. **Skipped `--force-recreate` on STEP 5.** Compose may decide nothing changed and leave the old container in place. Same symptom.
 >
 > If STEP 6's `version` field still shows the old timestamp, force a clean recreation:
