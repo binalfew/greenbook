@@ -23,6 +23,7 @@
   - [§6.4.5 Renewal](#645-renewal)
 - [§6.5 Test the TLS deployment](#65-test-the-tls-deployment)
 - [§6.6 Adding a second app on the App VM](#66-adding-a-second-app-on-the-app-vm)
+- [§6.7 Migrating an existing App VM to the multi-tenant shape](#67-migrating-an-existing-app-vm-to-the-multi-tenant-shape)
 
 ## 6. Nginx and TLS
 
@@ -651,6 +652,10 @@ $ openssl s_client -connect greenbook.africanunion.org:443 \
 
 When a second AU app onboards on the same App VM, the work collapses to **three commands plus one edited per-app config file**. The shared configs (`/etc/nginx/conf.d/00-app-vm-shared.conf`, `/etc/nginx/snippets/app-vm-proxy-headers.conf`) are already in place from greenbook's onboarding (§6.3.1) and are reused as-is — no edits.
 
+> **ℹ App VM built against an earlier version of this guide?**
+>
+> Check `ls /etc/nginx/conf.d/00-app-vm-shared.conf`. If the file does not exist, your `greenbook.conf` is the pre-refactor monolithic shape (rate-limit zones, WebSocket map, proxy headers, cache rules all inlined in one file). Run [§6.7](#67-migrating-an-existing-app-vm-to-the-multi-tenant-shape) **first** — onboarding a second app on top of an inline-zones config will fail `nginx -t` with "duplicate zone" / "duplicate map" errors.
+
 For an app whose docker container exposes its loopback port at `127.0.0.1:Y` (a different port from greenbook's `:3000`), reachable as `<app>.africanunion.org`:
 
 ```bash
@@ -701,5 +706,85 @@ The new app inherits the shared rate-limit zones (`app_general`, `app_auth`), th
 > **ℹ For the two-tier (DMZ-fronted) topology, see [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy)**
 >
 > If you're running greenbook (and its sibling apps) behind the DMZ shared reverse proxy, every new App VM app **also** needs a per-app server block on the DMZ side. Onboard the App VM block first (this section), then the DMZ block. The two have the same shape but different concerns — DMZ does TLS + edge rate-limit + security headers; App VM does auth-rate-limit + cache policy + container hand-off.
+
+### 6.7 Migrating an existing App VM to the multi-tenant shape
+
+If your App VM was set up against an earlier version of this guide that shipped a **single monolithic** `/etc/nginx/sites-available/greenbook.conf` (with the WebSocket map, rate-limit zones, proxy headers, and cache rules all inlined), migrate to the new multi-file structure (§6.3) before onboarding a second app — otherwise §6.6 fails `nginx -t` with `duplicate zone "app_general"` / `duplicate map "$http_upgrade"` when the new shared `conf.d/00-app-vm-shared.conf` collides with the inline definitions in the old file.
+
+The migration is **a single atomic swap** — replace 1 file with 4 files in one transaction, `nginx -t`, reload. Zero downtime; nginx workers reload gracefully.
+
+```bash
+# (a) From your laptop — scp all four new files in one shot:
+$ scp docs/deployment/appendix/app-vm/00-app-vm-shared.conf \
+      docs/deployment/appendix/app-vm/app-vm-proxy-headers.conf \
+      docs/deployment/appendix/app-vm/greenbook-cache-policy.conf \
+      docs/deployment/appendix/app-vm/greenbook.conf \
+      greenbook@10.111.11.51:~/
+
+# (b) On the App VM as your admin account:
+$ ssh greenbook@10.111.11.51
+
+# Sanity checks BEFORE the swap — make sure the new greenbook.conf will
+# point at the same cert files and same upstream port as the running
+# config. If you customised either, edit ~/greenbook.conf to match the
+# live values before installing.
+# [auishqosrgbwbs01]
+$ sudo grep -E "ssl_certificate|server 127" /etc/nginx/sites-available/greenbook.conf
+# Old (live). Note the cert paths and the upstream port (e.g. 127.0.0.1:3000).
+
+$ grep -E "ssl_certificate|server 127" ~/greenbook.conf
+# New (staged). Must match the old. Edit ~/greenbook.conf if they don't
+# before proceeding.
+
+# (c) Atomic install — all four files in one shell block. The new
+# greenbook.conf has NO inline zones/map/headers (those live in
+# 00-app-vm-shared.conf + the snippets now), so nginx sees exactly one
+# definition of each after the swap. No "duplicate ..." errors.
+$ sudo install -m 644 -o root -g root \
+    ~/00-app-vm-shared.conf /etc/nginx/conf.d/00-app-vm-shared.conf
+
+$ sudo install -d -m 755 /etc/nginx/snippets
+$ sudo install -m 644 -o root -g root \
+    ~/app-vm-proxy-headers.conf /etc/nginx/snippets/app-vm-proxy-headers.conf
+$ sudo install -m 644 -o root -g root \
+    ~/greenbook-cache-policy.conf /etc/nginx/snippets/greenbook-cache-policy.conf
+
+$ sudo install -m 644 -o root -g root \
+    ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf
+#   ↑ Overwrites the monolithic version. The symlink in
+#     /etc/nginx/sites-enabled/greenbook.conf already points at this path
+#     from the original bring-up, so no symlink work needed.
+
+$ rm ~/00-app-vm-shared.conf ~/app-vm-proxy-headers.conf \
+     ~/greenbook-cache-policy.conf ~/greenbook.conf
+
+# (d) Test + reload:
+$ sudo nginx -t
+# Expected: "syntax is ok" / "test is successful". If you see
+# "duplicate zone" or "duplicate map", an old greenbook.conf still has
+# inline definitions — re-run step (c) for greenbook.conf only and verify
+# /etc/nginx/sites-available/greenbook.conf no longer contains
+# `limit_req_zone` or `map $http_upgrade`.
+
+$ sudo systemctl reload nginx
+# Graceful — SIGHUP. Existing connections continue on old workers; new
+# connections land on the workers loaded with the multi-file config.
+# No dropped requests.
+
+# (e) Spot-check the live deployment still works:
+$ curl -I https://greenbook.africanunion.org/
+# Expected: HTTP/2 200 with the same security headers as before
+# (Strict-Transport-Security, X-Content-Type-Options, etc).
+
+$ echo | openssl s_client -connect greenbook.africanunion.org:443 \
+    -servername greenbook.africanunion.org 2>/dev/null \
+  | openssl x509 -noout -subject -dates
+# Expected: same cert subject (CN=*.africanunion.org) and same
+# notBefore/notAfter as before the swap. Migration is invisible to clients.
+```
+
+> **ℹ Rollback**
+>
+> If the new config misbehaves, revert in three commands. (1) Re-upload the previous monolithic `greenbook.conf` from wherever you have it staged (git history, an earlier `scp` source); (2) install it over the new slim version with `sudo install -m 644 -o root -g root ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf`; (3) `sudo rm /etc/nginx/conf.d/00-app-vm-shared.conf /etc/nginx/snippets/{app-vm-proxy-headers,greenbook-cache-policy}.conf && sudo nginx -t && sudo systemctl reload nginx`. With the shared files gone, only the inline definitions in the restored old `greenbook.conf` remain — back to pre-migration state. Confirm via `curl -I https://greenbook.africanunion.org/` that traffic still flows.
 
 ---
