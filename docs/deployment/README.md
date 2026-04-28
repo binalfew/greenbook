@@ -1,7 +1,7 @@
 # Greenbook — Production Deployment Guide
 
 **Greenbook (AU Blue Book directory) on Ubuntu VMs with Docker, Nginx, and PostgreSQL**
-_An on-premises, two-VM deployment reference, validated against the greenbook codebase — with every command explained._
+_An on-premises deployment reference (two-VM single-tier or three-VM with a DMZ edge proxy), validated against the greenbook codebase — with every command explained._
 
 Prepared for: **Binalfew** — Senior Solutions & System Architect, MISD / AUC
 Version 1.3 · April 2026 · Greenbook-specific · Multi-file edition
@@ -10,15 +10,17 @@ Version 1.3 · April 2026 · Greenbook-specific · Multi-file edition
 
 ## Where do I start?
 
-| If you're…                                      | Read these, in order                                                                                                                                                                                                                   |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Bringing up production for the first time**   | [01](01-pre-flight.md) → [02](02-db-vm-setup.md) → [03](03-db-vm-backups.md) → [04](04-app-vm-docker.md) → [05](05-app-vm-container.md) → [06](06-app-vm-nginx-tls.md) → [07](07-deploy-workflow.md) → [09](09-hardening-checklist.md) |
-| **Doing a routine deploy after launch**         | [07](07-deploy-workflow.md) only                                                                                                                                                                                                       |
-| **Operating a running production deployment**   | [08](08-day-2-operations.md) — bookmark it                                                                                                                                                                                             |
-| **Investigating an incident**                   | [10](10-troubleshooting.md) — drilldowns by symptom                                                                                                                                                                                    |
-| **Adding centralised log search**               | [11](11-future-graylog.md) (planning only, not yet built)                                                                                                                                                                              |
-| **Looking up a config file's full content**     | [Appendix B](appendix/B-config-files.md)                                                                                                                                                                                               |
-| **Scrolling for a one-liner you've run before** | [Appendix A](appendix/A-command-cheatsheet.md)                                                                                                                                                                                         |
+| If you're…                                            | Read these, in order                                                                                                                                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Bringing up production (single-tier, no DMZ)**      | [01](01-pre-flight.md) → [02](02-db-vm-setup.md) → [03](03-db-vm-backups.md) → [04](04-app-vm-docker.md) → [05](05-app-vm-container.md) → [06](06-app-vm-nginx-tls.md) → [07](07-deploy-workflow.md) → [09](09-hardening-checklist.md) |
+| **Bringing up production (two-tier, with DMZ)**       | same chain as above, **plus** [12](12-dmz-reverse-proxy.md) at the end (after 09) — brings up the DMZ edge proxy and reconfigures the App VM nginx to live behind it                                                                   |
+| **Doing a routine deploy after launch**               | [07](07-deploy-workflow.md) only                                                                                                                                                                                                       |
+| **Operating a running production deployment**         | [08](08-day-2-operations.md) — bookmark it                                                                                                                                                                                             |
+| **Investigating an incident**                         | [10](10-troubleshooting.md) — drilldowns by symptom                                                                                                                                                                                    |
+| **Adding centralised log search**                     | [11](11-future-graylog.md) (planning only, not yet built)                                                                                                                                                                              |
+| **Onboarding a new AU app behind the same DMZ proxy** | [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy) — three commands, no cert work                                                                                                                        |
+| **Looking up a config file's full content**           | [Appendix B](appendix/B-config-files.md)                                                                                                                                                                                               |
+| **Scrolling for a one-liner you've run before**       | [Appendix A](appendix/A-command-cheatsheet.md)                                                                                                                                                                                         |
 
 ---
 
@@ -78,9 +80,9 @@ Every command is followed by an explanation of what it does and why. Where a com
 
 ### 1.3 Assumptions
 
-- Two Ubuntu 24.04 LTS (Noble Numbat) VMs are already provisioned, reachable over SSH, and have sudo-enabled non-root user accounts.
-- The VMs can reach each other on an internal network. Examples use **10.111.11.51** for the app VM (`auishqosrgbwbs01`) and **10.111.11.50** for the DB VM (`auishqosrgbdbs01`) — substitute your actual addresses.
-- You have (or will acquire) a DNS name that resolves to the app VM. The examples use `greenbook.africanunion.org`; substitute your actual host. The public URL **must** match `APP_URL` in the env file — SSO callbacks and email links are constructed from it.
+- **Two or three** Ubuntu 24.04 LTS (Noble Numbat) VMs are already provisioned, reachable over SSH, and have sudo-enabled non-root user accounts. The minimum is two VMs (App + DB); the AU production topology adds a third — a DMZ reverse-proxy VM in front of the App VM (covered by [12 — DMZ shared reverse proxy](12-dmz-reverse-proxy.md)).
+- The VMs can reach each other on an internal network. Examples use **10.111.11.51** for the app VM (`auishqosrgbwbs01`) and **10.111.11.50** for the DB VM (`auishqosrgbdbs01`); the DMZ VM (`auishqosrarp01`) is on a separate DMZ subnet at **172.16.177.50**, routed to the internal subnet — substitute your actual addresses.
+- You have (or will acquire) a DNS name that resolves to **whichever VM is public-facing** — the DMZ VM in the three-VM topology, the App VM in the two-VM topology. The examples use `greenbook.africanunion.org`; substitute your actual host. The public URL **must** match `APP_URL` in the env file — SSO callbacks and email links are constructed from it.
 - Greenbook is at or ahead of commit `4a01def` (the template-extraction phases 1–15 merged, the AU Blue Book directory module shipped at `/$tenant/directory/*`, and the public unified directory shipped at `/directory/*`).
 - Node 22 is the target runtime (per `CLAUDE.md`). The hardened Dockerfile pins `node:22-alpine`.
 - The team is comfortable with Docker conceptually but wants the guardrails of an explicit, reviewed procedure.
@@ -105,29 +107,53 @@ Every command is followed by an explanation of what it does and why. Where a com
 
 ### 2.1 High-level diagram
 
+The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse-proxy VM at the public edge, an internal application VM running Docker, and a private database VM. TLS terminates only at the DMZ; everything between DMZ and App VM is plain HTTP across a trusted private LAN. Single-tier (no DMZ — App VM faces public directly) is also supported for simpler deployments — see the callout under the diagram and [chapter 06](06-app-vm-nginx-tls.md) for that shape.
+
 ```
-                                   Internet / AU Intranet
+                                Internet (public IP TBD by AU IT)
                                            │
                                            │  443/tcp (HTTPS)
-                                           │  80/tcp  (HTTP -> 301 HTTPS)
+                                           │  80/tcp  (HTTP → 301 HTTPS)
                                            ▼
     ┌──────────────────────────────────────────────────────────────────┐
-    │                         APP VM  (10.111.11.51)                   │
+    │            DMZ VM   auishqosrarp01   (172.16.177.50)             │
+    │            Public-facing edge — multi-tenant TLS terminator      │
     │                                                                  │
     │   ┌─────────────────────────────────────────────────────────┐    │
     │   │  Nginx  (host-installed, not containerised)             │    │
-    │   │   · TLS termination (Let's Encrypt or internal CA)      │    │
-    │   │   · Security headers, gzip                              │    │
-    │   │   · Long cache on /assets/*, short on /sw.js            │    │
+    │   │   · TLS termination (AU wildcard *.africanunion.org)    │    │
+    │   │   · Security headers (HSTS, X-Frame-Options, etc.)      │    │
+    │   │   · Per-IP edge rate-limit zones (coarse + auth-strict) │    │
+    │   │   · Routes by `server_name` — multi-tenant by design;   │    │
+    │   │     greenbook today, future AU apps onboard with        │    │
+    │   │     three commands (12 §12.7)                           │    │
+    │   │   · Cert files at /etc/ssl/au/ (single source of truth) │    │
+    │   └───────────────────────────┬─────────────────────────────┘    │
+    └───────────────────────────────┼──────────────────────────────────┘
+                                    │ HTTP across the private subnet
+                                    │ (DMZ ⇄ internal LAN is the
+                                    │  trust boundary; no TLS inside)
+                                    ▼
+    ┌──────────────────────────────────────────────────────────────────┐
+    │           APP VM   auishqosrgbwbs01   (10.111.11.51)             │
+    │           Internal — UFW pins :80 to DMZ source IP only          │
+    │                                                                  │
+    │   ┌─────────────────────────────────────────────────────────┐    │
+    │   │  Nginx  (host-installed) — application-routing tier     │    │
+    │   │   · No TLS (terminated at the DMZ)                      │    │
+    │   │   · `set_real_ip_from 172.16.177.50` for accurate logs  │    │
+    │   │   · Long cache /assets/*, short on /sw.js               │    │
     │   │   · proxy_buffering off → streams SSR + SSE             │    │
+    │   │   · X-Correlation-Id forwarding                         │    │
     │   │   · Reverse-proxies to 127.0.0.1:3000                   │    │
     │   └───────────────────────────┬─────────────────────────────┘    │
-    │                               │ HTTP                             │
+    │                               │ HTTP (loopback)                  │
     │                               ▼                                  │
     │   ┌─────────────────────────────────────────────────────────┐    │
     │   │  Docker container:  greenbook                           │    │
-    │   │   · Node 22 (alpine)                                    │    │
+    │   │   · Node 22 (alpine), uid 1000 (node), read-only FS     │    │
     │   │   · Express (server.js) → React Router 7 SSR            │    │
+    │   │   · `trust proxy 2` (DMZ → App nginx → Express)         │    │
     │   │   · Pino JSON logs to stdout                            │    │
     │   │   · Correlation ID middleware (AsyncLocalStorage)       │    │
     │   │   · Rate limiter (general / mutation / auth tiers)      │    │
@@ -135,17 +161,16 @@ Every command is followed by an explanation of what it does and why. Where a com
     │   │   · Sentry (server SDK) — optional via SENTRY_DSN       │    │
     │   │   · Listens on 0.0.0.0:3000 inside the container;       │    │
     │   │     published as 127.0.0.1:3000 on the host             │    │
-    │   │   · Runs as uid 1000 (node), read-only FS, no new privs │    │
-    │   │   · init: true → dumb-init PID 1 for proper SIGTERM     │    │
+    │   │   · init: dumb-init PID 1 for proper SIGTERM handling   │    │
     │   └───────────────────────────┬─────────────────────────────┘    │
-    │                               │                                  │
     └───────────────────────────────┼──────────────────────────────────┘
                                     │ 5432/tcp (PostgreSQL protocol)
                                     │ scram-sha-256 auth
                                     │ @prisma/adapter-pg driver
                                     ▼
     ┌──────────────────────────────────────────────────────────────────┐
-    │                         DB VM  (10.111.11.50)                    │
+    │           DB VM   auishqosrgbdbs01   (10.111.11.50)              │
+    │           Private — pg_hba pinned to APP VM /32 only             │
     │                                                                  │
     │   ┌─────────────────────────────────────────────────────────┐    │
     │   │  PostgreSQL 16  (native install, not containerised)     │    │
@@ -173,37 +198,60 @@ Every command is followed by an explanation of what it does and why. Where a com
                               └──────────────────────────────────────────┘
 ```
 
+> **ℹ Single-tier topology (no DMZ)**
+>
+> A simpler two-VM deployment collapses the DMZ tier into the App VM: the App VM's nginx terminates TLS itself (with the wildcard cert installed locally) and faces public traffic directly. Right for forks where there's no separate DMZ network, or for staging environments. To run that shape, follow chapters [01](01-pre-flight.md)–[09](09-hardening-checklist.md) only and skip chapter 12. Chapter 06 §6.7 documents the wildcard-cert path on the App VM directly. The diff between single-tier and two-tier App VM nginx configs is in [12 §12.8](12-dmz-reverse-proxy.md#128-modify-the-app-vm-for-the-two-tier-topology).
+
 ### 2.2 Why this split of responsibilities
 
-Two VMs are the right granularity for this workload. Running Postgres on its own VM gives the database predictable I/O and memory, decouples its lifecycle from the app (you can restart, upgrade, or replace either side independently), and simplifies backup operations. The app VM stays stateless, which is what makes zero-downtime deploys and rollbacks easy.
+**Three tiers, three concerns.** The DMZ owns "what the public internet sees" — TLS certificates, security headers, edge rate limiting, and per-host routing across multiple AU apps that may share the same wildcard domain. The App VM owns "the application" — Node, Docker, app-specific cache headers (`/sw.js`, `/assets/*`), SSR streaming, and the in-process job queue. The DB VM owns "the data" — PostgreSQL, pgBackRest repository, and the WAL archive. Each VM can be restarted, upgraded, or replaced without disturbing the others.
 
-Docker is used on the app VM only. PostgreSQL is installed natively on the DB VM rather than in a container. This is a deliberate choice: native Postgres is simpler to back up (pgBackRest reads the data directory directly), has no volume-driver surprises, and its performance is more predictable. You gain nothing operationally by containerising a single-tenant database — you only add a layer to debug.
+**Why a separate DMZ.** TLS terminator + multi-tenant edge proxy belongs at the network boundary, not on every backend VM. With the DMZ in place: the AU wildcard cert lives in exactly one place (renewals are one-VM operations); future AU apps onboard behind the same proxy with three commands (no second cert, no second TLS config); the App VM is a private host on the LAN with no public exposure (its UFW pins port 80 to the DMZ source IP only). The trade-off is one more VM to maintain, which is real but small.
 
-Nginx is installed on the host of the app VM, also not containerised. This keeps TLS certificates on the host filesystem (simple to manage with Certbot), lets Nginx survive container restarts, and makes it trivial to add rate limiting, access logs, or additional backends later.
+**Why native Postgres on its own VM.** Running Postgres in a container saves nothing operationally and adds a layer to debug (volume drivers, container restarts, log routing). Native Postgres is simpler to back up (pgBackRest reads the data directory directly), has predictable I/O and memory, and decouples its lifecycle from the app entirely. The App VM stays stateless, which is what makes zero-downtime deploys and rollbacks easy.
 
-The offsite backup destination shown in the diagram is non-optional for a production deployment. The local pgBackRest repository on the DB VM protects against PostgreSQL corruption or human error, but not against the VM itself being lost (disk failure, ransomware, accidental deletion of the VM). [§3.3 in 03 — Database VM backups](03-db-vm-backups.md) covers how to configure a second repository.
+**Why nginx on the host (both tiers).** Containerising nginx adds operational complexity (cert mounts, reload semantics, network_mode contortions) without operational benefit. Host nginx survives container restarts, integrates trivially with Certbot / systemd / fail2ban, and lets you `tail` access logs without `docker exec`.
+
+**Offsite backup is non-optional.** The local pgBackRest repository on the DB VM protects against Postgres corruption and human error, but not against the VM itself being lost (disk failure, ransomware, accidental deletion). Configure a second repository — see [03 §3.3](03-db-vm-backups.md).
 
 ### 2.3 Port map
 
-| VM     | Port | Protocol | Accessible from            | Purpose                                 |
-| ------ | ---- | -------- | -------------------------- | --------------------------------------- |
-| App VM | 22   | TCP      | Admin subnet only          | SSH                                     |
-| App VM | 80   | TCP      | Public / Intranet          | HTTP → 301 to HTTPS; ACME challenges    |
-| App VM | 443  | TCP      | Public / Intranet          | HTTPS (terminated by Nginx)             |
-| App VM | 3000 | TCP      | Loopback only (127.0.0.1)  | Docker → Node container (never exposed) |
-| DB VM  | 22   | TCP      | Admin subnet only          | SSH                                     |
-| DB VM  | 5432 | TCP      | App VM (10.111.11.51) only | PostgreSQL client protocol              |
+```
+                      Internet              DMZ (172.16.177.0/24)         Internal LAN (10.111.11.0/24)
+                          │                          │                              │
+                          ▼                          ▼                              ▼
+   DMZ VM auishqosrarp01:    22 (SSH, admin only)   80, 443 (public)
+   App VM auishqosrgbwbs01:  22 (SSH, admin only)                            80 (DMZ source IP only)
+                                                                              3000 (loopback only)
+   DB VM auishqosrgbdbs01:   22 (SSH, admin only)                            5432 (App VM IP only)
+```
+
+| VM     | Port | Protocol | Accessible from             | Purpose                                                              |
+| ------ | ---- | -------- | --------------------------- | -------------------------------------------------------------------- |
+| DMZ VM | 22   | TCP      | Admin subnet only           | SSH                                                                  |
+| DMZ VM | 80   | TCP      | Public Internet             | HTTP → 301 to HTTPS                                                  |
+| DMZ VM | 443  | TCP      | Public Internet             | HTTPS (TLS terminator — the public face)                             |
+| App VM | 22   | TCP      | Admin subnet only           | SSH                                                                  |
+| App VM | 80   | TCP      | DMZ VM (172.16.177.50) only | HTTP from edge proxy (UFW source-pinned, plus `allow/deny` in nginx) |
+| App VM | 3000 | TCP      | Loopback only (127.0.0.1)   | Docker → Node container (never exposed off-host)                     |
+| DB VM  | 22   | TCP      | Admin subnet only           | SSH                                                                  |
+| DB VM  | 5432 | TCP      | App VM (10.111.11.51) only  | PostgreSQL client protocol — UFW + pg_hba both source-pinned         |
+
+> **ℹ Single-tier alternative**
+>
+> If you're running the two-VM (no DMZ) shape, drop the DMZ VM rows; the App VM rows for ports 80 and 443 widen to "Public Internet" instead of "DMZ VM only", and the App VM nginx terminates TLS itself.
 
 ### 2.4 Traffic flow of a single request
 
-1. A browser resolves `greenbook.africanunion.org` to 10.111.11.51 and opens a TLS connection to port 443.
-2. Nginx on the app VM terminates TLS, applies security headers, sets long-cache headers on `/assets/*` / short-cache on `/sw.js`, and forwards the request to `http://127.0.0.1:3000` with `proxy_buffering off` so streamed SSR responses and SSE connections pass through unbuffered.
-3. Docker's port mapping delivers the request from `127.0.0.1:3000` into the `greenbook` container's `0.0.0.0:3000`.
-4. Express (`server.js` + `server/app.ts`) runs middleware in order: correlation ID → request logger (pino, JSON) → CORS → session extraction → rate limiter (general/mutation/auth tier by route) → React Router handler (`@react-router/express` + `createRequestHandler`).
-5. Route loaders/actions that need data call `prisma.*` through `@prisma/adapter-pg`, which opens a pooled TCP connection to `10.111.11.50:5432`.
-6. PostgreSQL authenticates the `appuser` role via SCRAM-SHA-256 and returns rows.
-7. Rendered HTML (for initial load) streams back through the same path — React Router 7 is streaming-first, which is why `proxy_buffering off` matters. Subsequent navigations return serialised loader data; SSE routes (notifications, real-time updates) keep the connection open.
-8. Side effects — audit log rows, webhook fan-outs, `send-email` jobs, domain events — are enqueued into the in-process job queue and picked up by the 5-second tick. On `SIGTERM` the job processor drains, the rate-limit audit buffer flushes, and Sentry flushes pending events.
+1. A browser resolves `greenbook.africanunion.org` to the **DMZ VM's public IP** and opens a TLS connection to port 443.
+2. **Nginx on the DMZ VM** terminates TLS using the AU wildcard cert (`/etc/ssl/au/wildcard.africanunion.org.{fullchain.pem,key}`), applies edge security headers (HSTS / X-Frame-Options / X-Content-Type-Options / Referrer-Policy), runs the request through the per-IP edge rate-limit zones (coarse `edge_general` for general traffic, strict `edge_auth` on `/login` / `/forgot-password` / `/api/auth` / `/api/sso`), looks up the right backend by `server_name`, and forwards the now-decrypted request to `http://10.111.11.51:80` with `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Correlation-Id` chained.
+3. The App VM's UFW lets the connection in only because the source IP is `172.16.177.50` (the DMZ VM); any other source is dropped.
+4. **Nginx on the App VM** sees the request, uses `set_real_ip_from 172.16.177.50` so its access log and rate-limiter key on the real client IP (not the DMZ's), applies the App-VM-tier rate limits (`greenbook_general` 30 r/s and `greenbook_auth` 5 r/s — these stack with the edge tier), sets long-cache headers on `/assets/*` / short-cache on `/sw.js`, and forwards to `http://127.0.0.1:3000` with `proxy_buffering off` so streamed SSR responses and SSE connections pass through unbuffered.
+5. Docker's port mapping delivers the request from `127.0.0.1:3000` into the `greenbook` container's `0.0.0.0:3000`.
+6. **Express** (`server.js` + `server/app.ts`, with `app.set("trust proxy", 2)` so Express knows there are two trusted upstream proxies and `req.ip` resolves to the real client) runs middleware in order: correlation ID → request logger (pino JSON) → CORS → session extraction → rate limiter (general / mutation / auth tier by route) → React Router handler (`@react-router/express` + `createRequestHandler`).
+7. Route loaders/actions that need data call `prisma.*` through `@prisma/adapter-pg`, which opens a pooled TCP connection to `10.111.11.50:5432`. PostgreSQL authenticates the `appuser` role via SCRAM-SHA-256 and returns rows.
+8. Rendered HTML (for initial load) streams back through the same path — DMZ → App VM nginx → DMZ → client. React Router 7 is streaming-first, which is why `proxy_buffering off` is critical at _both_ nginx tiers. Subsequent navigations return serialised loader data; SSE routes (notifications, real-time updates) keep the connection open all the way through.
+9. Side effects — audit log rows, webhook fan-outs, `send-email` jobs, domain events — are enqueued into the in-process job queue and picked up by the 5-second tick. On `SIGTERM` the job processor drains, the rate-limit audit buffer flushes, and Sentry flushes pending events.
 
 ---
 
