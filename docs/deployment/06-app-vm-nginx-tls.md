@@ -13,6 +13,8 @@
 - [§6.1 Install Nginx](#61-install-nginx)
 - [§6.2 Open ports 80 and 443 in UFW](#62-open-ports-80-and-443-in-ufw)
 - [§6.3 The Nginx server config](#63-the-nginx-server-config)
+  - [§6.3.1 Install the shared App VM nginx configs](#631-install-the-shared-app-vm-nginx-configs)
+  - [§6.3.2 Add greenbook as the first proxied app](#632-add-greenbook-as-the-first-proxied-app)
 - [§6.4 TLS with Let's Encrypt (public internet or public DNS)](#64-tls-with-lets-encrypt-public-internet-or-public-dns)
   - [§6.4.1 HTTP-01 validation (VM reachable on public internet, port 80)](#641-http-01-validation-vm-reachable-on-public-internet-port-80)
   - [§6.4.2 DNS-01 validation (VM not publicly reachable but has public DNS)](#642-dns-01-validation-vm-not-publicly-reachable-but-has-public-dns)
@@ -24,6 +26,7 @@
   - [§6.7.3 Install the wildcard certificate from a .pfx / .p12 bundle (AU's actual path)](#673-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path)
   - [§6.7.4 Point Nginx at the new files](#674-point-nginx-at-the-new-files)
   - [§6.7.5 Renewal](#675-renewal)
+- [§6.8 Adding a second app on the App VM](#68-adding-a-second-app-on-the-app-vm)
 
 ## 6. Nginx and TLS
 
@@ -76,253 +79,153 @@ $ sudo ufw status verbose
 
 ### 6.3 The Nginx server config
 
-Replace the default Nginx site with a config that proxies to the greenbook container. The canonical source is shipped as a standalone file in [appendix/greenbook.conf](appendix/greenbook.conf) — copy it to the app VM in **two hops**, because `/etc/nginx/sites-available/` is root-owned (so scp can't write there directly) AND `deployer` is intentionally no-sudo per [09 §9.1](09-hardening-checklist.md#91-operating-system). Use your personal sudo-capable admin account instead — `greenbook` in the AU's setup; substitute your own VM admin username:
+The App VM's nginx is a **multi-tenant reverse proxy** — it can host more than one docker app, each on its own port and `server_name`. Greenbook is the worked example throughout this chapter; if a second AU app later runs on the same App VM (e.g., `report-builder.africanunion.org` on `127.0.0.1:3001`), it onboards via [§6.8](#68-adding-a-second-app-on-the-app-vm) — three commands plus one edited per-app config file. The shape of the App VM's nginx mirrors the DMZ proxy in [chapter 12](12-dmz-reverse-proxy.md): shared `http {}` config + shared snippets + one `sites-available/<app>.conf` per backend.
+
+Three layers of config to install (under [`appendix/app-vm/`](appendix/app-vm/)):
+
+| File                                                                                         | Lives at                                          | Purpose                                                                      |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`appendix/app-vm/00-app-vm-shared.conf`](appendix/app-vm/00-app-vm-shared.conf)             | `/etc/nginx/conf.d/00-app-vm-shared.conf`         | WebSocket upgrade `map`, shared rate-limit zones (`app_general`, `app_auth`) |
+| [`appendix/app-vm/app-vm-proxy-headers.conf`](appendix/app-vm/app-vm-proxy-headers.conf)     | `/etc/nginx/snippets/app-vm-proxy-headers.conf`   | Shared `proxy_set_header` block + timeouts + buffering policy                |
+| [`appendix/app-vm/greenbook-cache-policy.conf`](appendix/app-vm/greenbook-cache-policy.conf) | `/etc/nginx/snippets/greenbook-cache-policy.conf` | Greenbook PWA-specific routing (`/sw.js`, `/assets/*`, `/manifest.json`)     |
+| [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — one of N (greenbook today; future apps in §6.8)       |
+
+Rationale: shared concerns (rate-limit zones, proxy headers, WebSocket map) live in one place so a second app onboarding doesn't have to copy/paste them. Per-app concerns (cache policy for `/assets/*`, framework-specific URL patterns, the upstream port) stay in each app's own files.
+
+Two hops for every `scp` of these files because `/etc/nginx/{conf.d,snippets,sites-available}/` are root-owned and the `deployer` account is intentionally no-sudo (per [09 §9.1](09-hardening-checklist.md#91-operating-system)). Use your personal sudo-capable admin account on the App VM — `greenbook` in the AU's setup; substitute your own.
+
+#### 6.3.1 Install the shared App VM nginx configs
+
+Two files, installed once. Every per-app server block inherits them implicitly via nginx's `conf.d/*.conf` auto-load and `include` mechanisms.
 
 ```bash
-# (a) From your laptop, with this repo cloned — scp into the admin
-#     account's home directory (NOT deployer's):
-$ scp docs/deployment/appendix/greenbook.conf \
-      greenbook@10.111.11.51:~/greenbook.conf
+# (a) From your laptop:
+$ scp docs/deployment/appendix/app-vm/00-app-vm-shared.conf \
+      docs/deployment/appendix/app-vm/app-vm-proxy-headers.conf \
+      greenbook@10.111.11.51:~/
 
-# (b) SSH in as the same admin account and install with sudo:
+# (b) On the App VM as your admin account:
 $ ssh greenbook@10.111.11.51
 
 # [auishqosrgbwbs01]
 $ sudo install -m 644 -o root -g root \
+    ~/00-app-vm-shared.conf /etc/nginx/conf.d/00-app-vm-shared.conf
+$ sudo install -d -m 755 /etc/nginx/snippets
+$ sudo install -m 644 -o root -g root \
+    ~/app-vm-proxy-headers.conf /etc/nginx/snippets/app-vm-proxy-headers.conf
+$ rm ~/00-app-vm-shared.conf ~/app-vm-proxy-headers.conf
+```
+
+Don't reload nginx yet — there's no per-app server block referencing these zones. The reload happens at the end of §6.3.2.
+
+#### 6.3.2 Add greenbook as the first proxied app
+
+Two more files: greenbook's per-app cache snippet and greenbook's server block.
+
+```bash
+# (a) From your laptop:
+$ scp docs/deployment/appendix/app-vm/greenbook-cache-policy.conf \
+      docs/deployment/appendix/app-vm/greenbook.conf \
+      greenbook@10.111.11.51:~/
+
+# (b) On the App VM:
+$ ssh greenbook@10.111.11.51
+
+# [auishqosrgbwbs01]
+$ sudo install -m 644 -o root -g root \
+    ~/greenbook-cache-policy.conf \
+    /etc/nginx/snippets/greenbook-cache-policy.conf
+
+$ sudo install -m 644 -o root -g root \
     ~/greenbook.conf \
     /etc/nginx/sites-available/greenbook.conf
-$ rm ~/greenbook.conf
-#   install -m 644 -o root -g root  cp + chown + chmod atomically.
-#                                    /etc/nginx/sites-available/ contents
-#                                    are root:root 644 by Ubuntu convention.
+
+$ sudo ln -sf /etc/nginx/sites-available/greenbook.conf \
+              /etc/nginx/sites-enabled/greenbook.conf
+$ sudo rm -f /etc/nginx/sites-enabled/default
+
+$ rm ~/greenbook-cache-policy.conf ~/greenbook.conf
 ```
 
-The full annotated content (also in the appendix file):
+The full annotated content of the per-app `greenbook.conf` (also in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)):
 
-```
-# /etc/nginx/sites-available/greenbook.conf
-# Nginx reverse-proxy for the greenbook container.
+```nginx
+# /etc/nginx/sites-available/greenbook.conf  (App VM, single-tier)
+# Inherits from /etc/nginx/conf.d/00-app-vm-shared.conf (WebSocket map +
+# rate-limit zones) and /etc/nginx/snippets/{app-vm-proxy-headers,
+# greenbook-cache-policy}.conf — don't duplicate those concerns here.
 
-# ----- Upstream definition ---------------------------------------------------
-upstream greenbook_upstream {
-    server 127.0.0.1:3000;
-    #  Where Nginx forwards requests. 127.0.0.1:3000 is the host-side
-    #  mapping of the container's :3000 (see 07 §7.2.3 ports: line).
-
+upstream greenbook_app {
+    server 127.0.0.1:3000;     # Loopback to the docker container.
     keepalive 32;
-    #  Maintain up to 32 idle TCP connections to the backend, avoiding the
-    #  cost of a fresh connection on every request. Works with the
-    #  proxy_http_version 1.1 + Connection "" settings below.
 }
 
-# ----- Rate limiting at the edge (defence in depth) -------------------------
-# Greenbook has its own rate limiter at the Express layer (server/security.ts,
-# three tiers). The nginx-level limits below run BEFORE that and protect the
-# Node process from floods — Express can't rate-limit a request it never gets.
-# Zones are cheap (1 MB ~= 16k tracked IPs). Tune burst to match your public
-# traffic profile.
-limit_req_zone $binary_remote_addr zone=greenbook_general:10m rate=30r/s;
-limit_req_zone $binary_remote_addr zone=greenbook_auth:1m    rate=5r/s;
-
-# ----- WebSocket support -----------------------------------------------------
-# Build a "Connection" header value based on whether the client asked to
-# upgrade. For non-WebSocket requests this becomes empty, which is exactly
-# what keepalive needs.
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    ''      '';
-}
-
-# ----- HTTP server: redirects to HTTPS + ACME challenge ---------------------
+# HTTP — redirect to HTTPS + ACME challenge slot
 server {
     listen      80;
     listen      [::]:80;
     server_name greenbook.africanunion.org;
 
-    # Serve Certbot's ACME HTTP-01 challenge files on port 80.
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    # Everything else: 301-redirect to HTTPS.
-    location / {
-        return 301 https://$host$request_uri;
-    }
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location /                            { return 301 https://$host$request_uri; }
 }
 
-# ----- HTTPS server ---------------------------------------------------------
+# HTTPS — TLS terminator + reverse proxy
 server {
     listen      443 ssl http2;
     listen      [::]:443 ssl http2;
-    #  "listen 443 ssl http2" — the form that works on BOTH nginx 1.24 (which
-    #  Ubuntu 24.04 ships) and nginx 1.25.1+ (from the upstream Nginx repo).
-    #  On 1.25+ it prints a deprecation warning; on 1.24 it is the ONLY
-    #  syntax that enables HTTP/2. The standalone "http2 on;" directive
-    #  only exists from 1.25.1 and would break the config on 1.24.
-
     server_name greenbook.africanunion.org;
 
-    # Certbot will fill in certificate paths here. Placeholders shown below.
-    ssl_certificate     /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem;
+    # TLS cert path. Default is the §6.7 wildcard (AU's actual production);
+    # change to /etc/letsencrypt/live/... for §6.4 LE, or to the per-host
+    # /etc/ssl/greenbook/<host>.{fullchain.pem,key} for §6.6 internal CA.
+    ssl_certificate     /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem;
+    ssl_certificate_key /etc/ssl/greenbook/wildcard.africanunion.org.key;
 
-    # Modern TLS configuration (see Mozilla's "intermediate" profile).
+    # Modern TLS (Mozilla "intermediate"). Same settings every per-app
+    # server block on this VM ends up using; could be lifted into a
+    # shared `conf.d/01-tls.conf` if more apps onboard.
     ssl_protocols         TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
-    # TLS 1.3 cipher order is client-preference by design; TLS 1.2 server-
-    # preference doesn't matter once you have the protocol floor at 1.2.
-
     ssl_session_cache     shared:SSL:10m;
-    #  Shared SSL cache: stores session tickets so clients can resume a TLS
-    #  session without a full handshake. 10 MB holds ~40,000 sessions.
     ssl_session_timeout   1d;
     ssl_session_tickets   off;
-    # Session tickets off = forward secrecy is preserved even if a ticket key
-    # leaks. Trade-off: slightly slower reconnects. Worth it for a server app.
+    ssl_stapling          on;
+    ssl_stapling_verify   on;
+    resolver              1.1.1.1 9.9.9.9 valid=300s;
+    resolver_timeout      5s;
 
-    # OCSP stapling: Nginx periodically fetches the CA's revocation response
-    # and attaches it to the TLS handshake, so clients don't need to contact
-    # the CA separately.
-    ssl_stapling        on;
-    ssl_stapling_verify on;
-    resolver            1.1.1.1 9.9.9.9 valid=300s;
-    resolver_timeout    5s;
-    # resolver is required for OCSP fetches (Nginx needs DNS to find the CA
-    # URL). 1.1.1.1 and 9.9.9.9 are public resolvers; replace with the AU's
-    # internal recursive resolvers if required by policy.
-
-    # ----- Security headers ----------------------------------------------
+    # Security headers — single-tier only. Drop these in the two-tier
+    # diff (12 §12.8); they move to the DMZ tier in that topology.
     add_header Strict-Transport-Security  "max-age=31536000; includeSubDomains" always;
-    #  HSTS: tell browsers to refuse plain HTTP for this host for 1 year.
-    #  'always' ensures the header is sent even on error responses.
-    add_header X-Content-Type-Options     "nosniff"                               always;
-    #  Prevents the browser from overriding Content-Type via MIME sniffing.
-    add_header X-Frame-Options            "DENY"                                  always;
-    #  Disallows being embedded in <iframe>. Combined with CSP frame-ancestors
-    #  if your CSP is strict enough.
-    add_header Referrer-Policy            "strict-origin-when-cross-origin"       always;
-    #  Sends the full referrer on same-origin, only the origin cross-origin.
+    add_header X-Content-Type-Options     "nosniff"                              always;
+    add_header X-Frame-Options            "DENY"                                 always;
+    add_header Referrer-Policy            "strict-origin-when-cross-origin"      always;
 
-    # ----- Upload size ---------------------------------------------------
     client_max_body_size 20m;
-    # Bigger than default (1 MB). Adjust to the largest legitimate upload
-    # your app accepts. This is the WIRE size, before body parsing.
-
-    # ----- Access / error logs ------------------------------------------
     access_log /var/log/nginx/greenbook.access.log;
     error_log  /var/log/nginx/greenbook.error.log warn;
-    # Per-vhost logs keep /var/log/nginx/access.log clean for default traffic.
 
-    # ----- Greenbook service worker: short cache, never stale --------
-    # sw.js is special — browsers fetch it on every pageview to check for
-    # updates. Long cache would strand users on an old version. The origin
-    # (/public/sw.js at build time) has no cache headers, so nginx sets them.
-    location = /sw.js {
-        proxy_pass            http://greenbook_upstream;
-        proxy_set_header      Host              $host;
-        proxy_set_header      X-Real-IP         $remote_addr;
-        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header      X-Forwarded-Proto $scheme;
-        proxy_set_header      X-Forwarded-Host  $host;
-        add_header Cache-Control "public, max-age=0, must-revalidate" always;
-        # max-age=0 + must-revalidate = "check for updates on every pageview
-        # but allow serving stale bytes while revalidating". Matches the
-        # browser-side SW update check greenbook does in app/utils/offline/.
+    # Greenbook PWA-specific cache routing (sw.js / /assets/ / /manifest.json).
+    include /etc/nginx/snippets/greenbook-cache-policy.conf;
+
+    # Auth-strict rate limit on credential / SSO endpoints.
+    location ~ ^/(login|forgot-password|api/auth|api/sso) {
+        limit_req zone=app_auth burst=20 nodelay;
+        proxy_pass http://greenbook_app;
+        include /etc/nginx/snippets/app-vm-proxy-headers.conf;
     }
 
-    # ----- Long-cache immutable assets (hashed filenames) -----------
-    # React Router emits client assets with content-hashed filenames
-    # (e.g. /assets/entry.client-abc123.js). They never change for a given
-    # hash, so we can cache them for a year. Greenbook's server.js already
-    # sets this via express.static; the nginx rule below reinforces it so
-    # CDNs and intermediary caches see it even if the origin ever loses it.
-    location ^~ /assets/ {
-        proxy_pass            http://greenbook_upstream;
-        proxy_set_header      Host              $host;
-        proxy_set_header      X-Real-IP         $remote_addr;
-        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header      X-Forwarded-Proto $scheme;
-        proxy_set_header      X-Forwarded-Host  $host;
-        proxy_buffering       on;
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
-        expires                1y;
-    }
-
-    # ----- Manifest + robots — short cache OK ----------------------
-    location = /manifest.json {
-        proxy_pass            http://greenbook_upstream;
-        proxy_set_header      Host              $host;
-        proxy_set_header      X-Real-IP         $remote_addr;
-        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header      X-Forwarded-Proto $scheme;
-        add_header Cache-Control "public, max-age=3600" always;
-    }
-
-    # ----- Reverse proxy to the Node container (SSR + SSE + API) ------
+    # Catch-all → docker container (SSR + SSE + API).
     location / {
-        proxy_pass         http://greenbook_upstream;
-        #  Forward to the upstream block defined above.
-
-        proxy_http_version 1.1;
-        #  Required for keepalive to the backend. Default is 1.0 which
-        #  closes after each request.
-        proxy_set_header   Connection         $connection_upgrade;
-        #  For SSE / WebSocket requests, passes "upgrade"; otherwise empty.
-
-        # Forward standard headers the backend needs to know who the client is.
-        # greenbook's server/app.ts has `app.set("trust proxy", 1)` which
-        # means "trust exactly one upstream proxy's X-Forwarded-For". Keep
-        # that hop count in sync: if a WAF or ingress LB sits IN FRONT OF
-        # nginx, change the trust-proxy value to the total hop count or the
-        # rate limiter will key on nginx's IP for every request.
-        proxy_set_header   Host               $host;
-        proxy_set_header   X-Real-IP          $remote_addr;
-        proxy_set_header   X-Forwarded-For    $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto  $scheme;
-        proxy_set_header   X-Forwarded-Host   $host;
-        proxy_set_header   Upgrade            $http_upgrade;
-        proxy_set_header   X-Correlation-Id   $http_x_correlation_id;
-        # Forward any client-supplied correlation ID; if absent, greenbook's
-        # correlationMiddleware (server/correlation.js) generates one and
-        # echoes it back on the response.
-
-        # Timeouts — allow slow streaming SSR but don't hang forever.
-        # SSE connections can legitimately stay open; we cap at 1 hour via
-        # proxy_read_timeout to recycle idle connections.
-        proxy_connect_timeout 10s;
-        proxy_send_timeout    60s;
-        proxy_read_timeout    3600s;
-
-        proxy_buffering off;
-        #  Two reasons greenbook needs buffering off:
-        #    1. React Router 7 streams HTML (Suspense boundaries, deferred
-        #       loaders); buffered responses delay time-to-first-byte.
-        #    2. SSE (text/event-stream) MUST flush each event immediately;
-        #       buffered SSE stalls the browser's EventSource indefinitely.
-        # Static assets are handled by the /assets/ block above with
-        # proxy_buffering on — they benefit from it.
-
-        proxy_request_buffering on;
-        # Inbound side CAN buffer — that actually helps for large form
-        # posts, and doesn't interfere with streaming responses.
+        limit_req zone=app_general burst=200 nodelay;
+        proxy_pass http://greenbook_app;
+        include /etc/nginx/snippets/app-vm-proxy-headers.conf;
     }
 }
 ```
 
-Enable the site and remove the default:
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo ln -s /etc/nginx/sites-available/greenbook.conf /etc/nginx/sites-enabled/
-#   ln -s SOURCE TARGET    create a symbolic link at TARGET pointing to SOURCE.
-#   Nginx reads every file in sites-enabled/ as part of its config. The
-#   two-directory pattern (available/enabled) lets you keep a site config
-#   around without actually serving it — just delete the symlink to disable.
-
-$ sudo rm /etc/nginx/sites-enabled/default
-#   Removes the symlink to the default "welcome to nginx" site. The original
-#   file in sites-available/ stays on disk in case you want it back.
-```
+The full annotated forms of all four files (`00-app-vm-shared.conf`, `app-vm-proxy-headers.conf`, `greenbook-cache-policy.conf`, and `greenbook.conf`) live in [`appendix/app-vm/`](appendix/app-vm/) — that's the canonical scp-able source.
 
 Bootstrap a placeholder certificate. The HTTPS server block above references `ssl_certificate` files that Certbot creates in §6.4 — but `nginx -t` opens those files at config-test time and refuses the whole config if either is missing. That means the test (and any reload) fails BEFORE you ever get to run Certbot. Drop in a 1-day self-signed cert at the exact paths the config expects; Certbot overwrites both files on first run, so the placeholder is genuinely temporary.
 
@@ -861,7 +764,7 @@ $ ls -l /etc/ssl/greenbook/
 
 #### 6.7.4 Point Nginx at the new files
 
-Edit `/etc/nginx/sites-available/greenbook.conf` (or rerun `scp` with an updated [`appendix/greenbook.conf`](appendix/greenbook.conf)). Change the two `ssl_certificate` paths in the HTTPS server block:
+Edit `/etc/nginx/sites-available/greenbook.conf` (or rerun `scp` with an updated [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)). Change the two `ssl_certificate` paths in the HTTPS server block:
 
 ```diff
 - ssl_certificate     /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem;
@@ -920,6 +823,61 @@ Both [§8.3 (monitoring script)](08-day-2-operations.md#83-simple-monitoring-scr
 
 > **ℹ OCSP stapling on the AU intranet — confirm outbound to the CA's responder**
 >
-> The Nginx config has `ssl_stapling on; resolver 1.1.1.1 9.9.9.9` so it can fetch OCSP responses from the CA. If outbound HTTPS to the CA's OCSP responder is blocked from the VM (common on locked-down intranets), nginx logs `ssl_stapling_responder failed` or `OCSP_basic_verify() failed` warnings — the config still loads, but stapling is silently off and clients fall back to fetching OCSP themselves. Two fixes: (a) ask network ops to allow outbound HTTPS to your CA's OCSP URL (DigiCert: `ocsp.digicert.com`, Sectigo: `ocsp.sectigo.com`, GlobalSign: `ocsp.globalsign.com`); or (b) accept the regression and disable stapling in [`appendix/greenbook.conf`](appendix/greenbook.conf) by setting `ssl_stapling off; ssl_stapling_verify off;`. Stapling is a latency optimisation, not a security feature — modern clients cope fine without it.
+> The Nginx config has `ssl_stapling on; resolver 1.1.1.1 9.9.9.9` so it can fetch OCSP responses from the CA. If outbound HTTPS to the CA's OCSP responder is blocked from the VM (common on locked-down intranets), nginx logs `ssl_stapling_responder failed` or `OCSP_basic_verify() failed` warnings — the config still loads, but stapling is silently off and clients fall back to fetching OCSP themselves. Two fixes: (a) ask network ops to allow outbound HTTPS to your CA's OCSP URL (DigiCert: `ocsp.digicert.com`, Sectigo: `ocsp.sectigo.com`, GlobalSign: `ocsp.globalsign.com`); or (b) accept the regression and disable stapling in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf) by setting `ssl_stapling off; ssl_stapling_verify off;`. Stapling is a latency optimisation, not a security feature — modern clients cope fine without it.
+
+### 6.8 Adding a second app on the App VM
+
+When a second AU app onboards on the same App VM, the work collapses to **three commands plus one edited per-app config file**. The shared configs (`/etc/nginx/conf.d/00-app-vm-shared.conf`, `/etc/nginx/snippets/app-vm-proxy-headers.conf`) are already in place from greenbook's onboarding (§6.3.1) and are reused as-is — no edits.
+
+For an app whose docker container exposes its loopback port at `127.0.0.1:Y` (a different port from greenbook's `:3000`), reachable as `<app>.africanunion.org`:
+
+```bash
+# [auishqosrgbwbs01]
+
+# (1) Copy greenbook.conf to <app>.conf as the template:
+$ sudo cp /etc/nginx/sites-available/greenbook.conf \
+          /etc/nginx/sites-available/<app>.conf
+
+# (2) Edit the per-app lines. Review by hand — sed alone may not catch
+#     every place to update.
+$ sudo $EDITOR /etc/nginx/sites-available/<app>.conf
+# Change:
+#   server_name greenbook.africanunion.org;
+#   → server_name <app>.africanunion.org;          (both server blocks)
+#
+#   upstream greenbook_app { server 127.0.0.1:3000; ... }
+#   → upstream <app>_app   { server 127.0.0.1:Y;    ... }
+#   And every proxy_pass http://greenbook_app   →   http://<app>_app
+#
+#   access_log /var/log/nginx/greenbook.access.log;
+#   error_log  /var/log/nginx/greenbook.error.log warn;
+#   → access_log /var/log/nginx/<app>.access.log;
+#   → error_log  /var/log/nginx/<app>.error.log warn;
+#
+# Drop the `include /etc/nginx/snippets/greenbook-cache-policy.conf;`
+# line if the new app isn't a React Router 7 PWA. Replace with the
+# new app's own cache snippet if it has one (see §6.3 — per-app cache
+# concerns are framework-specific).
+#
+# Adjust the auth-strict location regex (^/(login|forgot-password|api/auth|api/sso))
+# to the new app's actual auth route paths. Keep the catch-all
+# `location /` block unchanged — every app needs it.
+
+# (3) Symlink, test, reload:
+$ sudo ln -sf /etc/nginx/sites-available/<app>.conf \
+              /etc/nginx/sites-enabled/<app>.conf
+$ sudo nginx -t
+$ sudo systemctl reload nginx
+```
+
+The new app inherits the shared rate-limit zones (`app_general`, `app_auth`), the shared proxy-header / timeout / streaming policy (via `include /etc/nginx/snippets/app-vm-proxy-headers.conf`), and the WebSocket upgrade map — all defined once in §6.3.1, no duplication. Onboarding a second app does not disturb anything already running for greenbook.
+
+> **ℹ Wildcard cert covers any `*.africanunion.org` hostname**
+>
+> The `ssl_certificate` paths in `<app>.conf` stay pointed at `/etc/ssl/greenbook/wildcard.africanunion.org.{fullchain.pem,key}` (the same files greenbook uses, per §6.7). One cert serves every per-app server block on this VM, so adding `<app>.africanunion.org` needs no new cert work — just the public DNS A / CNAME record from AU IT.
+
+> **ℹ For the two-tier (DMZ-fronted) topology, see [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy)**
+>
+> If you're running greenbook (and its sibling apps) behind the DMZ shared reverse proxy, every new App VM app **also** needs a per-app server block on the DMZ side. Onboard the App VM block first (this section), then the DMZ block. The two have the same shape but different concerns — DMZ does TLS + edge rate-limit + security headers; App VM does auth-rate-limit + cache policy + container hand-off.
 
 ---

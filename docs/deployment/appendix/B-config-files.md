@@ -15,7 +15,7 @@
 - [§B.5 /opt/greenbook/docker-compose.yml](#b5-optgreenbookdocker-composeyml)
 - [§B.6 /etc/pgbackrest.conf](#b6-etcpgbackrestconf)
 - [§B.7 /etc/systemd/system/greenbook.service](#b7-etcsystemdsystemgreenbookservice)
-- [§B.8 /etc/nginx/sites-available/greenbook.conf](#b8-etcnginxsites-availablegreenbookconf)
+- [§B.8 App VM nginx files (multi-tenant)](#b8-app-vm-nginx-files-multi-tenant)
 
 ## Appendix B: Complete configuration files reference
 
@@ -198,109 +198,54 @@ ExecStop=/usr/bin/docker compose -f /opt/greenbook/docker-compose.yml down
 WantedBy=multi-user.target
 ```
 
-### B.8 /etc/nginx/sites-available/greenbook.conf
+### B.8 App VM nginx files (multi-tenant)
 
-The production nginx vhost is shipped as a standalone file in this directory: **[greenbook.conf](greenbook.conf)**. Copy it to the app VM in **two hops** — `/etc/nginx/sites-available/` is root-owned and `deployer` is intentionally no-sudo (09 §9.1). Use your personal sudo-capable admin account (`greenbook` in the AU's setup; substitute your own):
+The App VM's nginx is multi-tenant — shared `http {}`-scope config + shared snippets + one per-app server block. Four files ship in [`appendix/app-vm/`](app-vm/):
+
+| File                                                                       | Lives at                                          | Purpose                                                                                                                                                |
+| -------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`app-vm/00-app-vm-shared.conf`](app-vm/00-app-vm-shared.conf)             | `/etc/nginx/conf.d/00-app-vm-shared.conf`         | WebSocket upgrade `map`, shared rate-limit zones (`app_general`, `app_auth`)                                                                           |
+| [`app-vm/app-vm-proxy-headers.conf`](app-vm/app-vm-proxy-headers.conf)     | `/etc/nginx/snippets/app-vm-proxy-headers.conf`   | Shared `proxy_set_header` block + timeouts + buffering policy                                                                                          |
+| [`app-vm/greenbook-cache-policy.conf`](app-vm/greenbook-cache-policy.conf) | `/etc/nginx/snippets/greenbook-cache-policy.conf` | Greenbook PWA-specific (`/sw.js`, `/assets/*`, `/manifest.json`)                                                                                       |
+| [`app-vm/greenbook.conf`](app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — first of N (greenbook today; future apps onboard via [06 §6.8](../06-app-vm-nginx-tls.md#68-adding-a-second-app-on-the-app-vm)) |
+
+Install commands (two hops each — destination is root-owned and `deployer` is no-sudo per [09 §9.1](../09-hardening-checklist.md#91-operating-system); use your personal sudo-capable admin account on the App VM, `greenbook` in the AU's setup):
 
 ```bash
-# (a) From your laptop — scp into the admin account's home dir:
-$ scp docs/deployment/appendix/greenbook.conf \
-      greenbook@10.111.11.51:~/greenbook.conf
+# (a) From your laptop — scp all four files in one shot:
+$ scp docs/deployment/appendix/app-vm/00-app-vm-shared.conf \
+      docs/deployment/appendix/app-vm/app-vm-proxy-headers.conf \
+      docs/deployment/appendix/app-vm/greenbook-cache-policy.conf \
+      docs/deployment/appendix/app-vm/greenbook.conf \
+      greenbook@10.111.11.51:~/
 
-# (b) On the app VM as the same admin account:
+# (b) On the App VM as your admin account:
+$ ssh greenbook@10.111.11.51
+
+# Shared http{}-scope config (loads from conf.d/*):
 $ sudo install -m 644 -o root -g root \
-    ~/greenbook.conf \
-    /etc/nginx/sites-available/greenbook.conf
-$ rm ~/greenbook.conf
+    ~/00-app-vm-shared.conf /etc/nginx/conf.d/00-app-vm-shared.conf
+
+# Shared + per-app snippets:
+$ sudo install -d -m 755 /etc/nginx/snippets
+$ sudo install -m 644 -o root -g root \
+    ~/app-vm-proxy-headers.conf /etc/nginx/snippets/app-vm-proxy-headers.conf
+$ sudo install -m 644 -o root -g root \
+    ~/greenbook-cache-policy.conf /etc/nginx/snippets/greenbook-cache-policy.conf
+
+# Per-app server block + symlink + drop the default:
+$ sudo install -m 644 -o root -g root \
+    ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf
+$ sudo ln -sf /etc/nginx/sites-available/greenbook.conf \
+              /etc/nginx/sites-enabled/greenbook.conf
+$ sudo rm -f /etc/nginx/sites-enabled/default
+
+$ rm ~/00-app-vm-shared.conf ~/app-vm-proxy-headers.conf \
+     ~/greenbook-cache-policy.conf ~/greenbook.conf
+
+$ sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Stripped (no annotations) form for at-a-glance reference:
-
-```
-upstream greenbook_upstream {
-    server 127.0.0.1:3000;
-    keepalive 32;
-}
-
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    ''      '';
-}
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name greenbook.africanunion.org;
-
-    location /.well-known/acme-challenge/ { root /var/www/certbot; }
-    location / { return 301 https://$host$request_uri; }
-}
-
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name greenbook.africanunion.org;
-
-    ssl_certificate     /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache   shared:SSL:10m;
-    ssl_session_timeout 1d;
-    ssl_session_tickets off;
-    ssl_stapling        on;
-    ssl_stapling_verify on;
-    resolver            1.1.1.1 9.9.9.9 valid=300s;
-    resolver_timeout    5s;
-
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options    "nosniff" always;
-    add_header X-Frame-Options           "DENY" always;
-    add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
-
-    client_max_body_size 20m;
-
-    access_log /var/log/nginx/greenbook.access.log;
-    error_log  /var/log/nginx/greenbook.error.log warn;
-
-    location = /sw.js {
-        proxy_pass http://greenbook_upstream;
-        proxy_set_header Host $host;
-        add_header Cache-Control "public, max-age=0, must-revalidate" always;
-    }
-
-    location ^~ /assets/ {
-        proxy_pass http://greenbook_upstream;
-        proxy_set_header Host $host;
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
-        expires 1y;
-    }
-
-    location = /manifest.json {
-        proxy_pass http://greenbook_upstream;
-        proxy_set_header Host $host;
-        add_header Cache-Control "public, max-age=3600" always;
-    }
-
-    location / {
-        proxy_pass         http://greenbook_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header   Connection        $connection_upgrade;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_set_header   X-Forwarded-Host  $host;
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   X-Correlation-Id  $http_x_correlation_id;
-        proxy_connect_timeout 10s;
-        proxy_send_timeout    60s;
-        proxy_read_timeout    3600s;
-        proxy_buffering       off;
-    }
-}
-```
-
-Rationale for every directive is in [06-app-vm-nginx-tls.md §6.3](../06-app-vm-nginx-tls.md).
+Rationale for every directive — and the breakdown of which directives belong in shared files vs per-app files — is in [06-app-vm-nginx-tls.md §6.3](../06-app-vm-nginx-tls.md#63-the-nginx-server-config). The annotated source for each file lives in [`appendix/app-vm/`](app-vm/) directly.
 
 ---

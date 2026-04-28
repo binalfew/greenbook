@@ -377,115 +377,83 @@ The new app's **internal-side configuration** (its own VM's nginx pinned to acce
 
 The greenbook app VM `auishqosrgbwbs01` was originally configured per [06 — Nginx and TLS](06-app-vm-nginx-tls.md) for the **single-tier** shape: TLS termination on :443 with the wildcard cert installed locally, public traffic accepted directly. With the DMZ in front, the app VM's role narrows: accept HTTP only from the DMZ VM's source IP, terminate no TLS, trust the DMZ VM's `X-Forwarded-*` headers.
 
+The App VM nginx is **multi-tenant** (one shared `conf.d/00-app-vm-shared.conf` + one shared `snippets/app-vm-proxy-headers.conf` + one `sites-available/<app>.conf` per backend, per [06 §6.3](06-app-vm-nginx-tls.md#63-the-nginx-server-config)). The two-tier conversion touches the **per-app server blocks** and the host-level UFW + cert; the shared files stay untouched.
+
 Three changes on `auishqosrgbwbs01`:
 
-#### (a) Modify `/etc/nginx/sites-available/greenbook.conf`
+#### (a) Modify each per-app server block
 
-Drop the entire HTTPS server block. Keep one HTTP server block. Add `set_real_ip_from` so nginx logs / rate-limits the real client IP rather than the DMZ VM. Add `allow / deny` as belt-and-braces over UFW. Drop the four `add_header` security headers (those are now set once at the edge).
+For every `/etc/nginx/sites-available/<app>.conf` (greenbook today, additional apps later), apply the same diff: delete the HTTPS server block, narrow the HTTP block to the DMZ VM's source IP, add `set_real_ip_from`, drop the four `add_header` security headers (those move to the edge once at the DMZ — `/etc/nginx/conf.d/00-au-tls.conf`).
 
-The simplified version of `greenbook.conf` for the app VM:
+Concretely, starting from the §6.3.2 `greenbook.conf`:
+
+1. **Delete the `server { listen 443 ssl http2; ... }` block in its entirety.** No TLS on the App VM in two-tier — that's the DMZ's job.
+2. **Narrow the remaining `server { listen 80; ... }` block to plain HTTP** (no more `return 301 https://...` redirect — the DMZ already handled the redirect, and a redirect from the inner tier would loop). Keep `server_name greenbook.africanunion.org;`.
+3. **Add `allow 172.16.177.50; deny all;`** as belt-and-braces over UFW inside the `server { }` block.
+4. **Drop the four `add_header` lines** (`Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) from the (deleted) HTTPS block — already gone with step 1, called out here so the diff is explicit.
+5. **Drop the `/.well-known/acme-challenge/` location** (no Certbot on the App VM in two-tier — the DMZ owns the cert).
+6. **Move the cache snippet `include` and the auth-strict + catch-all `location` blocks** (the meaningful proxy work) into the surviving HTTP server block. The `include /etc/nginx/snippets/app-vm-proxy-headers.conf;` references inside the location blocks stay as-is — they're the same shared snippet either way.
+
+Add **once per file** (above the `server { }` block, inside the file but outside any block) so nginx rewrites `$remote_addr` to the real client IP for logging + rate-limiting (instead of treating every request as coming from the DMZ VM):
+
+```nginx
+set_real_ip_from 172.16.177.50;
+real_ip_header   X-Forwarded-For;
+real_ip_recursive on;
+```
+
+The shared `app_general` / `app_auth` rate-limit zones in `/etc/nginx/conf.d/00-app-vm-shared.conf` keep working unchanged — they key on `$binary_remote_addr`, which `set_real_ip_from` now points at the real client. Inner-tier rate limits stack with the DMZ's `edge_general` / `edge_auth` zones, and both buckets see the same remote-IP key.
+
+The resulting per-app server block is short:
 
 ```nginx
 # /etc/nginx/sites-available/greenbook.conf  (TWO-TIER VERSION)
-# App-VM internal nginx; receives plain HTTP from the DMZ proxy at
-# 172.16.177.50 and routes to the greenbook docker container.
+# Receives plain HTTP from the DMZ proxy at 172.16.177.50 only.
 
-upstream greenbook_upstream {
+upstream greenbook_app {
     server 127.0.0.1:3000;
     keepalive 32;
 }
 
-# Trust X-Forwarded-* headers from the DMZ VM. nginx rewrites
-# $remote_addr to the real client IP for logging + access control.
 set_real_ip_from 172.16.177.50;
 real_ip_header   X-Forwarded-For;
 real_ip_recursive on;
-
-# Inner-tier rate-limit zones (unchanged from 06 §6.3 single-tier
-# version — these stack with the DMZ's edge_general / edge_auth zones).
-limit_req_zone $binary_remote_addr zone=greenbook_general:10m rate=30r/s;
-limit_req_zone $binary_remote_addr zone=greenbook_auth:1m    rate=5r/s;
-
-# WebSocket upgrade map (same shape as the DMZ's; declared again here
-# because the app VM has its own nginx and its own http {} scope).
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    ''      '';
-}
 
 server {
     listen 80;
     listen [::]:80;
     server_name greenbook.africanunion.org;
 
-    # Belt-and-braces over UFW. Even if UFW were misconfigured, only
-    # the DMZ VM is allowed to reach this nginx server block.
     allow 172.16.177.50;
     deny  all;
 
     client_max_body_size 20m;
-
     access_log /var/log/nginx/greenbook.access.log;
     error_log  /var/log/nginx/greenbook.error.log warn;
 
-    # ----- Greenbook-specific routing (UNCHANGED from 06 §6.3) -----
-    # sw.js — short cache, never stale (browser update check).
-    location = /sw.js {
-        proxy_pass            http://greenbook_upstream;
-        proxy_set_header      Host              $host;
-        proxy_set_header      X-Real-IP         $remote_addr;
-        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header      X-Forwarded-Proto $scheme;
-        proxy_set_header      X-Forwarded-Host  $host;
-        add_header Cache-Control "public, max-age=0, must-revalidate" always;
+    include /etc/nginx/snippets/greenbook-cache-policy.conf;
+
+    location ~ ^/(login|forgot-password|api/auth|api/sso) {
+        limit_req zone=app_auth burst=20 nodelay;
+        proxy_pass http://greenbook_app;
+        include /etc/nginx/snippets/app-vm-proxy-headers.conf;
     }
 
-    # Hashed asset paths — long cache.
-    location ^~ /assets/ {
-        proxy_pass            http://greenbook_upstream;
-        proxy_set_header      Host              $host;
-        proxy_set_header      X-Real-IP         $remote_addr;
-        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header      X-Forwarded-Proto $scheme;
-        proxy_set_header      X-Forwarded-Host  $host;
-        proxy_buffering       on;
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
-        expires                1y;
-    }
-
-    location = /manifest.json {
-        proxy_pass            http://greenbook_upstream;
-        proxy_set_header      Host              $host;
-        proxy_set_header      X-Real-IP         $remote_addr;
-        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header      X-Forwarded-Proto $scheme;
-        add_header Cache-Control "public, max-age=3600" always;
-    }
-
-    # Catch-all → SSE / SSR streaming-aware proxy.
     location / {
-        proxy_pass         http://greenbook_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header   Connection         $connection_upgrade;
-        proxy_set_header   Host               $host;
-        proxy_set_header   X-Real-IP          $remote_addr;
-        proxy_set_header   X-Forwarded-For    $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto  $scheme;
-        proxy_set_header   X-Forwarded-Host   $host;
-        proxy_set_header   Upgrade            $http_upgrade;
-        proxy_set_header   X-Correlation-Id   $http_x_correlation_id;
-        proxy_connect_timeout 10s;
-        proxy_send_timeout    60s;
-        proxy_read_timeout    3600s;
-        proxy_buffering off;
-        proxy_request_buffering on;
+        limit_req zone=app_general burst=200 nodelay;
+        proxy_pass http://greenbook_app;
+        include /etc/nginx/snippets/app-vm-proxy-headers.conf;
     }
 }
 ```
 
+The shared `00-app-vm-shared.conf` (WebSocket upgrade map, rate-limit zones) and the shared `app-vm-proxy-headers.conf` snippet (`proxy_set_header` block, timeouts, buffering) are **unchanged** from §6.3.1 — they're already correctly shaped for both topologies. Only the per-app server block changes shape.
+
 The four security headers (`Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) are **gone** from this file — they're now set once at the edge (`/etc/nginx/conf.d/00-au-tls.conf` on the DMZ VM). nginx merges `add_header always` from the `http {}` scope of the edge into every response that flows through the proxy, so the headers reach browsers exactly as before; just from one source of truth.
 
 The `ssl_certificate` paths, the `listen 443 ssl http2` block, OCSP stapling, the resolver — all gone. None of those concerns belong on an internal-only nginx that never speaks TLS.
+
+Repeat steps 1-6 for every `<app>.conf` in `/etc/nginx/sites-available/` — each per-app file converts independently with the same diff.
 
 #### (b) UFW rule changes on the app VM
 
