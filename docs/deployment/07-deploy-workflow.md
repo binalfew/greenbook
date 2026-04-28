@@ -18,6 +18,8 @@
   - [§8.2.2 The environment file: /etc/greenbook.env](#822-the-environment-file-etcgreenbookenv)
   - [§8.2.3 The compose file: /opt/greenbook/docker-compose.yml](#823-the-compose-file-optgreenbookdocker-composeyml)
 - [§8.3 Deploy: build the image and stage it on the app VM](#83-deploy-build-the-image-and-stage-it-on-the-app-vm)
+  - [First-time deploy — the linear walkthrough](#first-time-deploy--the-linear-walkthrough)
+  - [Re-deploy after a code change — the every-deploy walkthrough](#re-deploy-after-a-code-change--the-every-deploy-walkthrough)
   - [§8.3.1 Apply schema changes — the greenbook reality check](#831-apply-schema-changes--the-greenbook-reality-check)
   - [§8.3.2 Env file lifecycle across deploys](#832-env-file-lifecycle-across-deploys)
   - [§8.3.3 Promote the new image](#833-promote-the-new-image)
@@ -508,7 +510,7 @@ $ curl -sI https://greenbook.africanunion.org/  | grep -E "HTTP|strict-transport
 # else. See §8.7 for details.
 ```
 
-That's it. From here on, re-deploys skip steps 4 and 8 — six commands instead of eight.
+That's it. From here on, re-deploys follow the six-command walkthrough below — same shape with steps 4 (seed) and 8 (rotate demo passwords) removed.
 
 > **⚠ Don't skip step 4 on a fresh database**
 >
@@ -518,7 +520,92 @@ That's it. From here on, re-deploys skip steps 4 and 8 — six commands instead 
 >
 > Steps 3, 4, and 6 all rely on `/etc/greenbook.env` existing on the VM. If you didn't create it during [05 — Application container §6.3](05-app-vm-container.md), do that BEFORE step 1: it's a 5-minute openssl + tee sequence.
 
-The remaining sections in §8 (Path A/B detailed walk-throughs, schema-deploy variants, env-file model, deploy.sh, rollback) are the reference material that step 1–8 above abstracts over. Read on if you want to know WHY each step exists.
+#### Re-deploy after a code change — the every-deploy walkthrough
+
+For deploys after [§8.7 first-run bootstrap](#87-first-run-bootstrap-one-time) has already run on a fresh DB. Six commands; ~5 minutes if the build is hot. Identical to the first-time walkthrough above with steps 4 (seed) and 8 (rotate demo passwords) removed.
+
+The single biggest deploy mistake is `git pull` on the laptop followed straight by `docker compose up -d` on the VM, expecting the change to take effect. It won't — nothing has rebuilt the image, so the same bytes are still running. STEP 1 must produce a new tag with new bytes; STEP 5 must point compose at that new tag.
+
+```bash
+# ── STEP 1. Laptop — pull and rebuild ─────────────────────────────
+$ cd ~/greenbook-builds/src
+$ git pull origin main
+$ VERSION=$(date -u +%Y-%m-%d-%H%M)
+$ docker build -t greenbook:$VERSION .
+# Apple Silicon: replace with
+#   docker buildx build --platform=linux/amd64 -t greenbook:$VERSION --load .
+
+# ── STEP 2. Laptop — save and ship ────────────────────────────────
+$ cd ..
+$ docker save greenbook:$VERSION | gzip > greenbook-$VERSION.tar.gz
+$ scp greenbook-$VERSION.tar.gz greenbook@10.111.11.51:/tmp/
+
+# ── STEP 3. App VM — load the new image ───────────────────────────
+$ ssh greenbook@10.111.11.51
+$ VERSION=2026-04-28-XXXX             # paste the timestamp from STEP 1;
+                                       # shell vars don't survive ssh
+$ gunzip -c /tmp/greenbook-$VERSION.tar.gz | docker load
+$ docker image ls greenbook:$VERSION  # confirm tag is registered
+$ rm /tmp/greenbook-$VERSION.tar.gz
+
+# ── STEP 4. Apply schema changes (idempotent) ─────────────────────
+$ docker run --rm \
+    --env-file /etc/greenbook.env \
+    greenbook:$VERSION \
+    npx --no-install prisma db push
+# Code-only deploy:
+#   "The database is already in sync with the Prisma schema."
+# Schema-changed deploy:
+#   "🚀 Your database is now in sync with your schema."
+# Safe to run on every deploy — costs <1 s when there's nothing to apply.
+
+# ── STEP 5. Promote — pin and recreate ────────────────────────────
+$ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
+$ docker compose -f /opt/greenbook/docker-compose.yml up -d --force-recreate
+#   --force-recreate     replace the running container even if compose
+#                         thinks nothing changed. Without this, compose
+#                         can decide the new VERSION is a no-op (especially
+#                         if the previous tag is still warm) and leave
+#                         the old container in place — the
+#                         "I deployed but my changes aren't live" trap.
+
+# ── STEP 6. Verify ────────────────────────────────────────────────
+$ docker compose -f /opt/greenbook/docker-compose.yml ps
+# Expected: STATE=running, HEALTH=healthy (~30 s after recreate).
+
+$ curl -s http://127.0.0.1:3000/healthz | head -c 400
+# Look for:  "version":"<your VERSION>"   ← proves the NEW image is
+#                                          serving (not a stale container)
+# AND        "checks":{"process":"ok","db":"ok"}
+
+$ curl -sI https://greenbook.africanunion.org/ | grep -E "HTTP|strict-transport"
+# Public-URL smoke test through Nginx.
+# Expected: HTTP/2 200 + the HSTS header.
+```
+
+> **⚠ "I deployed but my changes aren't live"**
+>
+> Two failure modes account for ~all instances of this:
+>
+> 1. **Forgot STEP 1 (the rebuild).** `docker build` is the only thing that turns new git commits into image bytes. Without it, the rest of the steps just relaunch the same image. Symptom: STEP 6's `version` field shows the OLD timestamp.
+> 2. **Skipped `--force-recreate` on STEP 5.** Compose may decide nothing changed and leave the old container in place. Same symptom.
+>
+> If STEP 6's `version` field still shows the old timestamp, force a clean recreation:
+>
+> ```bash
+> $ docker compose -f /opt/greenbook/docker-compose.yml down
+> $ docker compose -f /opt/greenbook/docker-compose.yml up -d
+> ```
+>
+> ~5 s of downtime, but guarantees the old container is gone before the new one starts.
+
+> **ℹ When the schema changed (rare)**
+>
+> STEP 4's `prisma db push` is idempotent — running it on a code-only deploy is a no-op that completes in under a second. But if the schema changed and `db push` reports it would lose data (column dropped, type narrowed), it refuses and exits non-zero in non-TTY mode. Don't blindly add `--accept-data-loss`; either back-port the change to keep the old shape working alongside the new one ("expand → migrate code → contract"), or generate a proper migration baseline (§8.3.1 Path B). See [§8.3.1](#831-apply-schema-changes--the-greenbook-reality-check) for the full reasoning.
+
+For rollback if the new deploy regresses, see [§8.4](#84-rollback) — the previous `$VERSION` is still on disk, and the rollback collapses to two commands (rewrite `/opt/greenbook/.env`, `compose up -d`).
+
+The remaining sections in §8 (Path A/B detailed walk-throughs, schema-deploy variants, env-file model, deploy.sh, rollback) are the reference material that the two walkthroughs above abstract over. Read on if you want to know WHY each step exists.
 
 > **ℹ Which path should I use?**
 >
