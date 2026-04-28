@@ -132,9 +132,17 @@ RUN npm run build
 # server.js imports the server bundle at runtime via
 # `import("./build/server/index.js").then(m => m.app)`.
 
-RUN npm prune --omit=dev
-#   npm prune           remove packages not required by the current tree.
-#   --omit=dev          also remove devDependencies.
+RUN npm prune --omit=dev --legacy-peer-deps
+#   npm prune             remove packages not required by the current tree.
+#   --omit=dev            also remove devDependencies.
+#   --legacy-peer-deps    same reason as the deps-stage `npm ci` above:
+#                          npm prune re-resolves the dep tree to decide
+#                          what to remove, and `use-resize-observer@9.x`
+#                          declaring `react@"16.8 - 18"` against greenbook's
+#                          react@19 will fail with ERESOLVE without the
+#                          flag. Drop the flag here AND on `npm ci` once
+#                          the underlying peer-dep is fixed (see the ⚠
+#                          callout below).
 # Shrinks node_modules by removing vite, vitest, typescript, @faker-js/faker,
 # @playwright/test, and other build/test-only packages.
 
@@ -205,9 +213,9 @@ CMD ["npm", "run", "start"]
 #   listens on process.env.PORT || 3000.
 ```
 
-> **⚠ `--legacy-peer-deps` on `npm ci` — why it's there and how to retire it**
+> **⚠ `--legacy-peer-deps` on `npm ci` _and_ `npm prune` — why it's there and how to retire it**
 >
-> The `RUN npm ci` line above passes `--legacy-peer-deps`. Without it the build fails on greenbook's first install step with:
+> Both `RUN npm ci --include=dev` (deps stage) and `RUN npm prune --omit=dev` (build stage) pass `--legacy-peer-deps`. Without it on either one the build fails:
 >
 > ```
 > ERESOLVE could not resolve
