@@ -270,10 +270,11 @@ CMD ["npm", "run", "start"]
 >   prisma/schema.prisma: file not found
 > ```
 >
-> Two follow-on observations the next operator should be aware of:
+> Three follow-on observations the next operator should be aware of:
 >
 > 1. **`npx prisma db push` fetches the prisma CLI from npm at deploy time** — `npm prune --omit=dev` removed the CLI from `node_modules`, so `npx` falls back to the registry and pulls ~50 MB on every migration (visible as `npm warn exec ... will be installed: prisma@7.8.0` in the output). Works as long as the deploying VM can reach `registry.npmjs.org` (already whitelisted on the AU intranet — see the egress table below). To avoid the round-trip, move `prisma` from `devDependencies` to `dependencies` in `package.json`; the CLI will then survive the prune and you can switch the deploy command to `npx --no-install prisma db push`. Not blocking; flag for cleanup if you do many migrations.
-> 2. **Schema disclosure**: shipping `prisma/` in the runtime image means anyone with `docker exec` access can read the schema (table names, column types, comments). Acceptable for greenbook on an internal AU intranet; on a hostile-tenant host the cleaner pattern is to tag the **build stage** as a separate `greenbook-builder:$VERSION` image and run migrations from that, leaving the runtime image with no schema source at all.
+> 2. **`prisma.config.ts` must NOT statically `import "dotenv/config"`.** `dotenv` is a devDep; the prune strips it. A static import then crashes the prisma CLI with `Failed to load config file "/app/prisma.config.ts" ... Cannot find module 'dotenv/config'` before `defineConfig()` ever runs. The committed file uses `createRequire(import.meta.url)` + a try/catch around `requireOrSkip("dotenv/config")` so production silently no-ops (env vars are already in `process.env` from docker's `--env-file`) while local dev still gets the .env-load convenience. Don't "simplify" the require back into a static import — it'll break the next deploy.
+> 3. **Schema disclosure**: shipping `prisma/` in the runtime image means anyone with `docker exec` access can read the schema (table names, column types, comments). Acceptable for greenbook on an internal AU intranet; on a hostile-tenant host the cleaner pattern is to tag the **build stage** as a separate `greenbook-builder:$VERSION` image and run migrations from that, leaving the runtime image with no schema source at all.
 
 > **ℹ Build-time egress requirements (for air-gapped / restricted-egress build hosts)**
 >
