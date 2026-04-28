@@ -38,6 +38,16 @@ COPY prisma.config.ts ./prisma.config.ts
 ARG DUMMY_DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy?schema=public
 ENV DATABASE_URL=${DUMMY_DATABASE_URL}
 
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Suppress Playwright's postinstall — it would otherwise download
+# ~500 MB of Chromium / Firefox / Webkit binaries to node_modules.
+# The production runtime image never runs E2E tests; `npm prune
+# --omit=dev` in the build stage removes Playwright entirely from the
+# final image anyway. Skipping the download avoids one egress host
+# (playwright.download.prss.microsoft.com) and shaves ~30 s off the
+# build. This env var is per-Dockerfile and never escapes to local
+# dev — `npm install` on your laptop still fetches browsers normally.
+
 RUN npm ci --include=dev --legacy-peer-deps
 #   npm ci                clean install: installs exact versions from
 #                          package-lock.json. Fails if the lockfile does not

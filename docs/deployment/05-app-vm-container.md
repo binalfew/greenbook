@@ -71,6 +71,16 @@ COPY prisma.config.ts ./prisma.config.ts
 ARG DUMMY_DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy?schema=public
 ENV DATABASE_URL=${DUMMY_DATABASE_URL}
 
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Suppress Playwright's postinstall — it would otherwise download
+# ~500 MB of Chromium / Firefox / Webkit binaries to node_modules.
+# The production runtime image never runs E2E tests; `npm prune
+# --omit=dev` in the build stage removes Playwright entirely from the
+# final image anyway. Skipping the download avoids one egress host
+# (playwright.download.prss.microsoft.com) and shaves ~30 s off the
+# build. This env var is per-Dockerfile and never escapes to local
+# dev — `npm install` on your laptop still fetches browsers normally.
+
 RUN npm ci --include=dev --legacy-peer-deps
 #   npm ci                clean install: installs exact versions from
 #                          package-lock.json. Fails if the lockfile does not
@@ -222,6 +232,21 @@ CMD ["npm", "run", "start"]
 > 2. **Drop the dependency.** `use-resize-observer` is a thin wrapper over the native `ResizeObserver` API — a hand-rolled `useResizeObserver` hook is ~15 lines and removes the conflict at the source. Best when greenbook only uses one or two of the package's hooks.
 >
 > Until either (1) or (2) lands, leave the flag in place. Removing it on a fork that's still on React 18 is fine; on React 19 the build will fail the same way again.
+
+> **ℹ Build-time egress requirements (for air-gapped / restricted-egress build hosts)**
+>
+> If you're building greenbook on a host with selective outbound HTTPS (typical AU intranet VM, locked-down CI runner, etc.), the table below lists every external host the build pulls from. Whitelist all of these upfront and you avoid iterating per-failure. The hosts are ordered by which build stage hits them first, so if you'd rather add them one at a time you can match each entry to its error message.
+>
+> | Host                                                                             | Why                                                                                                                                                                     | Stage             |
+> | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+> | `production.cloudfront.docker.com`<br>`registry-1.docker.io`<br>`auth.docker.io` | BuildKit frontend (`# syntax=docker/dockerfile:1.7`) and the `node:22-alpine` base image                                                                                | deps + runtime    |
+> | `dl-cdn.alpinelinux.org`                                                         | `apk add --no-cache openssl dumb-init`                                                                                                                                  | deps + runtime    |
+> | `registry.npmjs.org`                                                             | `npm ci --include=dev` (the manifest + every package tarball)                                                                                                           | deps              |
+> | `binaries.prisma.sh`                                                             | Prisma postinstall — fetches `schema-engine` and `query-engine` for `linux-musl-openssl-3.0.x`                                                                          | deps              |
+> | `playwright.download.prss.microsoft.com`<br>`objects.githubusercontent.com`      | Playwright postinstall — Chromium / Firefox / Webkit. **Already suppressed** above via `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`; whitelist only if you remove that env var. | deps (suppressed) |
+> | `registry.yarnpkg.com`                                                           | only if anything is yarn-installed (greenbook isn't — npm-only)                                                                                                         | n/a               |
+>
+> **Switch to Path B if you can't allow these on the build host.** [07 §8.3 Path B](07-deploy-workflow.md#83-deploy-build-the-image-and-stage-it-on-the-app-vm) builds on a host that already reaches all of the above (your laptop, a CI runner with full internet) and ships the resulting image as a tarball over SSH — the air-gapped VM only needs `docker load`, no outbound HTTPS at all. That's the recommended default for AU production.
 
 ### 6.2 The .dockerignore
 
