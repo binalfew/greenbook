@@ -70,16 +70,16 @@ $ sudo ufw status verbose
 
 ### 7.3 The Nginx server config
 
-Replace the default Nginx site with a config that proxies to the greenbook container. The canonical source is shipped as a standalone file in [appendix/greenbook.conf](appendix/greenbook.conf) — copy it to the app VM in **two hops**, because `/etc/nginx/sites-available/` is root-owned (so scp can't write there directly) AND `deployer` is intentionally no-sudo per [09 §11.1](09-hardening-checklist.md#111-operating-system). Use your personal sudo-capable admin account instead — `greenboo` in the AU's setup; substitute your own VM admin username:
+Replace the default Nginx site with a config that proxies to the greenbook container. The canonical source is shipped as a standalone file in [appendix/greenbook.conf](appendix/greenbook.conf) — copy it to the app VM in **two hops**, because `/etc/nginx/sites-available/` is root-owned (so scp can't write there directly) AND `deployer` is intentionally no-sudo per [09 §11.1](09-hardening-checklist.md#111-operating-system). Use your personal sudo-capable admin account instead — `greenbook` in the AU's setup; substitute your own VM admin username:
 
 ```bash
 # (a) From your laptop, with this repo cloned — scp into the admin
 #     account's home directory (NOT deployer's):
 $ scp docs/deployment/appendix/greenbook.conf \
-      greenboo@10.111.11.51:~/greenbook.conf
+      greenbook@10.111.11.51:~/greenbook.conf
 
 # (b) SSH in as the same admin account and install with sudo:
-$ ssh greenboo@10.111.11.51
+$ ssh greenbook@10.111.11.51
 
 # [auishqosrgbwbs01]
 $ sudo install -m 644 -o root -g root \
@@ -715,29 +715,29 @@ This is what to do when AU IT delivers a `wildcard.africanunion.org.pfx` (or sim
 #    /etc/ssl/greenbook/ with restrictive ownership.
 #
 #    USER NOTE: cert installation is HOST-level admin work. Use your
-#    personal sudo-capable account on the VM — `greenboo` in the AU's
+#    personal sudo-capable account on the VM — `greenbook` in the AU's
 #    setup; substitute your own. Do NOT use `deployer` here:
 #      · `deployer` was provisioned without a password (key-only login,
 #        per 01 §3.8), so `sudo` has no password to accept.
 #      · `deployer` is also explicitly NOT in the sudoers file
 #        (09 §11.1 — "deployer (app VM only, no sudo)"). It exists only
 #        to run `docker compose` for app deploys.
-#    All sudo-bearing commands in steps 1–8 below run as `greenboo`.
+#    All sudo-bearing commands in steps 1–8 below run as `greenbook`.
 
 # (1a) On your laptop — scp the PFX into your admin account's home
-#      directory. /home/greenboo is mode 700 on Ubuntu 24.04
+#      directory. /home/greenbook is mode 700 on Ubuntu 24.04
 #      (HOME_MODE=0700 in /etc/login.defs), so the file is unreadable to
 #      any other local user while it sits there during staging. Prefer
 #      this over /tmp, which is world-traversable.
-$ scp wildcard.africanunion.org.pfx greenboo@10.111.11.51:~/
+$ scp wildcard.africanunion.org.pfx greenbook@10.111.11.51:~/
 #   scp SOURCE USER@HOST:DEST    secure copy over SSH. Uses the same key-
 #                                 based auth you already use to ssh in
-#                                 as `greenboo` for sudo work elsewhere
+#                                 as `greenbook` for sudo work elsewhere
 #                                 in 06.
 #   ~/                            shorthand for the remote user's home
-#                                 directory — i.e. /home/greenboo/. The
+#                                 directory — i.e. /home/greenbook/. The
 #                                 file lands as
-#                                   /home/greenboo/wildcard.africanunion.org.pfx
+#                                   /home/greenbook/wildcard.africanunion.org.pfx
 #   The transfer itself is encrypted by SSH; the PFX's own password gives
 #   you a second layer of protection at rest.
 # (If your local PFX has a different filename, scp it as-is; you can rename
@@ -746,7 +746,7 @@ $ scp wildcard.africanunion.org.pfx greenboo@10.111.11.51:~/
 
 # (1b) SSH into the VM as your admin account, then create the cert
 #      directory and move the PFX into it with root:root 600 perms.
-$ ssh greenboo@10.111.11.51
+$ ssh greenbook@10.111.11.51
 
 # [auishqosrgbwbs01]
 $ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
@@ -765,7 +765,7 @@ $ sudo install -m 600 -o root -g root \
 #   is no window where the file is in place with the wrong perms.
 
 $ rm ~/wildcard.africanunion.org.pfx
-#   Remove the staging copy. /home/greenboo/ is mode 700 so the staging
+#   Remove the staging copy. /home/greenbook/ is mode 700 so the staging
 #   copy was never publicly readable, but deleting after the move keeps
 #   secret-material accounting tidy.
 
@@ -798,10 +798,17 @@ $ sudo openssl pkcs12 -legacy \
     -nokeys -clcerts -nodes
 
 # 4. Append the CA chain from the same PFX. Prompts for the password again.
-$ sudo openssl pkcs12 -legacy \
+#
+#    Important: do NOT pipe `sudo openssl ... | sudo tee -a ...`. Two
+#    sudos in one pipeline both grab /dev/tty, and openssl's tcsetattr()
+#    call (to disable echo for password input) fails — you'll see
+#    "Can't read Password" right after the prompt. Wrap everything in a
+#    single `sudo bash -c '...'` so there's only one tty owner, and use
+#    shell-level append (`>>`) instead of `| sudo tee -a`.
+$ sudo bash -c 'openssl pkcs12 -legacy \
     -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
     -nokeys -cacerts -nodes \
-  | sudo tee -a /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem >/dev/null
+  >> /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem'
 # fullchain.pem now contains the wildcard leaf followed by the intermediate(s).
 
 $ sudo chmod 644 /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem

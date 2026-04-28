@@ -200,12 +200,12 @@ WantedBy=multi-user.target
 
 ### B.8 /etc/nginx/sites-available/greenbook.conf
 
-The production nginx vhost is shipped as a standalone file in this directory: **[greenbook.conf](greenbook.conf)**. Copy it to the app VM in **two hops** — `/etc/nginx/sites-available/` is root-owned and `deployer` is intentionally no-sudo (09 §11.1). Use your personal sudo-capable admin account (`greenboo` in the AU's setup; substitute your own):
+The production nginx vhost is shipped as a standalone file in this directory: **[greenbook.conf](greenbook.conf)**. Copy it to the app VM in **two hops** — `/etc/nginx/sites-available/` is root-owned and `deployer` is intentionally no-sudo (09 §11.1). Use your personal sudo-capable admin account (`greenbook` in the AU's setup; substitute your own):
 
 ```bash
 # (a) From your laptop — scp into the admin account's home dir:
 $ scp docs/deployment/appendix/greenbook.conf \
-      greenboo@10.111.11.51:~/greenbook.conf
+      greenbook@10.111.11.51:~/greenbook.conf
 
 # (b) On the app VM as the same admin account:
 $ sudo install -m 644 -o root -g root \
