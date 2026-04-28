@@ -14,6 +14,8 @@
 - [§13.2 Install Nginx on the DMZ VM](#132-install-nginx-on-the-dmz-vm)
 - [§13.3 Open ports 80 and 443 in UFW](#133-open-ports-80-and-443-in-ufw)
 - [§13.4 Install the AU wildcard certificate](#134-install-the-au-wildcard-certificate)
+  - [§13.4.1 Copy the already-extracted cert from the app VM](#1341-copy-the-already-extracted-cert-from-the-app-vm)
+  - [§13.4.2 Import from a fresh PFX](#1342-import-from-a-fresh-pfx)
 - [§13.5 Shared edge configs (TLS + rate-limit zones)](#135-shared-edge-configs-tls--rate-limit-zones)
 - [§13.6 Add greenbook as the first proxied app](#136-add-greenbook-as-the-first-proxied-app)
 - [§13.7 Adding future apps behind the same proxy](#137-adding-future-apps-behind-the-same-proxy)
@@ -104,7 +106,90 @@ $ sudo ufw status verbose
 
 The DMZ VM holds the **only copy** of the AU wildcard cert in production. Once [§13.6](#136-add-greenbook-as-the-first-proxied-app) onward bring up app server-blocks behind it, none of the internal app VMs need their own cert — TLS terminates here and the LAN between DMZ and apps is plain HTTP.
 
-The procedure mirrors [06 §7.7](06-app-vm-nginx-tls.md#77-using-a-pre-purchased-commercial-certificate) but the cert lands under `/etc/ssl/au/` (shared across all proxied apps) rather than `/etc/ssl/greenbook/`:
+**Two paths in**, depending on where the cert lives today:
+
+- **[§13.4.1](#1341-copy-the-already-extracted-cert-from-the-app-vm)** — copy from the app VM. Use this when [06 §7.7.3](06-app-vm-nginx-tls.md#773-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) has already run (the original single-tier setup) — the wildcard `.fullchain.pem` and `.key` are at `/etc/ssl/greenbook/` on the app VM and the PFX itself was shredded per §7.7.3 step 8. Faster (no `openssl pkcs12` extraction; no PFX password) and uses files you've already validated end-to-end on the app VM.
+- **[§13.4.2](#1342-import-from-a-fresh-pfx)** — import a fresh PFX bundle from AU IT. Use this for greenfield bring-up (DMZ is the first place the cert lands) and for annual renewals. Mirrors [06 §7.7.3](06-app-vm-nginx-tls.md#773-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) but lands files under `/etc/ssl/au/`.
+
+After either path, the DMZ VM has the cert at the canonical paths every per-app server block in [§13.5](#135-shared-edge-configs-tls--rate-limit-zones)+ expects:
+
+```
+/etc/ssl/au/wildcard.africanunion.org.fullchain.pem    644 root:root
+/etc/ssl/au/wildcard.africanunion.org.key              640 root:www-data
+```
+
+#### 13.4.1 Copy the already-extracted cert from the app VM
+
+Two-hop the files via your laptop. (Direct VM-to-VM ssh would also work if your network allows it; via-laptop is the assumption-free version.)
+
+```bash
+# (a) On your laptop — pull the two files off the app VM. The .key is
+#     mode 640 root:www-data, so your greenbook account can't `cat` it
+#     directly; piping `sudo cat` over ssh streams it through the
+#     existing SSH session without ever writing to disk on the app VM.
+$ ssh greenbook@10.111.11.51 \
+    'sudo cat /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem' \
+  > /tmp/wildcard.fullchain.pem
+$ ssh greenbook@10.111.11.51 \
+    'sudo cat /etc/ssl/greenbook/wildcard.africanunion.org.key' \
+  > /tmp/wildcard.key
+$ chmod 600 /tmp/wildcard.fullchain.pem /tmp/wildcard.key
+#   Lock down the laptop staging. .fullchain.pem isn't secret (nginx
+#   sends it to every client) but the .key is — same files, same
+#   sensitivity tier as the original PFX.
+
+# (b) On your laptop — push them to the DMZ VM:
+$ scp /tmp/wildcard.fullchain.pem /tmp/wildcard.key \
+      <admin>@172.16.177.50:~/
+
+# (c) On the DMZ VM as your admin account — install at /etc/ssl/au/
+#     with the right ownership and modes for nginx (www-data) to read
+#     the key.
+$ ssh <admin>@172.16.177.50
+
+# [auishqosrarp01]
+$ sudo install -d -m 750 -o root -g www-data /etc/ssl/au
+$ sudo install -m 644 -o root -g root \
+    ~/wildcard.fullchain.pem \
+    /etc/ssl/au/wildcard.africanunion.org.fullchain.pem
+$ sudo install -m 640 -o root -g www-data \
+    ~/wildcard.key \
+    /etc/ssl/au/wildcard.africanunion.org.key
+
+# (d) Shred staging copies on the DMZ home directory and back on the
+#     laptop. Same sensitivity reasoning as 06 §7.7.3 step 8.
+$ shred -u ~/wildcard.fullchain.pem ~/wildcard.key
+$ exit                                                # back to laptop
+$ shred -u /tmp/wildcard.fullchain.pem /tmp/wildcard.key
+
+# (e) Spot-check on the DMZ VM. Re-running the full chain / key-match /
+#     SAN verifications from 06 §7.7.3 steps 5-7 here is optional —
+#     they passed when the files were first generated and bytes don't
+#     drift over scp. The lightweight smoke check below proves the
+#     files are at the right paths with the right contents:
+$ ssh <admin>@172.16.177.50
+
+# [auishqosrarp01]
+$ ls -l /etc/ssl/au/
+# Expected:
+#   -rw-r----- root www-data  wildcard.africanunion.org.key            (640)
+#   -rw-r--r-- root root      wildcard.africanunion.org.fullchain.pem  (644)
+
+$ openssl x509 -in /etc/ssl/au/wildcard.africanunion.org.fullchain.pem \
+    -noout -ext subjectAltName -dates
+# Expected: DNS:*.africanunion.org (and possibly DNS:africanunion.org),
+# notAfter date matching what was on the app VM.
+```
+
+> **ℹ Two copies during cutover, one copy after — don't skip §13.8(c)**
+>
+> While both VMs hold the cert, an issue at the DMZ falls back to a working app-VM TLS cert via DNS rollback. That's the right safety net during the cutover window. After [§13.8(c)](#138-modify-the-app-vm-for-the-two-tier-topology) deletes `/etc/ssl/greenbook/` on the app VM, you're back to a single copy on the DMZ — the steady state. Long-lived duplicate keys multiply the rotation surface area; do the cleanup once the DMZ is verified green.
+
+Continue with [§13.5](#135-shared-edge-configs-tls--rate-limit-zones).
+
+#### 13.4.2 Import from a fresh PFX
+
+Use this when the DMZ VM is the first place the cert lands (greenfield, or annual renewal). The procedure mirrors [06 §7.7.3](06-app-vm-nginx-tls.md#773-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) but the destination directory is `/etc/ssl/au/` rather than `/etc/ssl/greenbook/`.
 
 ```bash
 # (1a) On your laptop — scp the AU-supplied wildcard PFX to your sudo
