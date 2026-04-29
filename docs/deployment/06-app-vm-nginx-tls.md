@@ -181,9 +181,12 @@ server {
     listen      [::]:80;
     server_name greenbook.africanunion.org;
 
-    # Belt-and-braces over UFW (§6.2). Either layer alone would block
-    # non-DMZ traffic; both layers means a misconfiguration of one
-    # doesn't expose the App VM.
+    # Belt-and-braces over UFW (§6.2). Both layers means a
+    # misconfiguration of one doesn't expose the App VM. Loopback is
+    # allowed so the §8.3 monitoring script and the §13.4 verification
+    # tests can hit nginx from this same host.
+    allow 127.0.0.1;
+    allow ::1;
     allow 172.16.177.50;
     deny  all;
 
@@ -313,9 +316,10 @@ $ sudo $EDITOR /etc/nginx/sites-available/<app>.conf
 # to the new app's actual auth route paths. Keep the catch-all
 # `location /` block unchanged — every app needs it.
 #
-# Don't touch: `set_real_ip_from 172.16.177.50;`, `allow 172.16.177.50;`,
-# `deny all;` — these are infrastructure, not per-app concerns. Same
-# DMZ source for every app; same trust pin for every app.
+# Don't touch: `set_real_ip_from 172.16.177.50;`, the `allow` block
+# (127.0.0.1, ::1, 172.16.177.50), `deny all;` — these are
+# infrastructure, not per-app concerns. Same DMZ source for every app;
+# same loopback carve-out for every app's monitoring scripts.
 
 # (3) Symlink, test, reload:
 $ sudo ln -sf /etc/nginx/sites-available/<app>.conf \

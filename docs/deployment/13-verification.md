@@ -206,9 +206,12 @@ $ sudo ss -tlnp | grep nginx
 $ curl -sI --resolve greenbook.africanunion.org:80:127.0.0.1 \
     http://greenbook.africanunion.org/
 # Expected: HTTP/1.1 200 OK with Express headers (x-correlation-id,
-# x-powered-by: Express, ratelimit-*).
-# 403 Forbidden = `allow 172.16.177.50; deny all;` rejecting loopback —
-#                 expected if you didn't carve out `allow 127.0.0.1;`
+# x-powered-by: Express, ratelimit-*). The canonical greenbook.conf
+# allows 127.0.0.1 + ::1 + 172.16.177.50, so loopback is permitted.
+# 403 Forbidden = your greenbook.conf predates the loopback carve-out;
+#                 add `allow 127.0.0.1; allow ::1;` above
+#                 `allow 172.16.177.50;` (or re-fetch the canonical file
+#                 from appendix/app-vm/greenbook.conf), then reload nginx
 # 502 Bad Gateway = nginx accepted but couldn't reach the container
 #                   (port 3000 dead, healthcheck red)
 # 200 from /healthz returning HTML/empty = healthz route file missing
@@ -217,14 +220,14 @@ $ curl -sI --resolve greenbook.africanunion.org:80:127.0.0.1 \
 
 **Common failures and remedies:**
 
-| Symptom                                 | Cause                                                | Fix                                                                                                                           |
-| --------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Container `(unhealthy)`                 | healthcheck endpoint failing                         | `sudo -u deployer docker logs greenbook --tail 50`; common: DATABASE_URL wrong, Prisma migrations not applied, port not bound |
-| `docker ps` empty                       | Container never started                              | `sudo -u deployer docker compose -f /opt/greenbook/docker-compose.yml up -d`; check journalctl for systemd unit               |
-| `curl 127.0.0.1:3000/healthz` "refused" | Container not bound to 3000 or healthz route missing | Verify `app/routes/healthz.tsx` exists in the deployed image; check container's `ports` mapping                               |
-| `nginx -t` "host not found in upstream" | Upstream block references a name nginx can't resolve | Should be `127.0.0.1:3000` not a hostname; check `/etc/nginx/sites-enabled/greenbook.conf`                                    |
-| 502 from nginx                          | Container dead or not bound                          | Layer 3 step (2) + (3); usually a healthcheck issue                                                                           |
-| 403 from nginx on loopback              | `allow / deny` blocks 127.0.0.1                      | Either expected (test from DMZ instead) or add `allow 127.0.0.1;` above `allow 172.16.177.50;` in `greenbook.conf`            |
+| Symptom                                 | Cause                                                                                        | Fix                                                                                                                                                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container `(unhealthy)`                 | healthcheck endpoint failing                                                                 | `sudo -u deployer docker logs greenbook --tail 50`; common: DATABASE_URL wrong, Prisma migrations not applied, port not bound                                                                                                             |
+| `docker ps` empty                       | Container never started                                                                      | `sudo -u deployer docker compose -f /opt/greenbook/docker-compose.yml up -d`; check journalctl for systemd unit                                                                                                                           |
+| `curl 127.0.0.1:3000/healthz` "refused" | Container not bound to 3000 or healthz route missing                                         | Verify `app/routes/healthz.tsx` exists in the deployed image; check container's `ports` mapping                                                                                                                                           |
+| `nginx -t` "host not found in upstream" | Upstream block references a name nginx can't resolve                                         | Should be `127.0.0.1:3000` not a hostname; check `/etc/nginx/sites-enabled/greenbook.conf`                                                                                                                                                |
+| 502 from nginx                          | Container dead or not bound                                                                  | Layer 3 step (2) + (3); usually a healthcheck issue                                                                                                                                                                                       |
+| 403 from nginx on loopback              | `greenbook.conf` predates the loopback carve-out — only `172.16.177.50` is in the allow list | Re-fetch the canonical [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf) (it allows 127.0.0.1 + ::1 + 172.16.177.50) OR add `allow 127.0.0.1; allow ::1;` above `allow 172.16.177.50;` and `sudo systemctl reload nginx` |
 
 ### 13.5 Layer 4 — DMZ VM ↔ App VM connectivity
 
