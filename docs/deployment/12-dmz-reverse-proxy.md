@@ -276,8 +276,8 @@ $ sudo rm -f /etc/nginx/sites-enabled/default
 $ sudo nginx -t
 # Expected: "syntax is ok" / "test is successful". The TLS cert paths
 # point at /etc/ssl/au/wildcard.africanunion.org.* which §12.4 already
-# created — no snake-oil bootstrap needed (unlike 06 §6.3, where the
-# placeholder is only relevant for path B — cert not yet on disk).
+# created. If nginx -t complains about the cert files, §12.4 didn't
+# land them at the expected paths — re-check `ls -l /etc/ssl/au/`.
 
 $ sudo systemctl reload nginx
 ```
@@ -322,7 +322,7 @@ $ sudo nginx -t
 $ sudo systemctl reload nginx
 ```
 
-The new app's **internal-side configuration** (its own VM's nginx pinned to accept only DMZ traffic, its own UFW rule, its own `trust proxy` hop count) follows the same pattern as [§12.8](#128-modify-the-app-vm-for-the-two-tier-topology) and is **independent of greenbook's setup** — onboarding a new app doesn't disturb anything already running.
+The new app's **internal-side configuration** (its own VM's nginx pinned to accept only DMZ traffic, its own UFW rule, its own `trust proxy` hop count) follows [chapter 06](06-app-vm-nginx-tls.md) — and specifically [§6.5](06-app-vm-nginx-tls.md#65-adding-a-second-app-on-the-app-vm) for onboarding a second app on the same App VM. The DMZ block (this section) and the App VM block are **independent** — onboarding doesn't disturb anything already running. Order: App VM block first, then DMZ block.
 
 > **ℹ Add the new hostname to public DNS too**
 >
@@ -330,7 +330,7 @@ The new app's **internal-side configuration** (its own VM's nginx pinned to acce
 
 ### 12.8 Modify the app VM for the two-tier topology
 
-The diff to apply on the App VM (drop TLS, source-pin UFW, bump TRUSTED_PROXIES, remove cert) lives in [06 §6.6 Migrating a legacy single-tier App VM](06-app-vm-nginx-tls.md#66-migrating-a-legacy-single-tier-app-vm). Run that section after [§12.7](#127-adding-future-apps-behind-the-same-proxy) is complete and the DMZ is verified serving end-to-end.
+The diff to apply on the App VM (drop TLS, source-pin UFW, bump TRUSTED_PROXIES, remove cert) lives in [06 §6.6 Migrating a legacy single-tier App VM](06-app-vm-nginx-tls.md#66-migrating-a-legacy-single-tier-app-vm). Run that section after [§12.6](#126-add-greenbook-as-the-first-proxied-app) is complete and the DMZ is verified serving end-to-end via [§12.9](#129-test-the-tls-deployment). The App VM still has the old single-tier cert + UFW rules until you run §6.6, which gives you a working fallback during the cutover window.
 
 For greenfield deployments — App VM brought up against the current chapter 06, never single-tier — there's no migration to run. The App VM is already in the two-tier inner shape from bring-up.
 
