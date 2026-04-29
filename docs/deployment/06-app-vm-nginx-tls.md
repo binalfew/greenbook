@@ -95,7 +95,7 @@ Three layers of config to install (under [`appendix/app-vm/`](appendix/app-vm/))
 | [`appendix/app-vm/00-app-vm-shared.conf`](appendix/app-vm/00-app-vm-shared.conf)             | `/etc/nginx/conf.d/00-app-vm-shared.conf`         | WebSocket upgrade `map`, shared rate-limit zones (`app_general`, `app_auth`) |
 | [`appendix/app-vm/app-vm-proxy-headers.conf`](appendix/app-vm/app-vm-proxy-headers.conf)     | `/etc/nginx/snippets/app-vm-proxy-headers.conf`   | Shared `proxy_set_header` block + timeouts + buffering policy                |
 | [`appendix/app-vm/greenbook-cache-policy.conf`](appendix/app-vm/greenbook-cache-policy.conf) | `/etc/nginx/snippets/greenbook-cache-policy.conf` | Greenbook PWA-specific routing (`/sw.js`, `/assets/*`, `/manifest.json`)     |
-| [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — one of N (greenbook today; future apps in §6.6)       |
+| [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)                           | `/etc/nginx/sites-available/greenbook.conf`       | Per-app server block — one of N (greenbook today; future apps in §6.5)       |
 
 Rationale: shared concerns (rate-limit zones, proxy headers, WebSocket map) live in one place so a second app onboarding doesn't have to copy/paste them. Per-app concerns (cache policy for `/assets/*`, framework-specific URL patterns, the upstream port) stay in each app's own files.
 
