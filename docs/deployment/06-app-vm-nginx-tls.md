@@ -269,7 +269,7 @@ $ curl -I --resolve greenbook.africanunion.org:80:10.111.11.51 \
 # exercise the real-IP path.
 ```
 
-End-to-end testing (real client over HTTPS via the public hostname) belongs to chapter 12 once the DMZ tier is up; the App VM in isolation can only verify that nginx + the docker container are wired correctly.
+End-to-end testing (real client over HTTPS via the public hostname) belongs to chapter 12 once the DMZ tier is up; the App VM in isolation can only verify that nginx + the docker container are wired correctly. For the full verification ladder including this layer in context, see [13 §13.4](13-verification.md#134-layer-3-app-vm-docker-container-nginx).
 
 ### 6.5 Adding a second app on the App VM
 

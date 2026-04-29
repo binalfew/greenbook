@@ -4,7 +4,7 @@
 >
 > Edge nginx in the AU DMZ that terminates TLS and reverse-proxies HTTP traffic to internal app VMs. **Shared infrastructure** — once the AU wildcard cert and the shared TLS / rate-limit configs are in place, adding a new app behind the proxy is a three-command operation (drop in a new server-block file, symlink, reload). Greenbook is the worked example throughout this chapter; the same pattern applies to every future AU app that comes online behind this proxy.
 >
-> **Prev**: [11 — Future Graylog deployment](11-future-graylog.md) · **Index**: [README](README.md)
+> **Prev**: [11 — Future Graylog deployment](11-future-graylog.md) · **Next**: [13 — Verification](13-verification.md) · **Index**: [README](README.md)
 
 ---
 
@@ -335,6 +335,8 @@ The diff to apply on the App VM (drop TLS, source-pin UFW, bump TRUSTED_PROXIES,
 For greenfield deployments — App VM brought up against the current chapter 06, never single-tier — there's no migration to run. The App VM is already in the two-tier inner shape from bring-up.
 
 ### 12.9 Test the TLS deployment
+
+For the full layered verification (DB → App → DMZ → Internet), see [chapter 13 — Verification](13-verification.md). The quick-look smoke test below covers the DMZ-tier slice — useful right after §12.6 / §12.8 to confirm the edge proxy is doing its job before exercising the whole stack.
 
 Until AU IT cuts DNS over from Azure to the DMZ VM's public IP, the public hostname still resolves elsewhere. Test the DMZ proxy directly via its public IP with a `Host:` header override:
 
