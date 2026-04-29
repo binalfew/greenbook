@@ -1,6 +1,6 @@
 # 12 — DMZ shared reverse proxy
 
-> **Phase**: bring-up · **Run on**: DMZ VM (`auishqosrarp01`, 172.16.177.50, public IP TBD) · **Time**: ~45 min
+> **Phase**: bring-up · **Run on**: DMZ VM (`auishqosrarp01`, 172.16.177.50, public IP 196.188.248.25) · **Time**: ~45 min
 >
 > Edge nginx in the AU DMZ that terminates TLS and reverse-proxies HTTP traffic to internal app VMs. **Shared infrastructure** — once the AU wildcard cert and the shared TLS / rate-limit configs are in place, adding a new app behind the proxy is a three-command operation (drop in a new server-block file, symlink, reload). Greenbook is the worked example throughout this chapter; the same pattern applies to every future AU app that comes online behind this proxy.
 >
@@ -34,7 +34,7 @@ The internal app VMs see only HTTP traffic from a single trusted source (this DM
 ```
 Internet
    │
-   ▼  (DMZ public IP — TBD)
+   ▼  (DMZ public IP — 196.188.248.25)
 [ DMZ VM auishqosrarp01 — 172.16.177.50 ]
    nginx 1.24, AU wildcard cert at /etc/ssl/au/
    TLS terminator + edge rate-limit + security headers
@@ -340,8 +340,8 @@ Until AU IT cuts DNS over from Azure to the DMZ VM's public IP, the public hostn
 
 ```bash
 # From your laptop OR any host that can reach the DMZ VM's public IP.
-# <DMZ_PUBLIC_IP> = the public IP AU IT assigns to auishqosrarp01.
-$ curl -k -sI -H "Host: greenbook.africanunion.org" https://<DMZ_PUBLIC_IP>/
+# 196.188.248.25 = the public IP AU IT assigns to auishqosrarp01.
+$ curl -k -sI -H "Host: greenbook.africanunion.org" https://196.188.248.25/
 # Expected:
 #   HTTP/2 200 (or a 30x redirect from the app)
 #   strict-transport-security: max-age=31536000; includeSubDomains
@@ -352,7 +352,7 @@ $ curl -k -sI -H "Host: greenbook.africanunion.org" https://<DMZ_PUBLIC_IP>/
 #  name") but the cert itself is the real AU wildcard.
 ```
 
-When DNS is cut over (Azure CNAME → A record pointing at `<DMZ_PUBLIC_IP>`), repeat without `-k` and `-H`:
+When DNS is cut over (Azure CNAME → A record pointing at `196.188.248.25`), repeat without `-k` and `-H`:
 
 ```bash
 $ curl -sI https://greenbook.africanunion.org/

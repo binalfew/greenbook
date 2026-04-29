@@ -468,7 +468,7 @@ $ curl -I --resolve greenbook.africanunion.org:80:127.0.0.1 \
 # loopback (expected if you didn't add `allow 127.0.0.1;`).
 
 # (j) Verify end-to-end through the DMZ — bypass DNS, hit DMZ public IP:
-$ curl -I --resolve greenbook.africanunion.org:443:<DMZ_PUBLIC_IP> \
+$ curl -I --resolve greenbook.africanunion.org:443:196.188.248.25 \
     https://greenbook.africanunion.org/
 # Expected: HTTP/2 200 with strict-transport-security and the four
 # security headers — now set at the DMZ tier, not here. The hop count in

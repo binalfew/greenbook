@@ -109,7 +109,7 @@ Every command is followed by an explanation of what it does and why. Where a com
 The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse-proxy VM at the public edge, an internal application VM running Docker, and a private database VM. TLS terminates only at the DMZ; everything between DMZ and App VM is plain HTTP across a trusted private LAN. Single-tier (no DMZ — App VM faces public directly) is also supported for simpler deployments — see the callout under the diagram and [chapter 06](06-app-vm-nginx-tls.md) for that shape.
 
 ```
-                                Internet (public IP TBD by AU IT)
+                                Internet (DMZ public IP 196.188.248.25)
                                            │
                                            │  443/tcp (HTTPS)
                                            │  80/tcp  (HTTP → 301 HTTPS)

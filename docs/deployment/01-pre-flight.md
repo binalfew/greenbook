@@ -8,7 +8,7 @@
 >
 > - **DB VM** (`auishqosrgbdbs01`, 10.111.11.50): §1.1–§1.7. Skip §1.8.
 > - **App VM** (`auishqosrgbwbs01`, 10.111.11.51): §1.1–§1.8 (full).
-> - **DMZ VM** (`auishqosrarp01`, 172.16.177.50, public IP TBD): §1.1–§1.7. Skip §1.8.
+> - **DMZ VM** (`auishqosrarp01`, 172.16.177.50, public IP 196.188.248.25): §1.1–§1.7. Skip §1.8.
 >
 > The DMZ VM differs from the others in two places only: §1.6 UFW also accepts public 80/443 once chapter 12 §12.3 runs (see the DMZ-specific note in §1.6 below); §1.7 fail2ban watches SSH from a wider IP range because the DMZ is internet-exposed.
 >
