@@ -56,15 +56,15 @@ The companion change on the app VM side — drop TLS, listen on plain HTTP, pin 
 
 ### 12.1 DMZ VM pre-flight
 
-The DMZ VM gets the same hardened baseline as the other VMs (Ubuntu 24.04, SSH key auth, UFW restrictive defaults, fail2ban, unattended security updates), but **nothing else** — no Docker, no Postgres. Start from [01 — Pre-flight](01-pre-flight.md) §1.1 through §1.7. Skip §1.8 (the `deployer` user is for the app VMs only; the DMZ VM is operated by your sudo-capable admin account).
+The DMZ VM gets the same hardened baseline as the other VMs (Ubuntu 24.04, SSH key auth, UFW restrictive defaults, fail2ban, unattended security updates), but **nothing else** — no Docker, no Postgres. [Chapter 01](01-pre-flight.md) covers the full hardening; the DMZ VM specifically runs §1.1 through §1.7 (skipping §1.8 — the `deployer` user is App VM only).
 
-If the VM was already provisioned with hostname `auishqosrarp01` and internal IP `172.16.177.50`, you mostly just need to confirm the hardening is in place:
+If chapter 01 has already been applied across all three VMs, run the same audit it ends with against the DMZ VM to confirm:
 
 ```bash
 # [auishqosrarp01]
 $ lsb_release -d                                       # Ubuntu 24.04.x LTS
 $ sudo systemctl is-active unattended-upgrades         # active
-$ sudo ufw status verbose                              # restrictive default
+$ sudo ufw status verbose                              # active, default deny incoming
 $ sudo systemctl is-active fail2ban                    # active
 $ sudo sshd -T 2>/dev/null | grep -E "passwordauthentication|permitrootlogin|pubkeyauthentication"
 # Expected:
@@ -72,6 +72,8 @@ $ sudo sshd -T 2>/dev/null | grep -E "passwordauthentication|permitrootlogin|pub
 #   permitrootlogin no
 #   pubkeyauthentication yes
 ```
+
+If any of those come back as `inactive` / wrong, **stop here** and run the missing chapter 01 sections on the DMZ VM (most commonly §1.6 for UFW and §1.7 for fail2ban). The rest of chapter 12 assumes the baseline is in place.
 
 ### 12.2 Install Nginx on the DMZ VM
 

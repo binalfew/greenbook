@@ -1,8 +1,16 @@
-# 01 — Pre-flight: preparing both VMs
+# 01 — Pre-flight: preparing all three VMs
 
-> **Phase**: bring-up · **Run on**: BOTH VMs (`auishqosrgbwbs01`, `auishqosrgbdbs01`) · **Time**: ~30 min
+> **Phase**: bring-up · **Run on**: ALL THREE VMs (`auishqosrarp01` DMZ, `auishqosrgbwbs01` app, `auishqosrgbdbs01` db) · **Time**: ~30 min per VM
 >
-> Hardened-baseline configuration that every step after this assumes is in place: same OS image, fully patched, hostnames + `/etc/hosts`, NTP-synced clocks, SSH key-only auth, UFW restrictive defaults, fail2ban watching SSH, unattended security upgrades, and a non-sudo `deployer` user on the app VM only.
+> Hardened-baseline configuration that every step after this assumes is in place: same OS image, fully patched, hostnames + `/etc/hosts`, NTP-synced clocks, SSH key-only auth, UFW restrictive defaults, fail2ban watching SSH, unattended security upgrades, and a non-sudo `deployer` user on the App VM only.
+>
+> **Per-VM scope**:
+>
+> - **DB VM** (`auishqosrgbdbs01`, 10.111.11.50): §1.1–§1.7. Skip §1.8.
+> - **App VM** (`auishqosrgbwbs01`, 10.111.11.51): §1.1–§1.8 (full).
+> - **DMZ VM** (`auishqosrarp01`, 172.16.177.50, public IP TBD): §1.1–§1.7. Skip §1.8.
+>
+> The DMZ VM differs from the others in two places only: §1.6 UFW also accepts public 80/443 once chapter 12 §12.3 runs (see the DMZ-specific note in §1.6 below); §1.7 fail2ban watches SSH from a wider IP range because the DMZ is internet-exposed.
 >
 > **Next**: [02 — Database VM setup](02-db-vm-setup.md) · **Index**: [README](README.md)
 
@@ -19,14 +27,16 @@
 - [§1.7 Enable fail2ban for SSH](#17-enable-fail2ban-for-ssh)
 - [§1.8 Create a dedicated deploy user on the app VM](#18-create-a-dedicated-deploy-user-on-the-app-vm)
 
-## 1. Pre-flight: preparing both VMs
+## 1. Pre-flight: preparing all three VMs
 
-Run these steps on both VMs before anything else. They establish a consistent baseline: same time zone, same packages, firewall on, SSH hardened, unattended security patches on. Each command below is annotated with what it does.
+Run these steps on all three VMs (DMZ, App, DB) before anything else. They establish a consistent baseline: same time zone, same packages, firewall on, SSH hardened, unattended security patches on. Each command below is annotated with what it does.
+
+The DMZ VM and DB VM run §1.1 through §1.7 only — §1.8 (the `deployer` user) lives on the App VM exclusively.
 
 ### 1.1 Verify the OS and update packages
 
 ```bash
-# On BOTH VMs
+# On EVERY VM (DMZ, App, DB)
 
 $ lsb_release -a
 #   lsb_release     prints Linux Standard Base release info
@@ -68,19 +78,23 @@ $ sudo apt install -y curl ca-certificates gnupg lsb-release \
 ### 1.2 Set the hostname and /etc/hosts
 
 ```bash
-# [auishqosrgbwbs01]
-$ sudo hostnamectl set-hostname auishqosrgbwbs01
+# [auishqosrarp01]  (DMZ VM)
+$ sudo hostnamectl set-hostname auishqosrarp01
 #   hostnamectl     systemd tool for managing the system hostname.
 #   set-hostname    sets both the transient and static hostnames.
 # Effective immediately for new shells; existing prompts may show the old name.
 
-# [auishqosrgbdbs01]
+# [auishqosrgbwbs01]  (App VM)
+$ sudo hostnamectl set-hostname auishqosrgbwbs01
+
+# [auishqosrgbdbs01]  (DB VM)
 $ sudo hostnamectl set-hostname auishqosrgbdbs01
 ```
 
 ```bash
-# On BOTH VMs: edit /etc/hosts so each VM resolves the other by name
+# On EVERY VM (DMZ, App, DB): edit /etc/hosts so each VM resolves the other by name
 $ sudo tee -a /etc/hosts <<'EOF'
+172.16.177.50   auishqosrarp01
 10.111.11.51    auishqosrgbwbs01
 10.111.11.50    auishqosrgbdbs01
 EOF
@@ -170,7 +184,7 @@ $ cat /etc/apt/apt.conf.d/20auto-upgrades
 Disable password authentication and root login. This assumes you have already copied your public key to the target user (via ssh-copy-id from your workstation) and verified you can log in with keys.
 
 ```bash
-# On BOTH VMs, as a sudo user:
+# On EVERY VM (DMZ, App, DB), as a sudo user:
 $ sudo tee /etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
 PermitRootLogin no
 PasswordAuthentication no
@@ -246,6 +260,16 @@ $ sudo ufw status verbose
 >
 > Docker installs iptables rules directly and does not, by default, honour UFW rules for published container ports. On the app VM we work around this by publishing the container port only to 127.0.0.1 (not 0.0.0.0). Because 127.0.0.1 is never reachable from off-host, UFW does not need to protect it. All external traffic to the app arrives via Nginx on ports 80/443, which UFW does control normally.
 
+> **ℹ Per-VM UFW rules added later**
+>
+> §1.6 only opens SSH. Each chapter adds the rules its VM needs:
+>
+> - **DB VM** ([02 §2.7](02-db-vm-setup.md)): allow 5432/tcp from the App VM's IP only.
+> - **App VM** ([06 §6.2](06-app-vm-nginx-tls.md#62-open-port-80-in-ufw-dmz-source-pinned)): allow 80/tcp from the DMZ VM's IP only (172.16.177.50). Never public.
+> - **DMZ VM** ([12 §12.3](12-dmz-reverse-proxy.md#123-open-ports-80-and-443-in-ufw)): allow public 80/tcp + 443/tcp. The DMZ is the only host with public-internet exposure.
+>
+> Don't add those rules now — they assume infrastructure (other VM IPs, nginx) that doesn't exist yet. Each chapter will add them at the right moment.
+
 ### 1.7 Enable fail2ban for SSH
 
 fail2ban watches log files, matches patterns (e.g. "Failed password" lines), and adds short-term iptables bans for offending IPs. The default configuration ships with an SSH jail ready to use.
@@ -262,6 +286,10 @@ $ sudo fail2ban-client status sshd
 #                                currently banned IPs, total bans, failed attempts.
 # Fresh install shows zero bans — expected.
 ```
+
+> **ℹ The DMZ VM gets the most fail2ban traffic**
+>
+> SSH on the DB and App VMs is reachable only from your admin source IP via UFW (§1.6) — fail2ban is belt-and-braces. The DMZ VM is the only host with broader SSH exposure (it has a public IP for 80/443; even though SSH stays restricted via UFW, the host is internet-routable), so its fail2ban logs see real attack traffic. After the DMZ has been up for a week, `sudo fail2ban-client status sshd` on the DMZ will typically show a non-zero "Total banned" count — that's expected and the system working as intended.
 
 ### 1.8 Create a dedicated deploy user on the app VM
 
@@ -417,6 +445,19 @@ We will add deployer to the docker group later, after Docker is installed.
 
 > **✓ Checkpoint**
 >
-> At this point both VMs should: be on Ubuntu 24.04, be fully patched, have correct hostnames and hosts entries, have NTP-synced clocks, have SSH key-only auth, have UFW active with only 22/tcp open, have fail2ban watching SSH, and have unattended-upgrades running. Verify this before moving on — everything that follows assumes it.
+> At this point all three VMs (DMZ, App, DB) should: be on Ubuntu 24.04, be fully patched, have correct hostnames and `/etc/hosts` entries, have NTP-synced clocks, have SSH key-only auth, have UFW active with only 22/tcp open (per-VM rules added later by 02 / 06 / 12), have fail2ban watching SSH, and have unattended-upgrades running. The App VM additionally has a non-sudo `deployer` user from §1.8. Verify this before moving on — everything that follows assumes it.
+>
+> ```bash
+> # Same audit on each VM. Run as your sudo-capable admin account.
+> $ lsb_release -d                                       # Ubuntu 24.04.x LTS
+> $ sudo systemctl is-active unattended-upgrades         # active
+> $ sudo ufw status verbose                              # active, default deny incoming
+> $ sudo systemctl is-active fail2ban                    # active
+> $ sudo sshd -T 2>/dev/null | grep -E "passwordauthentication|permitrootlogin|pubkeyauthentication"
+> # Expected:
+> #   passwordauthentication no
+> #   permitrootlogin no
+> #   pubkeyauthentication yes
+> ```
 
 ---
