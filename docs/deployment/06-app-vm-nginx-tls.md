@@ -452,11 +452,10 @@ $ sudo -u deployer docker compose \
 
 # (h) Remove the wildcard cert from the App VM. The DMZ now holds the
 #     only copy in production — fewer copies of secret material to rotate
-#     when the cert renews next year. Skip this step if you ran §12.4.1
-#     ("copy from the app VM") on the DMZ side and the DMZ is now serving
-#     from a copy of these files; in that case the App VM's copy is
-#     redundant either way, but waiting until DMZ is verified green
-#     buys a safety net.
+#     when the cert renews next year. Don't run this step until you've
+#     verified the Mac-side backup tarball (step g.5) AND the DMZ is
+#     serving end-to-end (12 §12.9). Once those two are green, the App
+#     VM's copy is redundant.
 $ sudo rm -rf /etc/ssl/greenbook
 # Done. The App VM has no cert, no PFX, no key on disk.
 
@@ -478,6 +477,6 @@ $ curl -I --resolve greenbook.africanunion.org:443:<DMZ_PUBLIC_IP> \
 
 > **ℹ Rollback**
 >
-> Rolling back from two-tier to single-tier requires undoing all of (c)–(h): restore the previous `greenbook.conf` from git, re-add public 80/443 to UFW, set `TRUSTED_PROXIES=1`, recreate the container, restore `/etc/ssl/greenbook/` (re-run [12 §12.4.2](12-dmz-reverse-proxy.md#1242-import-from-a-fresh-pfx) against the PFX or restore from a backup), point public DNS back at the App VM. This is genuinely involved — much easier to fix forward by debugging the DMZ tier than to roll back. Ensure the DMZ is verified green ([chapter 12 §12.9](12-dmz-reverse-proxy.md#129-test-the-tls-deployment)) before running this migration so rollback never becomes necessary.
+> Rolling back from two-tier to single-tier requires undoing all of (c)–(h): restore the previous `greenbook.conf` from git, re-add public 80/443 to UFW, set `TRUSTED_PROXIES=1`, recreate the container, restore `/etc/ssl/greenbook/` (re-run [12 §12.4](12-dmz-reverse-proxy.md#124-install-the-au-wildcard-certificate) against the PFX or restore from the Mac-side backup tarball), point public DNS back at the App VM. This is genuinely involved — much easier to fix forward by debugging the DMZ tier than to roll back. Ensure the DMZ is verified green ([chapter 12 §12.9](12-dmz-reverse-proxy.md#129-test-the-tls-deployment)) before running this migration so rollback never becomes necessary.
 
 ---

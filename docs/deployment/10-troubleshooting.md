@@ -117,7 +117,7 @@ $ echo | openssl s_client -connect greenbook.africanunion.org:443 \
 # "we replaced the file but never reloaded nginx".
 ```
 
-Renewal procedure: re-run [12 §12.4.2 (Import from a fresh PFX)](12-dmz-reverse-proxy.md#1242-import-from-a-fresh-pfx) against the new PFX on the DMZ VM, then `sudo nginx -t && sudo systemctl reload nginx`. Wire alerting via [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) so an unrenewed cert pages well before it expires.
+Renewal procedure: re-run [12 §12.4](12-dmz-reverse-proxy.md#124-install-the-au-wildcard-certificate) against the new PFX on the DMZ VM, then `sudo nginx -t && sudo systemctl reload nginx`. Wire alerting via [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) so an unrenewed cert pages well before it expires.
 
 ### 10.5 Disk full
 
