@@ -766,11 +766,43 @@ $ rm ~/00-app-vm-shared.conf ~/app-vm-proxy-headers.conf \
 
 # (d) Test + reload:
 $ sudo nginx -t
-# Expected: "syntax is ok" / "test is successful". If you see
-# "duplicate zone" or "duplicate map", an old greenbook.conf still has
-# inline definitions — re-run step (c) for greenbook.conf only and verify
-# /etc/nginx/sites-available/greenbook.conf no longer contains
-# `limit_req_zone` or `map $http_upgrade`.
+# Expected: "syntax is ok" / "test is successful".
+#
+# Failure mode 1 — "duplicate zone" / "duplicate map":
+#   An old greenbook.conf still has inline definitions. Re-run step (c)
+#   for greenbook.conf only and verify
+#   /etc/nginx/sites-available/greenbook.conf no longer contains
+#   `limit_req_zone` or `map $http_upgrade`.
+#
+# Failure mode 2 — "<directive> directive is duplicate" (e.g.
+# proxy_buffering, proxy_set_header, expires):
+#   Your /etc/nginx/snippets/ files predate commit 83a91a6 (which moved
+#   proxy_buffering out of the shared snippet). The fix shipped in the
+#   repo; re-fetch and reinstall the three affected files:
+#
+#     # [your laptop]
+#     git pull
+#     scp docs/deployment/appendix/app-vm/app-vm-proxy-headers.conf \
+#         docs/deployment/appendix/app-vm/greenbook-cache-policy.conf \
+#         docs/deployment/appendix/app-vm/greenbook.conf \
+#         greenbook@10.111.11.51:~/
+#
+#     # [auishqosrgbwbs01]
+#     sudo install -m 644 -o root -g root \
+#       ~/app-vm-proxy-headers.conf /etc/nginx/snippets/app-vm-proxy-headers.conf
+#     sudo install -m 644 -o root -g root \
+#       ~/greenbook-cache-policy.conf /etc/nginx/snippets/greenbook-cache-policy.conf
+#     sudo install -m 644 -o root -g root \
+#       ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf
+#     rm ~/app-vm-proxy-headers.conf ~/greenbook-cache-policy.conf ~/greenbook.conf
+#     sudo nginx -t
+#
+# Why: nginx forbids re-defining a directive in the same location scope
+# after a snippet `include` already set it (no override semantics within
+# one block). Directives that have different correct values per location
+# (proxy_buffering off for SSR/SSE, on by default for static assets)
+# must NOT live in the shared snippet — they belong in the per-app
+# server block per-location. See app-vm-proxy-headers.conf's NOTE.
 
 $ sudo systemctl reload nginx
 # Graceful — SIGHUP. Existing connections continue on old workers; new
