@@ -83,7 +83,7 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   #   - DB  VM:  22/tcp, 5432/tcp from 10.111.11.51 only (unchanged)
   ```
 
-  Set in: [01-pre-flight.md §1.6](01-pre-flight.md), [02-db-vm-setup.md §2.7](02-db-vm-setup.md), [06-app-vm-nginx-tls.md §6.2](06-app-vm-nginx-tls.md) (single-tier), [12-dmz-reverse-proxy.md §12.3 + §12.8](12-dmz-reverse-proxy.md) (two-tier)
+  Set in: [01-pre-flight.md §1.6](01-pre-flight.md), [02-db-vm-setup.md §2.7](02-db-vm-setup.md), [06-app-vm-nginx-tls.md §6.2](06-app-vm-nginx-tls.md#62-open-port-80-in-ufw-dmz-source-pinned) (App VM: source-pinned :80 from DMZ only), [12-dmz-reverse-proxy.md §12.3](12-dmz-reverse-proxy.md#123-open-ports-80-and-443-in-ufw) (DMZ VM: public 80/443)
 
 - **SSH: password auth OFF, root login OFF, key-only.**
   Why: SSH brute-force is the most common automated compromise vector for internet-reachable hosts.
@@ -424,13 +424,14 @@ If any "Verify with" command shows a different result than the **Pass** line, tr
   Why: a stalled or forgotten renewal silently breaks every login at `notAfter`. The AU wildcard does not auto-renew — confirm a calendar reminder exists ≥30 days before `notAfter`, AND that the monitoring probe in [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) is wired into alerting (it pages when ≤14 days remain). Spot-check the on-disk cert directly:
 
   ```bash
-  $ sudo openssl x509 -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
+  # [auishqosrarp01 — DMZ VM]
+  $ sudo openssl x509 -in /etc/ssl/au/wildcard.africanunion.org.fullchain.pem \
       -noout -dates
   # Pass: notAfter is at least 30 days out AND a calendar reminder is set
   #       for ~30 days before that date.
   ```
 
-  Set in: [06-app-vm-nginx-tls.md §6.4](06-app-vm-nginx-tls.md#64-install-the-au-wildcard-tls-certificate) (single-tier, app VM) · [12-dmz-reverse-proxy.md §12.4 + §12.10](12-dmz-reverse-proxy.md) (two-tier, cert lives on the DMZ VM)
+  Set in: [12-dmz-reverse-proxy.md §12.4](12-dmz-reverse-proxy.md#124-install-the-au-wildcard-certificate) (cert install on DMZ VM) · [§12.10](12-dmz-reverse-proxy.md#1210-renewal) (renewal procedure). The cert lives only on the DMZ VM; the App VM never holds it.
 
 - **Edge rate limits configured for `/login`, `/forgot-password`, `/api/*`.**
   Why: greenbook has its own rate limiter at the Express layer, but the Nginx zones run BEFORE Express and protect the Node process from floods Express can't even see.

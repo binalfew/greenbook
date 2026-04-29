@@ -104,12 +104,10 @@ $ sudo grep -v '^#' /etc/postgresql/16/main/pg_hba.conf | grep -v '^$'
 The AU wildcard does not auto-renew — renewal is a manual operation triggered by AU IT delivering a fresh PFX (annually, before `notAfter`). If the on-disk cert is approaching expiry without a renewal in flight:
 
 ```bash
-# [auishqosrgbwbs01 — single-tier; auishqosrarp01 — two-tier]
+# [auishqosrarp01 — DMZ VM]
 $ sudo openssl x509 \
-    -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
+    -in /etc/ssl/au/wildcard.africanunion.org.fullchain.pem \
     -noout -dates
-# Single-tier path. For two-tier, the cert lives at
-# /etc/ssl/au/wildcard.africanunion.org.fullchain.pem on the DMZ VM.
 # Look at notAfter — anything inside ~14 days needs immediate action.
 
 $ echo | openssl s_client -connect greenbook.africanunion.org:443 \
@@ -119,7 +117,7 @@ $ echo | openssl s_client -connect greenbook.africanunion.org:443 \
 # "we replaced the file but never reloaded nginx".
 ```
 
-Renewal procedure: re-run [06 §6.4.3](06-app-vm-nginx-tls.md#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) (single-tier) or [12 §12.4.2](12-dmz-reverse-proxy.md#1242-import-from-a-fresh-pfx) (two-tier) against the new PFX, then `sudo nginx -t && sudo systemctl reload nginx`. Wire alerting via [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) so an unrenewed cert pages well before it expires.
+Renewal procedure: re-run [12 §12.4.2 (Import from a fresh PFX)](12-dmz-reverse-proxy.md#1242-import-from-a-fresh-pfx) against the new PFX on the DMZ VM, then `sudo nginx -t && sudo systemctl reload nginx`. Wire alerting via [08 §8.3](08-day-2-operations.md#83-simple-monitoring-script) so an unrenewed cert pages well before it expires.
 
 ### 10.5 Disk full
 

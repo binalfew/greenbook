@@ -1,8 +1,10 @@
-# 06 — Nginx and TLS
+# 06 — App VM nginx (inner tier)
 
-> **Phase**: bring-up · **Run on**: App VM (`auishqosrgbwbs01`) · **Time**: ~45 min
+> **Phase**: bring-up · **Run on**: App VM (`auishqosrgbwbs01`) · **Time**: ~30 min
 >
-> Host-installed Nginx terminating TLS on 443 and reverse-proxying to the container at `127.0.0.1:3000`. Tuned for React Router 7's streaming SSR + SSE (`proxy_buffering off`, long `proxy_read_timeout`), greenbook's PWA service worker (short cache on `/sw.js`, immutable on `/assets/*`), and correlation-ID forwarding. TLS uses the AU-procured wildcard certificate for `*.africanunion.org`, delivered as a password-protected PFX bundle.
+> Host-installed nginx as the App VM's inner-tier reverse proxy. Listens on plain HTTP from the DMZ VM only (172.16.177.50), routes by `Host:` header to the right docker container on `127.0.0.1`, applies inner-tier rate limits, and serves greenbook's PWA cache headers. Tuned for React Router 7's streaming SSR + SSE (`proxy_buffering off`, long `proxy_read_timeout`) and correlation-ID forwarding.
+>
+> **TLS lives on the DMZ VM, not here** — the App VM never holds the wildcard cert and never accepts public traffic. See [12 — DMZ shared reverse proxy](12-dmz-reverse-proxy.md) for cert installation and the public-facing edge.
 >
 > **Prev**: [05 — Application container](05-app-vm-container.md) · **Next**: [07 — Deploy workflow](07-deploy-workflow.md) · **Index**: [README](README.md)
 
@@ -11,29 +13,29 @@
 ## Contents
 
 - [§6.1 Install Nginx](#61-install-nginx)
-- [§6.2 Open ports 80 and 443 in UFW](#62-open-ports-80-and-443-in-ufw)
+- [§6.2 Open port 80 in UFW (DMZ source-pinned)](#62-open-port-80-in-ufw-dmz-source-pinned)
 - [§6.3 The Nginx server config](#63-the-nginx-server-config)
   - [§6.3.1 Install the shared App VM nginx configs](#631-install-the-shared-app-vm-nginx-configs)
   - [§6.3.2 Add greenbook as the first proxied app](#632-add-greenbook-as-the-first-proxied-app)
-- [§6.4 Install the AU wildcard TLS certificate](#64-install-the-au-wildcard-tls-certificate)
-  - [§6.4.1 Generate the CSR on the VM](#641-generate-the-csr-on-the-vm)
-  - [§6.4.2 Install the issued certificate (PEM bundle delivery)](#642-install-the-issued-certificate-pem-bundle-delivery)
-  - [§6.4.3 Install the wildcard certificate from a .pfx / .p12 bundle (AU's actual path)](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path)
-  - [§6.4.4 Point Nginx at the new files](#644-point-nginx-at-the-new-files)
-  - [§6.4.5 Renewal](#645-renewal)
-- [§6.5 Test the TLS deployment](#65-test-the-tls-deployment)
-- [§6.6 Adding a second app on the App VM](#66-adding-a-second-app-on-the-app-vm)
-- [§6.7 Migrating an existing App VM to the multi-tenant shape](#67-migrating-an-existing-app-vm-to-the-multi-tenant-shape)
+- [§6.4 Test the App VM nginx](#64-test-the-app-vm-nginx)
+- [§6.5 Adding a second app on the App VM](#65-adding-a-second-app-on-the-app-vm)
+- [§6.6 Migrating a legacy single-tier App VM](#66-migrating-a-legacy-single-tier-app-vm)
 
-## 6. Nginx and TLS
+## 6. App VM nginx (inner tier)
 
-Nginx sits on the host (not in a container) and terminates TLS on port 443. It forwards decrypted HTTP to the Node container at 127.0.0.1:3000 and adds security headers. Putting Nginx on the host (not in a container) keeps TLS certificates on the host filesystem, makes Certbot integration straightforward, and lets Nginx survive app container restarts.
+Nginx sits on the host (not in a container) on the App VM. Its job is narrow: accept plain HTTP from the DMZ reverse proxy ([chapter 12](12-dmz-reverse-proxy.md)), route by `Host:` header to the right docker container on `127.0.0.1`, and apply inner-tier rate limits + greenbook's PWA cache headers. That's the entire role.
 
-> **ℹ Single-tier (this chapter) vs two-tier (chapter 12) topology**
+Three things this nginx **does not** do, by design:
+
+- **Terminate TLS.** TLS lives on the DMZ VM. The App VM never holds the wildcard cert; the LAN between DMZ and App VM is plain HTTP, with the LAN itself as the trust boundary.
+- **Set the four security headers** (`Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`). Those are set once at the edge — see [12 §12.5](12-dmz-reverse-proxy.md#125-shared-edge-configs-tls--rate-limit-zones).
+- **Accept public traffic.** UFW + nginx `allow / deny` both pin :80 to the DMZ VM's source IP (172.16.177.50). The App VM has no public IP exposure.
+
+Putting nginx on the host (not in a container) keeps it independent of app container restarts and lets multiple apps share the same App VM via per-app `sites-available/<app>.conf` files (see [§6.5](#65-adding-a-second-app-on-the-app-vm)).
+
+> **ℹ Already running a single-tier (TLS-on-App-VM) deployment?**
 >
-> This chapter documents the **single-tier** shape — nginx on the app VM faces the public internet directly, terminates TLS, and proxies to the container. That's the simplest deployment and what you'll have at the end of the bring-up.
->
-> If you're running greenbook behind a separate **DMZ reverse proxy** ([12 — DMZ shared reverse proxy](12-dmz-reverse-proxy.md)), the app VM nginx role narrows: TLS terminates at the DMZ edge, the app VM listens on plain HTTP only, and UFW pins :80 to the DMZ VM's source IP. The configs in this chapter are the right starting point either way; chapter 12 §12.8 lists the four diffs to apply on the app VM after the DMZ tier is in place (drop the HTTPS server block, add `set_real_ip_from`, swap UFW rules, drop the security headers — they move to the edge).
+> If your App VM was set up against an earlier version of this guide that put TLS termination + the wildcard cert on the App VM directly, follow [§6.6](#66-migrating-a-legacy-single-tier-app-vm) to convert to the two-tier inner shape. The migration is a single atomic swap with no downtime; it drops the HTTPS server block, swaps UFW rules, and moves the security headers to the DMZ.
 
 ### 6.1 Install Nginx
 
@@ -60,23 +62,31 @@ $ curl -I http://127.0.0.1/
 # Nginx is running and listening on port 80.
 ```
 
-### 6.2 Open ports 80 and 443 in UFW
+### 6.2 Open port 80 in UFW (DMZ source-pinned)
+
+The App VM accepts HTTP from one source only — the DMZ VM at `172.16.177.50`. No public 80/443 rules; no general-purpose `Nginx Full` profile.
 
 ```bash
 # [auishqosrgbwbs01]
-$ sudo ufw allow 'Nginx Full'
-#   'Nginx Full'      a built-in UFW application profile (created by the
-#                     nginx package) that opens 80/tcp AND 443/tcp in one
-#                     rule. Equivalent to two explicit "ufw allow 80/tcp"
-#                     and "ufw allow 443/tcp" lines.
+$ sudo ufw allow from 172.16.177.50 to any port 80 proto tcp
+#   from IP   only allow inbound packets from this source address.
+#   to any port 80    destination port 80 on any local interface.
+#   proto tcp         TCP only. The DMZ proxy uses HTTP/1.1; UDP isn't relevant.
 
 $ sudo ufw status verbose
-# Expected: entries for 80/tcp AND 443/tcp (IPv4 and IPv6).
+# Expected:
+#   80/tcp ALLOW IN from 172.16.177.50
+#   (no public 80 rule, no 443 rule)
+# Plus the SSH ALLOW from 01 §1.6 — verify that's still there.
 ```
+
+> **ℹ Defence in depth**
+>
+> The per-app server block in §6.3 also has `allow 172.16.177.50; deny all;` at the nginx layer. UFW + nginx both enforce the same source pin; either one alone would be sufficient, but having both means a misconfiguration of one doesn't expose the App VM. Don't simplify by dropping one.
 
 ### 6.3 The Nginx server config
 
-The App VM's nginx is a **multi-tenant reverse proxy** — it can host more than one docker app, each on its own port and `server_name`. Greenbook is the worked example throughout this chapter; if a second AU app later runs on the same App VM (e.g., `report-builder.africanunion.org` on `127.0.0.1:3001`), it onboards via [§6.6](#66-adding-a-second-app-on-the-app-vm) — three commands plus one edited per-app config file. The shape of the App VM's nginx mirrors the DMZ proxy in [chapter 12](12-dmz-reverse-proxy.md): shared `http {}` config + shared snippets + one `sites-available/<app>.conf` per backend.
+The App VM's nginx is a **multi-tenant reverse proxy** — it can host more than one docker app, each on its own port and `server_name`. Greenbook is the worked example throughout this chapter; if a second AU app later runs on the same App VM (e.g., `report-builder.africanunion.org` on `127.0.0.1:3001`), it onboards via [§6.5](#65-adding-a-second-app-on-the-app-vm) — three commands plus one edited per-app config file. The shape of the App VM's nginx mirrors the DMZ proxy in [chapter 12](12-dmz-reverse-proxy.md): shared `http {}` config + shared snippets + one `sites-available/<app>.conf` per backend.
 
 Three layers of config to install (under [`appendix/app-vm/`](appendix/app-vm/)):
 
@@ -147,7 +157,9 @@ $ rm ~/greenbook-cache-policy.conf ~/greenbook.conf
 The full annotated content of the per-app `greenbook.conf` (also in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)):
 
 ```nginx
-# /etc/nginx/sites-available/greenbook.conf  (App VM, single-tier)
+# /etc/nginx/sites-available/greenbook.conf  (App VM, two-tier inner)
+# Plain HTTP listen on :80 from 172.16.177.50 (the DMZ VM) only.
+# No TLS — that's the DMZ's job (chapter 12).
 # Inherits from /etc/nginx/conf.d/00-app-vm-shared.conf (WebSocket map +
 # rate-limit zones) and /etc/nginx/snippets/{app-vm-proxy-headers,
 # greenbook-cache-policy}.conf — don't duplicate those concerns here.
@@ -157,46 +169,23 @@ upstream greenbook_app {
     keepalive 32;
 }
 
-# HTTP — redirect to HTTPS + ACME challenge slot
+# Trust X-Forwarded-* headers from the DMZ VM. nginx rewrites $remote_addr
+# to the real client IP for logging + rate-limit keying; without this,
+# every request looks like it came from 172.16.177.50.
+set_real_ip_from 172.16.177.50;
+real_ip_header   X-Forwarded-For;
+real_ip_recursive on;
+
 server {
     listen      80;
     listen      [::]:80;
     server_name greenbook.africanunion.org;
 
-    location /.well-known/acme-challenge/ { root /var/www/certbot; }
-    location /                            { return 301 https://$host$request_uri; }
-}
-
-# HTTPS — TLS terminator + reverse proxy
-server {
-    listen      443 ssl http2;
-    listen      [::]:443 ssl http2;
-    server_name greenbook.africanunion.org;
-
-    # TLS cert path — the AU wildcard (§6.4). Same two files serve every
-    # per-app server block on this VM (one wildcard, all hostnames).
-    ssl_certificate     /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem;
-    ssl_certificate_key /etc/ssl/greenbook/wildcard.africanunion.org.key;
-
-    # Modern TLS (Mozilla "intermediate"). Same settings every per-app
-    # server block on this VM ends up using; could be lifted into a
-    # shared `conf.d/01-tls.conf` if more apps onboard.
-    ssl_protocols         TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache     shared:SSL:10m;
-    ssl_session_timeout   1d;
-    ssl_session_tickets   off;
-    ssl_stapling          on;
-    ssl_stapling_verify   on;
-    resolver              1.1.1.1 9.9.9.9 valid=300s;
-    resolver_timeout      5s;
-
-    # Security headers — single-tier only. Drop these in the two-tier
-    # diff (12 §12.8); they move to the DMZ tier in that topology.
-    add_header Strict-Transport-Security  "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options     "nosniff"                              always;
-    add_header X-Frame-Options            "DENY"                                 always;
-    add_header Referrer-Policy            "strict-origin-when-cross-origin"      always;
+    # Belt-and-braces over UFW (§6.2). Either layer alone would block
+    # non-DMZ traffic; both layers means a misconfiguration of one
+    # doesn't expose the App VM.
+    allow 172.16.177.50;
+    deny  all;
 
     client_max_body_size 20m;
     access_log /var/log/nginx/greenbook.access.log;
@@ -205,7 +194,8 @@ server {
     # Greenbook PWA-specific cache routing (sw.js / /assets/ / /manifest.json).
     include /etc/nginx/snippets/greenbook-cache-policy.conf;
 
-    # Auth-strict rate limit on credential / SSO endpoints.
+    # Auth-strict rate limit on credential / SSO endpoints. Stacks with
+    # the DMZ's edge_auth zone — defence in depth.
     location ~ ^/(login|forgot-password|api/auth|api/sso) {
         limit_req zone=app_auth burst=20 nodelay;
         proxy_pass http://greenbook_app;
@@ -227,42 +217,7 @@ server {
 }
 ```
 
-The full annotated forms of all four files (`00-app-vm-shared.conf`, `app-vm-proxy-headers.conf`, `greenbook-cache-policy.conf`, and `greenbook.conf`) live in [`appendix/app-vm/`](appendix/app-vm/) — that's the canonical scp-able source.
-
-**Two orderings depending on whether you have the cert files already.**
-
-The HTTPS server block above references `ssl_certificate` files at `/etc/ssl/greenbook/wildcard.africanunion.org.*`. `nginx -t` opens those files at config-test time and refuses the whole config if either is missing — so the test (and any reload) fails until the cert is on disk. Pick whichever order matches your situation:
-
-- **(A) Cert already extracted** — if AU IT delivered the PFX before nginx setup, run [§6.4.3](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) **first**, then come back here and `nginx -t && systemctl reload nginx`. No placeholder needed; this is the recommended path.
-- **(B) Cert not yet in hand** — if you're doing infrastructure setup ahead of cert procurement, drop a 1-day self-signed placeholder at the exact paths the config expects, get nginx running, then replace the placeholder when [§6.4.3](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) lands. The 1-day expiry forces the issue if cert procurement stalls.
-
-Path (B) — the placeholder bootstrap:
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
-
-$ sudo openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
-    -keyout /etc/ssl/greenbook/wildcard.africanunion.org.key \
-    -out    /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
-    -subj   "/CN=greenbook.africanunion.org"
-#   req -x509 -nodes    self-signed cert, no passphrase on the key.
-#   -newkey rsa:2048    generate a fresh 2048-bit RSA key alongside the cert.
-#                        The real wildcard cert in §6.4.3 lands as RSA-2048
-#                        or RSA-4096 from AU IT's PKI; nginx loads whichever
-#                        algorithm the file holds.
-#   -days 1             expires in 24 hours. Short on purpose: if you forget
-#                        to install the real cert, browsers will scream loudly.
-#   -subj "/CN=..."     non-interactive subject. Skips the DN prompts.
-
-$ sudo chmod 640 /etc/ssl/greenbook/wildcard.africanunion.org.key
-$ sudo chown root:www-data /etc/ssl/greenbook/wildcard.africanunion.org.key
-#   Same perms the real key uses (§6.4.3), so the swap-in is a no-op for nginx.
-```
-
-> **ℹ Expect an `"ssl_stapling" ignored, issuer certificate not found` warning**
->
-> The next `nginx -t` will print that warning against the placeholder cert. It is benign and self-resolving: OCSP stapling needs the issuer's intermediate cert to fetch a revocation response, and a self-signed cert has no separate issuer. Nginx silently disables stapling for the placeholder and continues loading the config — that's why the test still ends in "syntax is ok / test is successful." Once §6.4.3 installs the real wildcard chain, OCSP stapling activates and the warning disappears.
+The four files (`00-app-vm-shared.conf`, `app-vm-proxy-headers.conf`, `greenbook-cache-policy.conf`, and `greenbook.conf`) live in [`appendix/app-vm/`](appendix/app-vm/) — that's the canonical scp-able source.
 
 Test the config and reload:
 
@@ -270,397 +225,59 @@ Test the config and reload:
 # [auishqosrgbwbs01]
 $ sudo nginx -t
 #   -t              test the config for syntax errors. Do NOT skip this.
-# Expected: "syntax is ok" and "test is successful". Any other output means
-# fix the error before reloading.
+# Expected: "syntax is ok" and "test is successful". Any other output
+# means fix the error before reloading.
 
 $ sudo systemctl reload nginx
-#   reload          graceful — SIGHUP. Nginx starts new workers with the new
-#                   config and retires the old ones as they finish current
-#                   requests. No dropped connections.
+#   reload          graceful — SIGHUP. Nginx starts new workers with the
+#                   new config and retires the old ones as they finish
+#                   current requests. No dropped connections.
 ```
 
-> **⚠ HTTPS will show a "not trusted" warning until §6.4 installs the real cert**
+> **ℹ The App VM nginx is a partial system until the DMZ tier is up**
 >
-> The placeholder cert above lets `nginx -t` pass and lets nginx start, but a browser visiting `https://greenbook.africanunion.org` will see a self-signed / "not trusted" warning until §6.4 installs the AU wildcard. The HTTP site on port 80 works already (it 301-redirects to HTTPS, where the browser then warns). **Don't share the public URL with anyone before §6.4 completes.**
+> A request to `greenbook.africanunion.org` ends at the DMZ VM (where TLS terminates and the public DNS record points). Until [chapter 12](12-dmz-reverse-proxy.md) is brought up, no public traffic reaches the App VM at all. You can verify the App VM nginx in isolation via loopback ([§6.4](#64-test-the-app-vm-nginx)) — that's enough to confirm the bring-up succeeded; end-to-end public traffic is gated on chapter 12 + AU IT publishing the public DNS record.
 
-### 6.4 Install the AU wildcard TLS certificate
+### 6.4 Test the App VM nginx
 
-This is the African Union's chosen TLS path: a commercial wildcard certificate procured from a public CA (DigiCert, Sectigo, GlobalSign, GoDaddy — depends on the AU's current vendor). Wildcard `*.africanunion.org` covers `greenbook.africanunion.org` AND every other host under the same apex (a future internal app, staging, etc.), so the file naming below uses `wildcard.africanunion.org.*` rather than a per-host name. Trusted by every browser and OS out of the box, so there is no client-side trust step.
+The App VM is unreachable from the public internet by design — there's no public DNS record pointing at it, no public IP exposure, and UFW + nginx both pin :80 to the DMZ source IP. So bare `curl https://greenbook.africanunion.org/` from a laptop will fail with `Could not resolve host` (and even from the AU LAN it would only resolve if AU IT has an internal DNS record). That's expected at this stage.
 
-**Three sub-paths depending on how AU IT delivers the cert:**
-
-- **PFX / `.p12` bundle (the actual AU path).** AU IT generated the CSR centrally and delivers a single password-protected `.pfx` containing leaf + chain + private key. **Skip §6.4.1 + §6.4.2 — go directly to [§6.4.3](#643-install-the-wildcard-certificate-from-a-pfx--p12-bundle-aus-actual-path) → [§6.4.4](#644-point-nginx-at-the-new-files) → [§6.4.5](#645-renewal).**
-- **PEM bundle delivery.** AU IT (or the CA portal) delivers a `fullchain.pem` + `privkey.pem` directly. Skip §6.4.1, follow §6.4.2 + §6.4.4 + §6.4.5.
-- **CSR-on-VM.** You generate the CSR locally, hand it to AU IT, get back the signed cert. Follow §6.4.1 + §6.4.2 + §6.4.4 + §6.4.5.
-
-The Nginx config in §6.3 needs **only one change** for any of these paths: the two `ssl_certificate` paths in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf) point at `/etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem` and `.key` by default — that's already correct. TLS protocols, ciphers, OCSP stapling, security headers, and every `location` block stay identical.
-
-> **ℹ If you don't have an AU wildcard PFX (forks / non-AU deployments)**
->
-> The deployment guide is intentionally focused on AU's procurement reality. If you're forking greenbook for a different organisation: (a) for free auto-renewing certs against a public domain, see [Certbot's official guide](https://certbot.eff.org/instructions); (b) for an internal/air-gapped CA, generate a key + CSR per §6.4.1, submit it to your PKI team, then install the returned PEM bundle per §6.4.2. Either way the Nginx config in §6.3 stays the same — only the `ssl_certificate` paths change.
-
-#### 6.4.1 Generate the CSR on the VM
-
-Generating the CSR on the target server is preferred over receiving a pre-generated key from AU IT, because the private key never leaves the VM and you don't have to trust the channel that delivers it. Skip to §6.4.3 if AU IT generated the CSR centrally and is delivering you a `.pfx` / `.p12` bundle.
+Verify the App VM nginx in isolation via loopback or LAN-direct, bypassing DNS:
 
 ```bash
+# (a) From the App VM itself — loopback. nginx terminates on :80, so use
+#     plain HTTP. The --resolve flag is what bypasses DNS; --connect-to
+#     would also work. SNI is not relevant on plain HTTP.
 # [auishqosrgbwbs01]
-$ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
-#   -m 750 owned by root:www-data. www-data (nginx worker) can read but
-#   not write; root can do both.
+$ curl -I --resolve greenbook.africanunion.org:80:127.0.0.1 \
+    http://greenbook.africanunion.org/
+# Expected: HTTP/1.1 200 OK and Express-flavoured response headers
+# (server: nginx, x-correlation-id, x-powered-by: Express, ratelimit-*).
+# 403 Forbidden = the allow/deny block in greenbook.conf is rejecting
+# loopback. Add `allow 127.0.0.1;` above `allow 172.16.177.50;` if you
+# want loopback testing to work without the --resolve trick.
 
-# Generate an ECDSA P-256 private key (smaller, faster, equal security to RSA-3072).
-$ sudo openssl ecparam -name prime256v1 -genkey -noout \
-    -out /etc/ssl/greenbook/greenbook.africanunion.org.key
-$ sudo chmod 640 /etc/ssl/greenbook/greenbook.africanunion.org.key
-#   The key NEVER leaves this VM. If you ever regenerate it, the old CSR
-#   and any cert issued against it become useless — you'd need a new CSR.
-
-# Build the CSR with the right SAN (Subject Alternative Name). Modern CAs
-# require a SAN; CN-only CSRs are rejected.
-$ sudo openssl req -new \
-    -key /etc/ssl/greenbook/greenbook.africanunion.org.key \
-    -out /etc/ssl/greenbook/greenbook.africanunion.org.csr \
-    -subj "/C=ET/ST=Addis Ababa/L=Addis Ababa/O=African Union/CN=greenbook.africanunion.org" \
-    -addext "subjectAltName=DNS:greenbook.africanunion.org"
-#   -subj          non-interactive Distinguished Name. Adjust C/ST/L/O to
-#                   whatever AU IT/security want on the issued cert (they
-#                   may have a procurement template — ask before submitting).
-#   -addext SAN    Subject Alternative Name. For a wildcard, use:
-#                   -addext "subjectAltName=DNS:*.africanunion.org,DNS:africanunion.org"
-
-# Inspect the CSR before submitting:
-$ openssl req -in /etc/ssl/greenbook/greenbook.africanunion.org.csr -noout -text \
-  | grep -E "Subject:|DNS:"
-# Expected: a Subject line (matches your -subj) and a "DNS:greenbook.africanunion.org"
-# SAN entry. If SAN is missing, the CA will reject the CSR.
-
-# Print the CSR so you can email/paste it to AU IT — the .csr is safe to
-# share, contains no secrets:
-$ sudo cat /etc/ssl/greenbook/greenbook.africanunion.org.csr
+# (b) From any host on the AU LAN that can reach 10.111.11.51 (e.g. the
+#     DMZ VM during bring-up) — same idea, via the App VM's LAN IP.
+# [from DMZ VM or any LAN host]
+$ curl -I --resolve greenbook.africanunion.org:80:10.111.11.51 \
+    -H 'X-Forwarded-For: 1.2.3.4' \
+    http://greenbook.africanunion.org/
+# X-Forwarded-For simulates what the DMZ proxy will set in production.
+# Without it, `set_real_ip_from` in greenbook.conf has nothing to
+# overwrite $remote_addr with — the test still works, just doesn't
+# exercise the real-IP path.
 ```
 
-#### 6.4.2 Install the issued certificate (PEM bundle delivery)
+End-to-end testing (real client over HTTPS via the public hostname) belongs to chapter 12 once the DMZ tier is up; the App VM in isolation can only verify that nginx + the docker container are wired correctly.
 
-The CA returns the signed certificate, typically with the issuer's intermediate(s). Common file shapes:
-
-| File                                            | Contents                                                             |
-| ----------------------------------------------- | -------------------------------------------------------------------- |
-| `greenbook.africanunion.org.crt` (or `.pem`)    | Server certificate (the leaf)                                        |
-| `intermediate.crt` / `chain.crt` / `bundle.crt` | One or more intermediate CA certs                                    |
-| `root.crt` (sometimes)                          | The CA's root — **NOT required**; browsers and OSes already trust it |
-
-Build a **fullchain** in the right order: server certificate FIRST, then each intermediate in chain order. Order matters — out-of-order chains cause "incomplete chain" warnings on SSL Labs and break some older clients.
-
-```bash
-# [auishqosrgbwbs01]
-# Place the issued files in /etc/ssl/greenbook/ first. The exact filenames
-# depend on what the CA delivered; rename them to the conventions below
-# so the rest of the procedure / the nginx config paths match.
-#   - greenbook.africanunion.org.crt    (server cert / leaf)
-#   - intermediate.crt                  (CA intermediate, or chain bundle)
-
-# Concatenate server + intermediate(s) into fullchain.pem:
-$ sudo bash -c 'cat /etc/ssl/greenbook/greenbook.africanunion.org.crt \
-                    /etc/ssl/greenbook/intermediate.crt \
-                  > /etc/ssl/greenbook/greenbook.africanunion.org.fullchain.pem'
-$ sudo chmod 644 /etc/ssl/greenbook/greenbook.africanunion.org.fullchain.pem
-
-# Verify the chain is well-formed (server cert at top, intermediates next):
-$ openssl crl2pkcs7 -nocrl \
-    -certfile /etc/ssl/greenbook/greenbook.africanunion.org.fullchain.pem \
-  | openssl pkcs7 -print_certs -noout \
-  | grep -E "subject=|issuer="
-# Expected order:
-#   subject= server CN              issuer= intermediate CA CN
-#   subject= intermediate CA CN     issuer= root CA CN
-# If the order is reversed, regenerate fullchain.pem with cat in the right
-# order — leaf first, then intermediate(s).
-
-# Verify the leaf and key actually match (catches "wrong key for this cert"
-# delivery mistakes before they hit nginx):
-$ sudo bash -c '
-    diff <(openssl x509 -in /etc/ssl/greenbook/greenbook.africanunion.org.fullchain.pem -pubkey -noout) \
-         <(openssl pkey -in /etc/ssl/greenbook/greenbook.africanunion.org.key -pubout)
-'
-# Empty output = match. Any diff output = the cert was issued against a
-# different key; do not proceed.
-
-# Final perms check:
-$ ls -l /etc/ssl/greenbook/
-# Expected (at minimum):
-#   -rw-r----- root www-data  greenbook.africanunion.org.key            (640)
-#   -rw-r--r-- root www-data  greenbook.africanunion.org.fullchain.pem  (644)
-```
-
-#### 6.4.3 Install the wildcard certificate from a `.pfx` / `.p12` bundle (AU's actual path)
-
-This is what to do when AU IT delivers a `wildcard.africanunion.org.pfx` (or similarly-named) file plus a password. The PFX contains three things in one encrypted blob: the wildcard certificate, its private key, and the CA chain. The procedure below extracts each part to a separate file on disk, in the conventional layout that the Nginx config in §6.4.4 expects.
-
-> **⚠ Handle the PFX password carefully**
->
-> Two practical rules:
->
-> 1. **Don't pass the password on the command line** with `-passin pass:<value>` — it lands in shell history (`.bash_history` / `.zsh_history`) and `ps auxf` for any other user during the brief moment openssl is running. Use the interactive prompt below (default behaviour: openssl asks for "Enter Import Password:") or the `-passin file:<path>` form pointing at a 600-mode root-owned file you `shred -u` after.
-> 2. **If the .pfx and the password arrived through the same channel** (e.g. both in a single email, or both attached to the same ticket), rotate before installing — the cert+password pair is one factor, not two, when they share a delivery path. AU IT can re-export the bundle with a new password without reissuing the cert.
-
-> **⚠ Add `-legacy` to every `openssl pkcs12` invocation below**
->
-> PKCS#12 bundles produced by Windows Server / IIS and several commercial CA portals (including DigiCert and Sectigo) encrypt the certificate portion with `RC2-40-CBC` by default. OpenSSL 3.0+ — which Ubuntu 24.04 ships as 3.0.x — moved RC2 into the "legacy" provider, which is **not loaded by default** anymore. Without `-legacy` you'll see:
->
-> ```
-> Error outputting keys and certificates
-> error:0308010C:digital envelope routines:inner_evp_generic_fetch:unsupported
->     Algorithm (RC2-40-CBC : 0), Properties ()
-> ```
->
-> Adding `-legacy` to `openssl pkcs12 -in ...` loads the legacy provider on top of the default provider — modern algorithms still work, RC2 also works. The flag is a no-op on PFX bundles that don't use legacy ciphers, so the procedure below leaves it on unconditionally. (You don't need to pre-register the legacy provider in `/etc/ssl/openssl.cnf`; the `-legacy` flag is per-command.)
-
-```bash
-# 1. Transfer the PFX from your laptop to the VM, then move it into
-#    /etc/ssl/greenbook/ with restrictive ownership.
-#
-#    USER NOTE: cert installation is HOST-level admin work. Use your
-#    personal sudo-capable account on the VM — `greenbook` in the AU's
-#    setup; substitute your own. Do NOT use `deployer` here:
-#      · `deployer` was provisioned without a password (key-only login,
-#        per 01 §1.8), so `sudo` has no password to accept.
-#      · `deployer` is also explicitly NOT in the sudoers file
-#        (09 §9.1 — "deployer (app VM only, no sudo)"). It exists only
-#        to run `docker compose` for app deploys.
-#    All sudo-bearing commands in steps 1–8 below run as `greenbook`.
-
-# (1a) On your laptop — scp the PFX into your admin account's home
-#      directory. /home/greenbook is mode 700 on Ubuntu 24.04
-#      (HOME_MODE=0700 in /etc/login.defs), so the file is unreadable to
-#      any other local user while it sits there during staging. Prefer
-#      this over /tmp, which is world-traversable.
-$ scp wildcard.africanunion.org.pfx greenbook@10.111.11.51:~/
-#   scp SOURCE USER@HOST:DEST    secure copy over SSH. Uses the same key-
-#                                 based auth you already use to ssh in
-#                                 as `greenbook` for sudo work elsewhere
-#                                 in 06.
-#   ~/                            shorthand for the remote user's home
-#                                 directory — i.e. /home/greenbook/. The
-#                                 file lands as
-#                                   /home/greenbook/wildcard.africanunion.org.pfx
-#   The transfer itself is encrypted by SSH; the PFX's own password gives
-#   you a second layer of protection at rest.
-# (If your local PFX has a different filename, scp it as-is; you can rename
-#  on the VM in step 1b. The procedure expects wildcard.africanunion.org.pfx
-#  for the rest of this section.)
-
-# (1b) SSH into the VM as your admin account, then create the cert
-#      directory and move the PFX into it with root:root 600 perms.
-$ ssh greenbook@10.111.11.51
-
-# [auishqosrgbwbs01]
-$ sudo install -d -m 750 -o root -g www-data /etc/ssl/greenbook
-#   install -d        create the directory if absent.
-#   -m 750            rwx for owner (root), rx for group (www-data, the
-#                      nginx worker user), nothing for other.
-#   -o root -g www-data    ownership.
-
-$ sudo install -m 600 -o root -g root \
-    ~/wildcard.africanunion.org.pfx \
-    /etc/ssl/greenbook/wildcard.africanunion.org.pfx
-#   install -m 600    rw for owner only. The PFX still contains the
-#                      encrypted private key until extracted in steps 3-4
-#                      below; tighten it before unwrapping.
-#   The single install(1) call does cp + chown + chmod atomically — there
-#   is no window where the file is in place with the wrong perms.
-
-$ rm ~/wildcard.africanunion.org.pfx
-#   Remove the staging copy. /home/greenbook/ is mode 700 so the staging
-#   copy was never publicly readable, but deleting after the move keeps
-#   secret-material accounting tidy.
-
-# 2. Extract the private key. openssl prompts for the PFX password
-#    interactively — type it, hit enter, no shell history exposure.
-$ sudo openssl pkcs12 -legacy \
-    -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
-    -out /etc/ssl/greenbook/wildcard.africanunion.org.key \
-    -nocerts -nodes
-#   -legacy      load the legacy provider so RC2-40-CBC (the default cert
-#                 encryption algorithm in PFX exports from Windows / IIS /
-#                 several commercial CA portals) is recognised. See the ⚠
-#                 callout above. No-op on modern PFX exports.
-#   -nocerts     only output the private key, no certs.
-#   -nodes       do NOT encrypt the output key. nginx won't prompt for a
-#                 passphrase at startup; encrypted-on-disk keys would need
-#                 a passphrase agent, which is more operational complexity
-#                 than disk-permissions on a server we already trust.
-# Enter Import Password:  ← type the AU-supplied password here.
-
-$ sudo chmod 640 /etc/ssl/greenbook/wildcard.africanunion.org.key
-$ sudo chown root:www-data /etc/ssl/greenbook/wildcard.africanunion.org.key
-#   640 root:www-data so nginx (running as www-data) can read it but no
-#   other unprivileged user can. Same perms as the placeholder in §6.3.2.
-
-# 3. Extract the leaf (wildcard) certificate. Prompts for the password again.
-$ sudo openssl pkcs12 -legacy \
-    -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
-    -out /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
-    -nokeys -clcerts -nodes
-
-# 4. Append the CA chain from the same PFX. Prompts for the password again.
-#
-#    Important: do NOT pipe `sudo openssl ... | sudo tee -a ...`. Two
-#    sudos in one pipeline both grab /dev/tty, and openssl's tcsetattr()
-#    call (to disable echo for password input) fails — you'll see
-#    "Can't read Password" right after the prompt. Wrap everything in a
-#    single `sudo bash -c '...'` so there's only one tty owner, and use
-#    shell-level append (`>>`) instead of `| sudo tee -a`.
-$ sudo bash -c 'openssl pkcs12 -legacy \
-    -in  /etc/ssl/greenbook/wildcard.africanunion.org.pfx \
-    -nokeys -cacerts -nodes \
-  >> /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem'
-# fullchain.pem now contains the wildcard leaf followed by the intermediate(s).
-
-$ sudo chmod 644 /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem
-$ sudo chown root:root /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem
-#   644 root:root — public part, world-readable is fine (it's what nginx
-#   sends to every client during the TLS handshake).
-
-# 5. Verify chain order: leaf at top, intermediate(s) next.
-$ openssl crl2pkcs7 -nocrl \
-    -certfile /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
-  | openssl pkcs7 -print_certs -noout | grep -E "subject=|issuer="
-# Expected:
-#   subject= ... CN = *.africanunion.org    issuer= ... intermediate CN
-#   subject= ... intermediate CN            issuer= ... root CN
-
-# 6. Verify the leaf and key actually match (catches "wrong key for this
-#    cert" bundle errors before they hit nginx as obscure SSL mismatches).
-$ sudo bash -c '
-    diff <(openssl x509 -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem -pubkey -noout) \
-         <(openssl pkey -in /etc/ssl/greenbook/wildcard.africanunion.org.key -pubout)
-'
-# Empty output = match. Any diff output = the cert was issued against a
-# different key. Don't proceed — go back to AU IT for a re-export.
-
-# 7. Confirm the SAN actually covers greenbook.africanunion.org.
-$ openssl x509 -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
-    -noout -ext subjectAltName
-# Expected: DNS:*.africanunion.org (and possibly DNS:africanunion.org).
-# A wildcard *.africanunion.org matches greenbook.africanunion.org. If the
-# SAN is only the bare apex (africanunion.org) without the wildcard, the
-# cert will NOT serve subdomains — go back to AU IT.
-
-# 8. Once extraction succeeded and verifications pass, shred the PFX — the
-#    secret material is now on disk as the .key file and there's no reason
-#    to keep two copies.
-$ sudo shred -u /etc/ssl/greenbook/wildcard.africanunion.org.pfx
-
-# Final layout in /etc/ssl/greenbook/:
-$ ls -l /etc/ssl/greenbook/
-# Expected:
-#   -rw-r----- root www-data  wildcard.africanunion.org.key            (640)
-#   -rw-r--r-- root root      wildcard.africanunion.org.fullchain.pem  (644)
-```
-
-#### 6.4.4 Point Nginx at the new files
-
-Edit `/etc/nginx/sites-available/greenbook.conf` (or rerun `scp` with an updated [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf)). Change the two `ssl_certificate` paths in the HTTPS server block:
-
-```diff
-- ssl_certificate     /etc/letsencrypt/live/greenbook.africanunion.org/fullchain.pem;
-- ssl_certificate_key /etc/letsencrypt/live/greenbook.africanunion.org/privkey.pem;
-+ ssl_certificate     /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem;
-+ ssl_certificate_key /etc/ssl/greenbook/wildcard.africanunion.org.key;
-```
-
-`server_name` stays `greenbook.africanunion.org` — a wildcard cert matches the host, but nginx still routes by `server_name`, not by what the cert covers. (If you later add another AU host on the same VM, you'd add a second `server { ... }` block with its own `server_name` and the same two `ssl_certificate` paths, reusing the wildcard.)
-
-Then test and reload:
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo nginx -t
-# Expected: "syntax is ok" / "test is successful". The "ssl_stapling
-# ignored" warning from the §6.3 placeholder should be gone — the
-# commercial chain has a real intermediate, so OCSP stapling activates.
-
-$ sudo systemctl reload nginx
-
-# Verify the live cert is the AU wildcard (not the leftover snake-oil):
-$ echo | openssl s_client -connect 127.0.0.1:443 \
-    -servername greenbook.africanunion.org 2>/dev/null \
-  | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
-# Expected:
-#   subject=CN = *.africanunion.org
-#   issuer=    your CA's intermediate (DigiCert/Sectigo/etc.)
-#   notBefore=...   notAfter=...   (typically 1 year apart)
-#   X509v3 Subject Alternative Name:
-#       DNS:*.africanunion.org, DNS:africanunion.org
-```
-
-If the snake-oil from §6.3 is still on disk (it expires in 24h anyway), it's harmless once nginx is pointed elsewhere. You can delete `/etc/letsencrypt/live/greenbook.africanunion.org/` if you'd rather keep `/etc/letsencrypt/` reserved for actual Let's Encrypt material.
-
-#### 6.4.5 Renewal
-
-Commercial certificates do **not** auto-renew. Validity is typically 1 year (with a 397-day cap per Apple/Google policies; some vendors now offer 90-day commercial certs to align with industry direction). Two paths:
-
-1. **Manual renewal** — set a calendar reminder 30 days before `notAfter`. The renewal flow is identical to §6.4.1: reuse the existing key (or rotate it as a discipline), submit a fresh CSR, install per §6.4.2, `nginx -t && systemctl reload nginx`. AU IT may supply the renewed cert without a new CSR if they retained the original key — confirm their procurement workflow up front. For PFX renewal (the AU's actual path) re-run §6.4.3 against the new bundle, then `nginx -t && systemctl reload nginx`.
-
-2. **Vendor ACME** — some commercial CAs now expose ACME endpoints (Sectigo, ZeroSSL, BuyPass, DigiCert all do at the time of writing). If yours does and AU IT enables ACME on the AU account, you can drive renewals with Certbot or `acme.sh` against the vendor's ACME URL via `--server`. Renewal becomes automated. Confirm with AU IT whether ACME is enabled.
-
-Check current expiry on demand:
-
-```bash
-# [auishqosrgbwbs01]
-$ sudo openssl x509 -in /etc/ssl/greenbook/wildcard.africanunion.org.fullchain.pem \
-    -noout -dates
-# Expected:
-#   notBefore=...
-#   notAfter=...     ← put a calendar reminder for ~30 days before this date.
-```
-
-Both [§8.3 (monitoring script)](08-day-2-operations.md#83-simple-monitoring-script) and [09 §9.6 (Observability hardening)](09-hardening-checklist.md#96-observability) probe cert expiry; the monitoring script alerts when ≤14 days remain. Don't rely solely on the calendar reminder — wire one or both of those in so a forgotten cert pages someone.
-
-> **ℹ OCSP stapling on the AU intranet — confirm outbound to the CA's responder**
->
-> The Nginx config has `ssl_stapling on; resolver 1.1.1.1 9.9.9.9` so it can fetch OCSP responses from the CA. If outbound HTTPS to the CA's OCSP responder is blocked from the VM (common on locked-down intranets), nginx logs `ssl_stapling_responder failed` or `OCSP_basic_verify() failed` warnings — the config still loads, but stapling is silently off and clients fall back to fetching OCSP themselves. Two fixes: (a) ask network ops to allow outbound HTTPS to your CA's OCSP URL (DigiCert: `ocsp.digicert.com`, Sectigo: `ocsp.sectigo.com`, GlobalSign: `ocsp.globalsign.com`); or (b) accept the regression and disable stapling in [`appendix/app-vm/greenbook.conf`](appendix/app-vm/greenbook.conf) by setting `ssl_stapling off; ssl_stapling_verify off;`. Stapling is a latency optimisation, not a security feature — modern clients cope fine without it.
-
-### 6.5 Test the TLS deployment
-
-```bash
-# From your workstation (not the VM):
-$ curl -I https://greenbook.africanunion.org/
-# Expected: HTTP/2 200  (or an application redirect).
-# Expected header: strict-transport-security: max-age=31536000; includeSubDomains
-
-$ openssl s_client -connect greenbook.africanunion.org:443 \
-  -servername greenbook.africanunion.org </dev/null 2>/dev/null | \
-  openssl x509 -noout -subject -issuer -dates -ext subjectAltName
-#   openssl s_client        open a raw TLS connection.
-#   -connect HOST:PORT      what to connect to.
-#   -servername NAME        SNI — indicate which vhost the connection is for.
-#                            REQUIRED if multiple HTTPS sites live on the same IP.
-#   </dev/null              empty stdin — don't wait for interactive input.
-#   2>/dev/null             discard stderr (progress chatter).
-#   | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
-#                            parse the server cert from s_client's output
-#                            and show who issued it, for whom, validity, and SAN.
-# Expected (AU wildcard):
-#   subject=CN = *.africanunion.org
-#   issuer=    AU's CA's intermediate (DigiCert/Sectigo/etc.)
-#   notBefore=...   notAfter=...   (typically 1 year apart)
-#   X509v3 Subject Alternative Name:
-#       DNS:*.africanunion.org, DNS:africanunion.org
-```
-
-> **✓ Check your grade**
->
-> Test the HTTPS config at https://www.ssllabs.com/ssltest/ (public) or a private equivalent for internal hosts. With the config in §6.3, expect a solid "A" rating.
-
-### 6.6 Adding a second app on the App VM
+### 6.5 Adding a second app on the App VM
 
 When a second AU app onboards on the same App VM, the work collapses to **three commands plus one edited per-app config file**. The shared configs (`/etc/nginx/conf.d/00-app-vm-shared.conf`, `/etc/nginx/snippets/app-vm-proxy-headers.conf`) are already in place from greenbook's onboarding (§6.3.1) and are reused as-is — no edits.
 
 > **ℹ App VM built against an earlier version of this guide?**
 >
-> Check `ls /etc/nginx/conf.d/00-app-vm-shared.conf`. If the file does not exist, your `greenbook.conf` is the pre-refactor monolithic shape (rate-limit zones, WebSocket map, proxy headers, cache rules all inlined in one file). Run [§6.7](#67-migrating-an-existing-app-vm-to-the-multi-tenant-shape) **first** — onboarding a second app on top of an inline-zones config will fail `nginx -t` with "duplicate zone" / "duplicate map" errors.
+> Check `ls /etc/nginx/conf.d/00-app-vm-shared.conf` AND `grep -l 'listen 443' /etc/nginx/sites-enabled/*.conf`. If the shared file is missing OR any site-block still has `listen 443`, your App VM is still in the legacy single-tier shape. Run [§6.6](#66-migrating-a-legacy-single-tier-app-vm) **first** — adding a second app on top of either a monolithic config or a TLS-terminating App VM will fail at `nginx -t` (duplicate zones) or break the trust model (TLS in two places).
 
 For an app whose docker container exposes its loopback port at `127.0.0.1:Y` (a different port from greenbook's `:3000`), reachable as `<app>.africanunion.org`:
 
@@ -676,7 +293,7 @@ $ sudo cp /etc/nginx/sites-available/greenbook.conf \
 $ sudo $EDITOR /etc/nginx/sites-available/<app>.conf
 # Change:
 #   server_name greenbook.africanunion.org;
-#   → server_name <app>.africanunion.org;          (both server blocks)
+#   → server_name <app>.africanunion.org;
 #
 #   upstream greenbook_app { server 127.0.0.1:3000; ... }
 #   → upstream <app>_app   { server 127.0.0.1:Y;    ... }
@@ -695,6 +312,10 @@ $ sudo $EDITOR /etc/nginx/sites-available/<app>.conf
 # Adjust the auth-strict location regex (^/(login|forgot-password|api/auth|api/sso))
 # to the new app's actual auth route paths. Keep the catch-all
 # `location /` block unchanged — every app needs it.
+#
+# Don't touch: `set_real_ip_from 172.16.177.50;`, `allow 172.16.177.50;`,
+# `deny all;` — these are infrastructure, not per-app concerns. Same
+# DMZ source for every app; same trust pin for every app.
 
 # (3) Symlink, test, reload:
 $ sudo ln -sf /etc/nginx/sites-available/<app>.conf \
@@ -705,22 +326,34 @@ $ sudo systemctl reload nginx
 
 The new app inherits the shared rate-limit zones (`app_general`, `app_auth`), the shared proxy-header / timeout / streaming policy (via `include /etc/nginx/snippets/app-vm-proxy-headers.conf`), and the WebSocket upgrade map — all defined once in §6.3.1, no duplication. Onboarding a second app does not disturb anything already running for greenbook.
 
-> **ℹ Wildcard cert covers any `*.africanunion.org` hostname**
+> **ℹ Don't forget the DMZ side**
 >
-> The `ssl_certificate` paths in `<app>.conf` stay pointed at `/etc/ssl/greenbook/wildcard.africanunion.org.{fullchain.pem,key}` (the same files greenbook uses, per §6.4). One cert serves every per-app server block on this VM, so adding `<app>.africanunion.org` needs no new cert work — just the public DNS A / CNAME record from AU IT.
+> Every new App VM app also needs a per-app server block on the DMZ — that's where TLS terminates, the public hostname is routed, and the wildcard cert serves traffic. See [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy). Order: App VM block first (this section), then DMZ block. The wildcard cert at `*.africanunion.org` already covers any new hostname under the apex, so no new cert work — just a public DNS A / CNAME record from AU IT and a new `<app>.conf` on the DMZ VM.
 
-> **ℹ For the two-tier (DMZ-fronted) topology, see [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy)**
+### 6.6 Migrating a legacy single-tier App VM
+
+If your App VM was set up against an earlier version of this guide and currently terminates TLS itself (single-tier shape), this section converts it to the two-tier inner shape this chapter now documents. Two flavours of legacy are covered:
+
+- **Monolithic-with-TLS**: a single `/etc/nginx/sites-available/greenbook.conf` containing everything inlined (rate-limit zones, WebSocket map, proxy headers, cache rules, HTTPS server block, security headers, ssl_certificate paths). One file, ~210 lines.
+- **Split-with-TLS**: the multi-file shape with a shared `00-app-vm-shared.conf` + snippets, but the per-app `greenbook.conf` still has the HTTPS server block, security headers, and cert paths. This is what AU has right now after the most recent file-split migration.
+
+Both end at the same destination — the App VM listening on plain HTTP from the DMZ source IP only, with TLS, security headers, and the wildcard cert all moved to the DMZ tier ([chapter 12](12-dmz-reverse-proxy.md)).
+
+> **⚠ Bring up chapter 12 FIRST**
 >
-> If you're running greenbook (and its sibling apps) behind the DMZ shared reverse proxy, every new App VM app **also** needs a per-app server block on the DMZ side. Onboard the App VM block first (this section), then the DMZ block. The two have the same shape but different concerns — DMZ does TLS + edge rate-limit + security headers; App VM does auth-rate-limit + cache policy + container hand-off.
+> This migration drops TLS from the App VM. If chapter 12 (the DMZ tier) isn't up yet — or if AU IT hasn't pointed public DNS for `greenbook.africanunion.org` at the DMZ VM's public IP — running this migration breaks public access. Order:
+>
+> 1. Complete [chapter 12 §12.1–§12.7](12-dmz-reverse-proxy.md) (DMZ VM provisioned, cert installed at `/etc/ssl/au/`, edge nginx serving).
+> 2. Coordinate the DNS cutover with AU IT — public A record for `greenbook.africanunion.org` flips from the App VM's public IP (or NAT) to the DMZ VM's public IP.
+> 3. Verify the DMZ is serving end-to-end via the new DNS or `--resolve` to the DMZ public IP.
+> 4. **Then** run this migration to drop TLS from the App VM.
 
-### 6.7 Migrating an existing App VM to the multi-tenant shape
-
-If your App VM was set up against an earlier version of this guide that shipped a **single monolithic** `/etc/nginx/sites-available/greenbook.conf` (with the WebSocket map, rate-limit zones, proxy headers, and cache rules all inlined), migrate to the new multi-file structure (§6.3) before onboarding a second app — otherwise §6.6 fails `nginx -t` with `duplicate zone "app_general"` / `duplicate map "$http_upgrade"` when the new shared `conf.d/00-app-vm-shared.conf` collides with the inline definitions in the old file.
-
-The migration is **a single atomic swap** — replace 1 file with 4 files in one transaction, `nginx -t`, reload. Zero downtime; nginx workers reload gracefully.
+The migration is mostly an atomic file swap; the trailing UFW + env + cert-removal steps cement the cut.
 
 ```bash
-# (a) From your laptop — scp all four new files in one shot:
+# (a) From your laptop — scp the four new files in one shot. These files
+#     ship the HTTP-only inner-tier shape: no HTTPS block, no security
+#     headers, no ssl_certificate paths, source-pinned to 172.16.177.50.
 $ scp docs/deployment/appendix/app-vm/00-app-vm-shared.conf \
       docs/deployment/appendix/app-vm/app-vm-proxy-headers.conf \
       docs/deployment/appendix/app-vm/greenbook-cache-policy.conf \
@@ -730,22 +363,20 @@ $ scp docs/deployment/appendix/app-vm/00-app-vm-shared.conf \
 # (b) On the App VM as your admin account:
 $ ssh greenbook@10.111.11.51
 
-# Sanity checks BEFORE the swap — make sure the new greenbook.conf will
-# point at the same cert files and same upstream port as the running
-# config. If you customised either, edit ~/greenbook.conf to match the
-# live values before installing.
+# Sanity checks BEFORE the swap. Confirm the upstream port hasn't been
+# customised — if it has, edit ~/greenbook.conf to match before installing.
 # [auishqosrgbwbs01]
-$ sudo grep -E "ssl_certificate|server 127" /etc/nginx/sites-available/greenbook.conf
-# Old (live). Note the cert paths and the upstream port (e.g. 127.0.0.1:3000).
+$ sudo grep "server 127" /etc/nginx/sites-available/greenbook.conf
+# Old (live). Note the upstream port (e.g. 127.0.0.1:3000).
 
-$ grep -E "ssl_certificate|server 127" ~/greenbook.conf
+$ grep "server 127" ~/greenbook.conf
 # New (staged). Must match the old. Edit ~/greenbook.conf if they don't
 # before proceeding.
 
-# (c) Atomic install — all four files in one shell block. The new
-# greenbook.conf has NO inline zones/map/headers (those live in
-# 00-app-vm-shared.conf + the snippets now), so nginx sees exactly one
-# definition of each after the swap. No "duplicate ..." errors.
+# (c) Atomic install — all four files. The new greenbook.conf has NO
+#     inline zones/map/headers AND no HTTPS server block. After this
+#     install nginx -t will see exactly one definition of each shared
+#     directive (no duplicates), and no ssl_certificate references at all.
 $ sudo install -m 644 -o root -g root \
     ~/00-app-vm-shared.conf /etc/nginx/conf.d/00-app-vm-shared.conf
 
@@ -757,72 +388,96 @@ $ sudo install -m 644 -o root -g root \
 
 $ sudo install -m 644 -o root -g root \
     ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf
-#   ↑ Overwrites the monolithic version. The symlink in
+#   ↑ Overwrites the previous (single-tier) version. The symlink in
 #     /etc/nginx/sites-enabled/greenbook.conf already points at this path
 #     from the original bring-up, so no symlink work needed.
 
 $ rm ~/00-app-vm-shared.conf ~/app-vm-proxy-headers.conf \
      ~/greenbook-cache-policy.conf ~/greenbook.conf
 
-# (d) Test + reload:
+# (d) UFW: revoke public 80/443, add a single source-pinned :80 rule.
+$ sudo ufw delete allow 'Nginx Full'
+#   Removes the public 80/443 rule from the original §6.2 (single-tier
+#   version). If your VM had explicit `ufw allow 80/tcp` and
+#   `ufw allow 443/tcp` rules instead, delete those too.
+
+$ sudo ufw allow from 172.16.177.50 to any port 80 proto tcp
+$ sudo ufw status verbose
+# Expected:
+#   80/tcp ALLOW IN from 172.16.177.50
+#   (no public 80 / 443 rules anymore)
+
+# (e) Test + reload nginx:
 $ sudo nginx -t
 # Expected: "syntax is ok" / "test is successful".
 #
 # Failure mode 1 — "duplicate zone" / "duplicate map":
-#   An old greenbook.conf still has inline definitions. Re-run step (c)
-#   for greenbook.conf only and verify
-#   /etc/nginx/sites-available/greenbook.conf no longer contains
-#   `limit_req_zone` or `map $http_upgrade`.
+#   An old greenbook.conf still has inline `limit_req_zone` or
+#   `map $http_upgrade` definitions. Re-run step (c) for greenbook.conf
+#   only and verify the new file actually overwrote the monolithic one.
 #
 # Failure mode 2 — "<directive> directive is duplicate" (e.g.
 # proxy_buffering, proxy_set_header, expires):
 #   Your /etc/nginx/snippets/ files predate commit 83a91a6 (which moved
-#   proxy_buffering out of the shared snippet). The fix shipped in the
-#   repo; re-fetch and reinstall the three affected files:
-#
-#     # [your laptop]
-#     git pull
-#     scp docs/deployment/appendix/app-vm/app-vm-proxy-headers.conf \
-#         docs/deployment/appendix/app-vm/greenbook-cache-policy.conf \
-#         docs/deployment/appendix/app-vm/greenbook.conf \
-#         greenbook@10.111.11.51:~/
-#
-#     # [auishqosrgbwbs01]
-#     sudo install -m 644 -o root -g root \
-#       ~/app-vm-proxy-headers.conf /etc/nginx/snippets/app-vm-proxy-headers.conf
-#     sudo install -m 644 -o root -g root \
-#       ~/greenbook-cache-policy.conf /etc/nginx/snippets/greenbook-cache-policy.conf
-#     sudo install -m 644 -o root -g root \
-#       ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf
-#     rm ~/app-vm-proxy-headers.conf ~/greenbook-cache-policy.conf ~/greenbook.conf
-#     sudo nginx -t
-#
-# Why: nginx forbids re-defining a directive in the same location scope
-# after a snippet `include` already set it (no override semantics within
-# one block). Directives that have different correct values per location
-# (proxy_buffering off for SSR/SSE, on by default for static assets)
-# must NOT live in the shared snippet — they belong in the per-app
-# server block per-location. See app-vm-proxy-headers.conf's NOTE.
+#   proxy_buffering out of the shared snippet). Re-fetch and reinstall
+#   the three affected files (`git pull` + scp + `install` of
+#   app-vm-proxy-headers.conf, greenbook-cache-policy.conf, greenbook.conf).
 
 $ sudo systemctl reload nginx
 # Graceful — SIGHUP. Existing connections continue on old workers; new
-# connections land on the workers loaded with the multi-file config.
-# No dropped requests.
+# connections land on the workers loaded with the HTTP-only config.
 
-# (e) Spot-check the live deployment still works:
-$ curl -I https://greenbook.africanunion.org/
-# Expected: HTTP/2 200 with the same security headers as before
-# (Strict-Transport-Security, X-Content-Type-Options, etc).
+# (f) Bump TRUSTED_PROXIES in /etc/greenbook.env from 1 to 2. The
+#     Express layer (server/app.ts) reads this to set `app.set("trust
+#     proxy", N)`. With the DMZ in front there are now TWO trusted
+#     proxies between the client and Express (DMZ nginx → App VM nginx).
+#     Without the bump, Express trusts only the App VM nginx and treats
+#     the DMZ VM's IP as the client — breaking rate limiting that keys
+#     on req.ip.
+$ sudo sed -i 's/^TRUSTED_PROXIES=1$/TRUSTED_PROXIES=2/' /etc/greenbook.env
+$ sudo grep '^TRUSTED_PROXIES=' /etc/greenbook.env
+# Expected: TRUSTED_PROXIES=2
+# If the line doesn't exist, add it: echo 'TRUSTED_PROXIES=2' | sudo tee -a /etc/greenbook.env
 
-$ echo | openssl s_client -connect greenbook.africanunion.org:443 \
-    -servername greenbook.africanunion.org 2>/dev/null \
-  | openssl x509 -noout -subject -dates
-# Expected: same cert subject (CN=*.africanunion.org) and same
-# notBefore/notAfter as before the swap. Migration is invisible to clients.
+# (g) Recreate the container to pick up the env-file change. docker
+#     compose only reads env_file at container START — `up -d` alone
+#     won't reload it, you need --force-recreate.
+$ sudo -u deployer docker compose \
+    -f /opt/greenbook/docker-compose.yml \
+    up -d --force-recreate
+# Wait for the container to come back healthy:
+$ sudo -u deployer docker compose \
+    -f /opt/greenbook/docker-compose.yml ps
+# Expected: greenbook  Up (healthy)
+
+# (h) Remove the wildcard cert from the App VM. The DMZ now holds the
+#     only copy in production — fewer copies of secret material to rotate
+#     when the cert renews next year. Skip this step if you ran §12.4.1
+#     ("copy from the app VM") on the DMZ side and the DMZ is now serving
+#     from a copy of these files; in that case the App VM's copy is
+#     redundant either way, but waiting until DMZ is verified green
+#     buys a safety net.
+$ sudo rm -rf /etc/ssl/greenbook
+# Done. The App VM has no cert, no PFX, no key on disk.
+
+# (i) Spot-check via the App VM nginx — bypass DNS, hit loopback:
+$ curl -I --resolve greenbook.africanunion.org:80:127.0.0.1 \
+    http://greenbook.africanunion.org/
+# Expected: HTTP/1.1 200 OK from nginx, with x-correlation-id and
+# x-powered-by: Express (proves nginx → docker hand-off works).
+# 403 Forbidden = the allow/deny in greenbook.conf is rejecting
+# loopback (expected if you didn't add `allow 127.0.0.1;`).
+
+# (j) Verify end-to-end through the DMZ — bypass DNS, hit DMZ public IP:
+$ curl -I --resolve greenbook.africanunion.org:443:<DMZ_PUBLIC_IP> \
+    https://greenbook.africanunion.org/
+# Expected: HTTP/2 200 with strict-transport-security and the four
+# security headers — now set at the DMZ tier, not here. The hop count in
+# x-forwarded-for should reflect both proxies (DMZ → App VM → Express).
 ```
 
 > **ℹ Rollback**
 >
-> If the new config misbehaves, revert in three commands. (1) Re-upload the previous monolithic `greenbook.conf` from wherever you have it staged (git history, an earlier `scp` source); (2) install it over the new slim version with `sudo install -m 644 -o root -g root ~/greenbook.conf /etc/nginx/sites-available/greenbook.conf`; (3) `sudo rm /etc/nginx/conf.d/00-app-vm-shared.conf /etc/nginx/snippets/{app-vm-proxy-headers,greenbook-cache-policy}.conf && sudo nginx -t && sudo systemctl reload nginx`. With the shared files gone, only the inline definitions in the restored old `greenbook.conf` remain — back to pre-migration state. Confirm via `curl -I https://greenbook.africanunion.org/` that traffic still flows.
+> Rolling back from two-tier to single-tier requires undoing all of (c)–(h): restore the previous `greenbook.conf` from git, re-add public 80/443 to UFW, set `TRUSTED_PROXIES=1`, recreate the container, restore `/etc/ssl/greenbook/` (re-run [12 §12.4.2](12-dmz-reverse-proxy.md#1242-import-from-a-fresh-pfx) against the PFX or restore from a backup), point public DNS back at the App VM. This is genuinely involved — much easier to fix forward by debugging the DMZ tier than to roll back. Ensure the DMZ is verified green ([chapter 12 §12.9](12-dmz-reverse-proxy.md#129-test-the-tls-deployment)) before running this migration so rollback never becomes necessary.
 
 ---

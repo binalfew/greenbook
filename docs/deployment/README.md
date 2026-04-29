@@ -1,7 +1,7 @@
 # Greenbook — Production Deployment Guide
 
 **Greenbook (AU Blue Book directory) on Ubuntu VMs with Docker, Nginx, and PostgreSQL**
-_An on-premises deployment reference (two-VM single-tier or three-VM with a DMZ edge proxy), validated against the greenbook codebase — with every command explained._
+_An on-premises deployment reference for a three-VM topology (DMZ + App + DB), validated against the greenbook codebase — with every command explained. TLS terminates at the DMZ; the App VM is unreachable from the public internet._
 
 Prepared for: **Binalfew** — Senior Solutions & System Architect, MISD / AUC
 
@@ -9,17 +9,17 @@ Prepared for: **Binalfew** — Senior Solutions & System Architect, MISD / AUC
 
 ## Where do I start?
 
-| If you're…                                            | Read these, in order                                                                                                                                                                                                                   |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Bringing up production (single-tier, no DMZ)**      | [01](01-pre-flight.md) → [02](02-db-vm-setup.md) → [03](03-db-vm-backups.md) → [04](04-app-vm-docker.md) → [05](05-app-vm-container.md) → [06](06-app-vm-nginx-tls.md) → [07](07-deploy-workflow.md) → [09](09-hardening-checklist.md) |
-| **Bringing up production (two-tier, with DMZ)**       | same chain as above, **plus** [12](12-dmz-reverse-proxy.md) at the end (after 09) — brings up the DMZ edge proxy and reconfigures the App VM nginx to live behind it                                                                   |
-| **Doing a routine deploy after launch**               | [07](07-deploy-workflow.md) only                                                                                                                                                                                                       |
-| **Operating a running production deployment**         | [08](08-day-2-operations.md) — bookmark it                                                                                                                                                                                             |
-| **Investigating an incident**                         | [10](10-troubleshooting.md) — drilldowns by symptom                                                                                                                                                                                    |
-| **Adding centralised log search**                     | [11](11-future-graylog.md) (planning only, not yet built)                                                                                                                                                                              |
-| **Onboarding a new AU app behind the same DMZ proxy** | [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy) — three commands, no cert work                                                                                                                        |
-| **Looking up a config file's full content**           | [Appendix B](appendix/B-config-files.md)                                                                                                                                                                                               |
-| **Scrolling for a one-liner you've run before**       | [Appendix A](appendix/A-command-cheatsheet.md)                                                                                                                                                                                         |
+| If you're…                                            | Read these, in order                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Bringing up production from scratch**               | [01](01-pre-flight.md) → [02](02-db-vm-setup.md) → [03](03-db-vm-backups.md) → [04](04-app-vm-docker.md) → [05](05-app-vm-container.md) → [06](06-app-vm-nginx-tls.md) → [07](07-deploy-workflow.md) → [12](12-dmz-reverse-proxy.md) → [09](09-hardening-checklist.md) |
+| **Migrating from a legacy single-tier App VM**        | [12](12-dmz-reverse-proxy.md) (bring up the DMZ tier first) → [06 §6.6](06-app-vm-nginx-tls.md#66-migrating-a-legacy-single-tier-app-vm) (drop TLS from App VM, source-pin UFW)                                                                                        |
+| **Doing a routine deploy after launch**               | [07](07-deploy-workflow.md) only                                                                                                                                                                                                                                       |
+| **Operating a running production deployment**         | [08](08-day-2-operations.md) — bookmark it                                                                                                                                                                                                                             |
+| **Investigating an incident**                         | [10](10-troubleshooting.md) — drilldowns by symptom                                                                                                                                                                                                                    |
+| **Adding centralised log search**                     | [11](11-future-graylog.md) (planning only, not yet built)                                                                                                                                                                                                              |
+| **Onboarding a new AU app behind the same DMZ proxy** | [06 §6.5](06-app-vm-nginx-tls.md#65-adding-a-second-app-on-the-app-vm) (App VM block) → [12 §12.7](12-dmz-reverse-proxy.md#127-adding-future-apps-behind-the-same-proxy) (DMZ block)                                                                                   |
+| **Looking up a config file's full content**           | [Appendix B](appendix/B-config-files.md)                                                                                                                                                                                                                               |
+| **Scrolling for a one-liner you've run before**       | [Appendix A](appendix/A-command-cheatsheet.md)                                                                                                                                                                                                                         |
 
 ---
 
@@ -32,7 +32,7 @@ Prepared for: **Binalfew** — Senior Solutions & System Architect, MISD / AUC
 | 03  | [Database VM backups](03-db-vm-backups.md)          | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                                                                                                                           | DB VM                   |
 | 04  | [App VM Docker setup](04-app-vm-docker.md)          | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                                                                                                                         | App VM                  |
 | 05  | [Application container](05-app-vm-container.md)     | **Source-tree artefacts**: hardened Dockerfile, `.dockerignore`, `/healthz` route, post-build checkpoint, common build-failures playbook                                                                | Repo (laptop)           |
-| 06  | [Nginx and TLS](06-app-vm-nginx-tls.md)             | Multi-tenant nginx reverse proxy, streaming SSR / SSE / PWA tuning, AU wildcard cert (PFX), per-app onboarding                                                                                          | App VM                  |
+| 06  | [App VM nginx (inner tier)](06-app-vm-nginx-tls.md) | Multi-tenant inner-tier nginx (HTTP-only, source-pinned to DMZ), streaming SSR / SSE / PWA tuning, per-app onboarding, legacy single-tier migration                                                     | App VM                  |
 | 07  | [Deploy workflow](07-deploy-workflow.md)            | **App-VM-side**: initial setup (`/etc/greenbook.env`, `docker-compose.yml`), first-deploy walkthrough, build path A/B, schema (`db push` vs `migrate`), env-file lifecycle, `deploy.sh`, rollback, seed | App VM (+ build host)   |
 | 08  | [Day-2 operations](08-day-2-operations.md)          | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates                                                                                                      | BOTH VMs                |
 | 09  | [Hardening checklist](09-hardening-checklist.md)    | Pre-go-live audit and quarterly review                                                                                                                                                                  | BOTH VMs                |
@@ -71,7 +71,7 @@ Every command is followed by an explanation of what it does and why. Where a com
 - The first-run seed (`npm run db:seed`) that creates roles, permissions, feature flags, reference data, and the system tenant.
 - A greenbook-compatible `/healthz` resource route (none exists yet in the repo) and the container + external probes that use it.
 - Nginx installed directly on the host (not containerised) as the TLS-terminating reverse proxy, tuned for React Router's streaming SSR, Server-Sent Events, and greenbook's PWA service worker.
-- TLS certificates from the AU-procured wildcard for `*.africanunion.org`, delivered as a password-protected PFX bundle and installed on the App VM (single-tier) or the DMZ VM (two-tier).
+- TLS certificates from the AU-procured wildcard for `*.africanunion.org`, delivered as a password-protected PFX bundle and installed on the DMZ VM (the only place TLS terminates).
 - A release-directory deployment workflow, rollback procedure, and systemd integration for boot-time startup.
 - Backups: daily logical (pg_dump) plus a production-grade physical + WAL strategy using pgBackRest, so point-in-time recovery is possible.
 - A planning section for adding Graylog (MongoDB + OpenSearch + Graylog Server) as a separate log-aggregation VM. Greenbook's pino JSON output drops straight into Graylog with no reformatting.
@@ -197,9 +197,9 @@ The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse
                               └──────────────────────────────────────────┘
 ```
 
-> **ℹ Single-tier topology (no DMZ)**
+> **ℹ Migrating from a legacy single-tier App VM?**
 >
-> A simpler two-VM deployment collapses the DMZ tier into the App VM: the App VM's nginx terminates TLS itself (with the wildcard cert installed locally) and faces public traffic directly. Right for forks where there's no separate DMZ network, or for staging environments. To run that shape, follow chapters [01](01-pre-flight.md)–[09](09-hardening-checklist.md) only and skip chapter 12. Chapter 06 §6.4 documents the wildcard-cert path on the App VM directly. The diff between single-tier and two-tier App VM nginx configs is in [12 §12.8](12-dmz-reverse-proxy.md#128-modify-the-app-vm-for-the-two-tier-topology).
+> Earlier versions of this guide documented a two-VM single-tier shape (App VM nginx terminating TLS directly, no DMZ). The current docs assume three-VM with a DMZ tier. If your existing deployment was built single-tier, [06 §6.6](06-app-vm-nginx-tls.md#66-migrating-a-legacy-single-tier-app-vm) covers the conversion (drop TLS from App VM, source-pin UFW, bump TRUSTED_PROXIES, remove the cert) — run it AFTER [chapter 12](12-dmz-reverse-proxy.md) is up and the DMZ is verified serving end-to-end.
 
 ### 2.2 Why this split of responsibilities
 
