@@ -210,13 +210,19 @@ server {
         limit_req zone=app_auth burst=20 nodelay;
         proxy_pass http://greenbook_app;
         include /etc/nginx/snippets/app-vm-proxy-headers.conf;
+        proxy_buffering         off;
+        proxy_request_buffering on;
     }
 
-    # Catch-all → docker container (SSR + SSE + API).
+    # Catch-all → docker container (SSR + SSE + API). Streaming-aware
+    # buffering (off) per-location, NOT in the shared snippet — see the
+    # NOTE in app-vm-proxy-headers.conf for why.
     location / {
         limit_req zone=app_general burst=200 nodelay;
         proxy_pass http://greenbook_app;
         include /etc/nginx/snippets/app-vm-proxy-headers.conf;
+        proxy_buffering         off;
+        proxy_request_buffering on;
     }
 }
 ```
