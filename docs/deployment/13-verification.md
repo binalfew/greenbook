@@ -380,8 +380,7 @@ $ nc -zv 196.188.248.25 80
 # Expected: same as 443 (DMZ nginx serves both, redirects 80 → 443)
 
 # (2) HTTPS handshake reaches the DMZ?
-$ curl -kI --resolve greenbook.africanunion.org:443:196.188.248.25 \
-    https://greenbook.africanunion.org/
+$ curl -kI --resolve greenbook.africanunion.org:443:196.188.248.25 https://greenbook.africanunion.org/
 # Same response as Layer 5 step (6), but now the path is
 # Mac → AU perimeter (DNAT) → DMZ VM:443. End-to-end through the public IP.
 # If Layer 5 step (6) returned 200 but this returns "timed out", the

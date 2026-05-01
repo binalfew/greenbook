@@ -25,6 +25,7 @@
 - [§14.7 Real client IP preservation through the chain](#147-real-client-ip-preservation-through-the-chain)
 - [§14.8 Cloudflare error code reference](#148-cloudflare-error-code-reference)
 - [§14.9 Symptoms to cause cheatsheet](#149-symptoms-to-cause-cheatsheet)
+- [§14.10 Corporate web filter blocking \*.data POSTs](#1410-corporate-web-filter-blocking-data-posts)
 
 ## 14. Cloudflare verification
 
@@ -374,5 +375,66 @@ Cloudflare-branded error pages (the `cloudflare.com` "Web server is down" / "Con
 > Cloudflare's free tier doesn't include direct support, but their community forum (community.cloudflare.com) is responsive when you provide a `cf-ray` ID. Capture the `cf-ray` from the failing request (`curl -sI ... | grep cf-ray`) and include it verbatim in any support thread.
 >
 > Paid plans give email/chat support that can read the actual edge logs for that `cf-ray`. For 525/526 issues that aren't reproducible from your tests, this is often the fastest path to root-cause.
+
+### 14.10 Corporate web filter blocking \*.data POSTs
+
+A common failure mode for greenbook deployments inside large enterprise networks (and the actual cause of a hard-to-debug login failure during AU's bring-up): a **corporate web security appliance** with TLS interception sits in path between internal users and the application. The appliance treats React Router 7's `*.data` action endpoints as file uploads (because of the URL extension) and blocks POSTs via its anti-malware sandbox / DLP policy.
+
+**Symptom**
+
+- Forms submit fine in dev / from machines outside the corporate network
+- Inside the corporate network, POST to `*.data` endpoints (e.g. `/login.data`) returns a non-greenbook HTML page
+- The page typically includes wording like "**Attention** / **File blocked** / **Quarantined File Name**" — corporate anti-malware vendor branding (Symantec WSS, Bluecoat ProxySG, Sophos, F5 Access Policy Manager, etc.)
+- DMZ access log records the request as 403 with an unusually large response body (~20 KB — consistent with a vendor block page, not nginx's 200-byte default 403)
+
+**Diagnosis**
+
+Three commands localize the failure:
+
+```bash
+# (1) Capture the actual response body
+$ curl -sk --resolve greenbook.africanunion.org:443:172.16.177.50 \
+    -X POST -d 'test=1' \
+    https://greenbook.africanunion.org/login.data \
+  > /tmp/block.html
+$ wc -c /tmp/block.html               # ~20 KB confirms vendor page
+$ grep -iE 'block|quarantin|attention|file blocked' /tmp/block.html
+# Hits = corporate appliance is the source. Look at <title>, any
+# vendor logo, or block-ID / reference in the page.
+
+# (2) Bypass the appliance — direct plain HTTP from DMZ to App VM
+# [auishqosrarp01]
+$ curl -v --max-time 5 -X POST \
+    -H 'Host: greenbook.africanunion.org' \
+    -d 'test=1' http://10.111.11.51/login.data 2>&1 | head -20
+# Expected: 403 from greenbook's CSRF check (small body, helmet headers
+# like X-XSS-Protection / X-Frame-Options) — proves the App VM stack
+# is healthy and the block is upstream of plain-HTTP DMZ→App-VM path.
+# A 20 KB "File blocked" page here would mean the appliance is on the
+# DMZ→App-VM LAN segment too, which is a different (and more invasive)
+# remediation.
+
+# (3) Confirm your Mac has no system-level proxy
+$ scutil --proxy
+# Empty or just default exceptions (*.local, 169.254/16) = no system
+# proxy. The interception is happening transparently at the network
+# layer.
+```
+
+**Root cause**
+
+The appliance has a corporate CA cert installed on every internal Mac (typically pushed via MDM). It transparently intercepts outbound HTTPS, decrypts using the corporate CA, inspects content, and blocks per policy. URL extensions like `.data`, `.dat`, `.bin` trigger generic "file upload" anti-malware rules even though they're legitimate React Router data-action endpoints carrying form-encoded bodies.
+
+**Fix**
+
+This is a **network/security team task**, not a deployment fix. The exact wording to send:
+
+> Internal AU users on `greenbook.africanunion.org` are getting blocked when submitting any form. The corporate web security appliance is intercepting decrypted HTTPS traffic and treating React Router 7's `*.data` data-action endpoints as file uploads (the URL extension trips the sandbox / AV / DLP policy). The "Attention / File blocked" page is returned from the appliance itself, not from greenbook.
+>
+> Please add `*.africanunion.org` (or specifically `greenbook.africanunion.org`) to the appliance's bypass list for content inspection / sandbox / file-scanning. The site is internally-developed and `.data` is the standard React Router 7 form-action convention, not a file upload.
+
+> **ℹ Why not change the URL convention instead**
+>
+> React Router 7's `.data` suffix is built into its data-loading protocol; changing it requires forking the framework or extensive route-shape gymnastics. Bypassing the appliance is the right fix — every React Router 7 deployment behind the same appliance will hit this same wall, and it's a one-time configuration change at the appliance.
 
 ---
