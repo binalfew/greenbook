@@ -150,7 +150,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 03 — Vault                       | 1     | 📝 drafted  |
 | 04 — GitLab CE                   | 1     | 📝 drafted  |
 | 05 — Nomad cluster               | 1     | 📝 drafted  |
-| 06 — Nexus                       | 1     | 📋 planned  |
+| 06 — Nexus                       | 1     | 📝 drafted  |
 | 07 — Keycloak                    | 2     | 📋 planned  |
 | 08 — Keycloak federated to AD    | 2     | 📋 planned  |
 | 09 — Loki + Grafana              | 2     | 📋 planned  |

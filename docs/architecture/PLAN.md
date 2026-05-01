@@ -2,8 +2,8 @@
 
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
-> **Status**: 🚧 Phase 1 in progress
-> **Last updated**: 2026-05-01 (chapter 05 drafted)
+> **Status**: ✅ Phase 1 drafted; 🚧 Phase 2 next
+> **Last updated**: 2026-05-01 (Phase 1 complete — chapters 02-06 all drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,28 +19,29 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                                          |
-| --------------------------------------- | ------------------------------------------------------------------------------ |
-| Phase                                   | 1 of 5                                                                         |
-| Chapters drafted                        | 6 (README, 00-architecture, 02-bastion, 03-vault, 04-gitlab, 05-nomad-cluster) |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                                                         |
-| Chapters planned                        | ~24                                                                            |
-| Locked decisions                        | 6 / 6                                                                          |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                                            |
-| External dependencies blocked           | 0                                                                              |
+| Metric                                  | Value                                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Phase                                   | 1 of 5                                                                                   |
+| Chapters drafted                        | 7 (README, 00-architecture, 02-bastion, 03-vault, 04-gitlab, 05-nomad-cluster, 06-nexus) |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                                                                   |
+| Chapters planned                        | ~23                                                                                      |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                                          |
+| Locked decisions                        | 6 / 6                                                                                    |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                                                                      |
+| External dependencies blocked           | 0                                                                                        |
 
 ---
 
 ## Phase summary
 
-| Phase | Goal                                | Months  | Status         | Chapters in scope                |
-| ----- | ----------------------------------- | ------- | -------------- | -------------------------------- |
-| 1     | Developer foothold                  | 0-2     | 🚧 in progress | 02, 03, 04, 05, 06               |
-| 2     | Identity + observability            | 2-4     | 📋 planned     | 07, 08, 09, 10, 11, 12           |
-| 3     | App scaling + edge HA               | 4-6     | 📋 planned     | 13, 14, 15, 16, 17, 18           |
-| 4     | Resilience                          | 6-9     | 📋 planned     | 19, 20                           |
-| 5     | Operational maturity                | 9-12    | 📋 planned     | 21, 22, 23                       |
-| post  | Operational reference (cross-phase) | rolling | 📋 planned     | 30, 40, 41, 42, appendices A/B/C |
+| Phase | Goal                                | Months  | Status     | Chapters in scope                |
+| ----- | ----------------------------------- | ------- | ---------- | -------------------------------- |
+| 1     | Developer foothold                  | 0-2     | 📝 drafted | 02, 03, 04, 05, 06               |
+| 2     | Identity + observability            | 2-4     | 📋 planned | 07, 08, 09, 10, 11, 12           |
+| 3     | App scaling + edge HA               | 4-6     | 📋 planned | 13, 14, 15, 16, 17, 18           |
+| 4     | Resilience                          | 6-9     | 📋 planned | 19, 20                           |
+| 5     | Operational maturity                | 9-12    | 📋 planned | 21, 22, 23                       |
+| post  | Operational reference (cross-phase) | rolling | 📋 planned | 30, 40, 41, 42, appendices A/B/C |
 
 ---
 
@@ -57,8 +58,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal                             |
 | 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA                           |
 | 05  | Nomad cluster            | 1     | 📝     | 2026-05-01 | —           | —                              | 3 servers + 3 clients; Consul colocated; mTLS + ACLs + Vault JWT |
-| 06  | Nexus                    | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT (final Phase 1 chapter)                            |
-| 07  | Keycloak                 | 2     | 📋     | —          | —           | —                              | standalone first, AD-federated next                              |
+| 06  | Nexus                    | 1     | 📝     | 2026-05-01 | —           | —                              | OSS single VM; Maven/npm/PyPI proxies + hosted repos             |
+| 07  | Keycloak                 | 2     | 📋     | —          | —           | —                              | NEXT TO DRAFT — start of Phase 2 (standalone first)              |
 | 08  | Keycloak federated to AD | 2     | 📋     | —          | —           | —                              | depends on AU IT AD/LDAP access                                  |
 | 09  | Loki + Grafana           | 2     | 📋     | —          | —           | —                              | observability foundation                                         |
 | 10  | Prometheus + Mimir       | 2     | 📋     | —          | —           | —                              | depends on 09                                                    |
@@ -212,9 +213,16 @@ Append-only. Most recent first.
   - Establishes the workload-identity pattern explicitly to avoid the "static Vault token in job spec" anti-pattern
   - GitLab Runners co-located on Nomad clients per chapter 04 §4.9 commitment; runner registration token fetched from Vault
 
-### 2026-05-XX (next planned)
+- 📝 06-nexus drafted (Phase 1, chapter 5 of 5 — **PHASE 1 COMPLETE**)
+  - Sections: role + threat model, pre-flight, OSS install (no apt repo), admin password rotation + Vault, TLS via local nginx reverse proxy, repository setup (Maven/npm/PyPI/Generic/Docker), Phase 2 SSO deferment, backup strategy (DB export task + filesystem snapshot), audit logging, UFW, verification, Phase 2 path
+  - 20 fenced code blocks, 0 broken anchors
+  - Smallest Phase 1 chapter — Nexus is straightforward single-VM JVM
+  - Phase 1 now ships an end-to-end "Phase 1 complete" summary table mapping each component to its Phase 5 upgrade chapter
+  - **Phase 1 closes on 2026-05-01**: app teams now have everything needed to deploy a workload (source, secrets, scheduler, dependencies, operator access). Per-app onboarding workflow lands in chapter 30.
 
-- 🚧 → 📝 06-nexus drafting begins (Phase 1, chapter 5 of 5 — last in Phase 1)
+### 2026-05-XX (next planned — Phase 2 begins)
+
+- 🚧 → 📝 07-keycloak drafting begins (Phase 2, chapter 1 of 6) — standalone Keycloak HA pair before federating to AD in chapter 08
 
 ---
 
