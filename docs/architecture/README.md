@@ -156,7 +156,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 09 — Loki + Grafana              | 2     | 📝 drafted  |
 | 10 — Prometheus + Mimir          | 2     | 📝 drafted  |
 | 11 — Tempo                       | 2     | 📝 drafted  |
-| 12 — Alertmanager                | 2     | 📋 planned  |
+| 12 — Alertmanager                | 2     | 📝 drafted  |
 | 13 — Postgres HA                 | 3     | 📋 planned  |
 | 14 — Redis Sentinel              | 3     | 📋 planned  |
 | 15 — MinIO                       | 3     | 📋 planned  |

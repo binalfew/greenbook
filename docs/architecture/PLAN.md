@@ -2,8 +2,8 @@
 
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
-> **Status**: ✅ Phase 1 drafted; 🚧 Phase 2 in progress
-> **Last updated**: 2026-05-01 (chapter 11 drafted)
+> **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted
+> **Last updated**: 2026-05-01 (chapter 12 drafted — Phase 2 complete)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,30 +19,31 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                             |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| Phase                                   | 1 of 5                                                            |
-| Chapters drafted                        | 12 (README, 00, 02-11)                                            |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                                            |
-| Chapters planned                        | ~18                                                               |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                   |
-| **Phase 2 status**                      | 🚧 5 of 6 drafted (07-11); next: 12 (Alertmanager closes Phase 2) |
-| Locked decisions                        | 6 / 6                                                             |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                               |
-| External dependencies blocked           | 0                                                                 |
+| Metric                                  | Value                                           |
+| --------------------------------------- | ----------------------------------------------- |
+| Phase                                   | 1 of 5                                          |
+| Chapters drafted                        | 13 (README, 00, 02-12)                          |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                          |
+| Chapters planned                        | ~17                                             |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
+| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
+| **Phase 3 status**                      | 📋 planned; next: 13 (Postgres HA)              |
+| Locked decisions                        | 6 / 6                                           |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
+| External dependencies blocked           | 0                                               |
 
 ---
 
 ## Phase summary
 
-| Phase | Goal                                | Months  | Status         | Chapters in scope                       |
-| ----- | ----------------------------------- | ------- | -------------- | --------------------------------------- |
-| 1     | Developer foothold                  | 0-2     | 📝 drafted     | 02, 03, 04, 05, 06                      |
-| 2     | Identity + observability            | 2-4     | 🚧 in progress | 07, 08, 09, 10, 11, 12 (5 of 6 drafted) |
-| 3     | App scaling + edge HA               | 4-6     | 📋 planned     | 13, 14, 15, 16, 17, 18                  |
-| 4     | Resilience                          | 6-9     | 📋 planned     | 19, 20                                  |
-| 5     | Operational maturity                | 9-12    | 📋 planned     | 21, 22, 23                              |
-| post  | Operational reference (cross-phase) | rolling | 📋 planned     | 30, 40, 41, 42, appendices A/B/C        |
+| Phase | Goal                                | Months  | Status     | Chapters in scope                      |
+| ----- | ----------------------------------- | ------- | ---------- | -------------------------------------- |
+| 1     | Developer foothold                  | 0-2     | 📝 drafted | 02, 03, 04, 05, 06                     |
+| 2     | Identity + observability            | 2-4     | 📝 drafted | 07, 08, 09, 10, 11, 12 (all 6 drafted) |
+| 3     | App scaling + edge HA               | 4-6     | 📋 planned | 13, 14, 15, 16, 17, 18                 |
+| 4     | Resilience                          | 6-9     | 📋 planned | 19, 20                                 |
+| 5     | Operational maturity                | 9-12    | 📋 planned | 21, 22, 23                             |
+| post  | Operational reference (cross-phase) | rolling | 📋 planned | 30, 40, 41, 42, appendices A/B/C       |
 
 ---
 
@@ -50,40 +51,40 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 planned · 🔒 stub only
 
-| #   | Title                    | Phase | Status | Drafted    | Reviewed by | Validated against real install | Notes                                                              |
-| --- | ------------------------ | ----- | ------ | ---------- | ----------- | ------------------------------ | ------------------------------------------------------------------ |
-| —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step                                |
-| 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23                              |
-| 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD                                      |
-| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21                             |
-| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal                               |
-| 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA                             |
-| 05  | Nomad cluster            | 1     | 📝     | 2026-05-01 | —           | —                              | 3 servers + 3 clients; Consul colocated; mTLS + ACLs + Vault JWT   |
-| 06  | Nexus                    | 1     | 📝     | 2026-05-01 | —           | —                              | OSS single VM; Maven/npm/PyPI proxies + hosted repos               |
-| 07  | Keycloak                 | 2     | 📝     | 2026-05-01 | —           | —                              | Standalone HA pair + dedicated Postgres; au realm + OIDC clients   |
-| 08  | Keycloak federated to AD | 2     | 📝     | 2026-05-01 | —           | —                              | AD as user lifecycle source; Q3 dependency surfaced in §8.2        |
-| 09  | Loki + Grafana           | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Loki cluster + Grafana SSO; Promtail on every platform VM   |
-| 10  | Prometheus + Mimir       | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Mimir colocated on obs01-03; Prometheus HA with Mimir dedup |
-| 11  | Tempo                    | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Tempo on obs01-03; OTLP receivers; logs↔traces wired       |
-| 12  | Alertmanager             | 2     | 📋     | —          | —           | —                              | NEXT TO DRAFT — closes Phase 2; depends on 10 + 11                 |
-| 13  | Postgres HA              | 3     | 📋     | —          | —           | —                              | streaming replication; PITR                                        |
-| 14  | Redis Sentinel           | 3     | 📋     | —          | —           | —                              | 3-node Sentinel pattern                                            |
-| 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | erasure-coded set ≥4 nodes                                         |
-| 16  | PgBouncer                | 3     | 📋     | —          | —           | —                              | depends on 13                                                      |
-| 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | active-active VRRP                                                 |
-| 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | folds in greenbook ch14 learnings                                  |
-| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | RPO ≤ 1h target                                                    |
-| 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                                                    |
-| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | upgrade from chapter 02 simple bastion                             |
-| 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only                                    |
-| 23  | Runbook automation       | 5     | 📋     | —          | —           | —                              | Ansible playbooks for routine ops                                  |
-| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | the user-facing surface                                            |
-| 40  | Verification ladder      | post  | 📋     | —          | —           | —                              | mirrors greenbook ch13                                             |
-| 41  | Incident response        | post  | 📋     | —          | —           | —                              | playbooks per common failure mode                                  |
-| 42  | Hardening checklist      | post  | 📋     | —          | —           | —                              | pre-go-live audit                                                  |
-| A   | Command cheatsheet       | —     | 📋     | —          | —           | —                              | append rolling                                                     |
-| B   | Reference configs        | —     | 📋     | —          | —           | —                              | canonical files per chapter                                        |
-| C   | External references      | —     | 📋     | —          | —           | —                              | upstream docs, vendor links                                        |
+| #   | Title                    | Phase | Status | Drafted    | Reviewed by | Validated against real install | Notes                                                                   |
+| --- | ------------------------ | ----- | ------ | ---------- | ----------- | ------------------------------ | ----------------------------------------------------------------------- |
+| —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step                                     |
+| 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23                                   |
+| 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD                                           |
+| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21                                  |
+| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal                                    |
+| 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA                                  |
+| 05  | Nomad cluster            | 1     | 📝     | 2026-05-01 | —           | —                              | 3 servers + 3 clients; Consul colocated; mTLS + ACLs + Vault JWT        |
+| 06  | Nexus                    | 1     | 📝     | 2026-05-01 | —           | —                              | OSS single VM; Maven/npm/PyPI proxies + hosted repos                    |
+| 07  | Keycloak                 | 2     | 📝     | 2026-05-01 | —           | —                              | Standalone HA pair + dedicated Postgres; au realm + OIDC clients        |
+| 08  | Keycloak federated to AD | 2     | 📝     | 2026-05-01 | —           | —                              | AD as user lifecycle source; Q3 dependency surfaced in §8.2             |
+| 09  | Loki + Grafana           | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Loki cluster + Grafana SSO; Promtail on every platform VM        |
+| 10  | Prometheus + Mimir       | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Mimir colocated on obs01-03; Prometheus HA with Mimir dedup      |
+| 11  | Tempo                    | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Tempo on obs01-03; OTLP receivers; logs↔traces wired            |
+| 12  | Alertmanager             | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node AM cluster; Mimir+Loki rulers; 30+ initial rules; closes Phase 2 |
+| 13  | Postgres HA              | 3     | 📋     | —          | —           | —                              | NEXT TO DRAFT — Phase 3 begins; streaming replication; PITR             |
+| 14  | Redis Sentinel           | 3     | 📋     | —          | —           | —                              | 3-node Sentinel pattern                                                 |
+| 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | erasure-coded set ≥4 nodes                                              |
+| 16  | PgBouncer                | 3     | 📋     | —          | —           | —                              | depends on 13                                                           |
+| 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | active-active VRRP                                                      |
+| 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | folds in greenbook ch14 learnings                                       |
+| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | RPO ≤ 1h target                                                         |
+| 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                                                         |
+| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | upgrade from chapter 02 simple bastion                                  |
+| 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only                                         |
+| 23  | Runbook automation       | 5     | 📋     | —          | —           | —                              | Ansible playbooks for routine ops                                       |
+| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | the user-facing surface                                                 |
+| 40  | Verification ladder      | post  | 📋     | —          | —           | —                              | mirrors greenbook ch13                                                  |
+| 41  | Incident response        | post  | 📋     | —          | —           | —                              | playbooks per common failure mode                                       |
+| 42  | Hardening checklist      | post  | 📋     | —          | —           | —                              | pre-go-live audit                                                       |
+| A   | Command cheatsheet       | —     | 📋     | —          | —           | —                              | append rolling                                                          |
+| B   | Reference configs        | —     | 📋     | —          | —           | —                              | canonical files per chapter                                             |
+| C   | External references      | —     | 📋     | —          | —           | —                              | upstream docs, vendor links                                             |
 
 ---
 
@@ -256,9 +257,16 @@ Append-only. Most recent first.
   - **App instrumentation contract** is the most consequential addition — 7 required + 4 forbidden items that chapter 30 (App onboarding) will enforce. Greenbook is named as the first adopter, with concrete OTel SDK/transport details for its TS/Express stack
   - LGTM circuit closes with logs↔traces wiring: Loki's `derivedFields` (ch09 §9.7) and Tempo's `tracesToLogsV2` (this chapter §11.6) reference each other's data-source UIDs
 
-### 2026-05-XX (next planned — closes Phase 2)
+- 📝 12-alertmanager drafted (Phase 2, chapter 6 of 6 — **PHASE 2 COMPLETE**)
+  - Sections: role + threat model (alert fatigue as the most likely failure mode), pre-flight (last service to fit on the obs VMs without resize), install Alertmanager from upstream tarball (reuses prometheus user), 3-node cluster config with HashiCorp memberlist on port 9094, notification routing tree (3 severity tiers — critical→oncall+paging, warning→team email, info→drop), Mimir ruler config + 30+ initial alert rules covering Phase 1 + Phase 2 services + hosts + the LGTM stack itself, Loki ruler with log-pattern alerts (SSH brute-force, Vault permission denials, nginx 5xx surge, Keycloak admin lockout), silences + inhibitions (HostDown inhibits per-service; MimirIngesterDown inhibits derived metric alerts), Q6 on-call rotation dependency surfaced explicitly with PagerDuty/Opsgenie/AU-incident integration shapes, UFW (9093, 9094, SMTP outbound), synthetic alert end-to-end verification + silence + cluster-gossip checks, **Phase 2 close-out summary** mapping every component to its Phase 5 upgrade chapter
+  - 24 fenced code blocks, 0 broken anchors
+  - Three severity tiers (`critical` / `warning` / `info`) established as platform convention for all future rules — referenced from chapter 30 (App onboarding) when apps add their own rules
+  - Q6 (paging product) decision documented as open with the integration shapes pre-specified; closing Q6 doesn't require a chapter rewrite, just the receiver block swap
+  - **Phase 2 closes on 2026-05-01**: app teams now have SSO, logs, metrics, traces, and alerts. Phase 3 starts with Postgres HA (chapter 13) replacing the manual-failover Postgres assumed by chapter 07.
 
-- 🚧 → 📝 12-alertmanager drafting begins (Phase 2, chapter 6 of 6) — Alertmanager + Mimir ruler + initial alerting rules; chapter 12 closes Phase 2
+### 2026-05-XX (next planned — Phase 3 begins)
+
+- 🚧 → 📝 13-postgres-ha drafting begins (Phase 3, chapter 1 of 6) — streaming replication for the application Postgres cluster (replaces ch07's single-node Keycloak DB)
 
 ---
 
