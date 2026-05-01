@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: 🚧 Phase 1 in progress
-> **Last updated**: 2026-05-01 (chapter 02 drafted)
+> **Last updated**: 2026-05-01 (chapter 03 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,15 +19,15 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                   |
-| --------------------------------------- | --------------------------------------- |
-| Phase                                   | 1 of 5                                  |
-| Chapters drafted                        | 3 (README, 00-architecture, 02-bastion) |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                  |
-| Chapters planned                        | ~27                                     |
-| Locked decisions                        | 6 / 6                                   |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                     |
-| External dependencies blocked           | 0                                       |
+| Metric                                  | Value                                             |
+| --------------------------------------- | ------------------------------------------------- |
+| Phase                                   | 1 of 5                                            |
+| Chapters drafted                        | 4 (README, 00-architecture, 02-bastion, 03-vault) |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                            |
+| Chapters planned                        | ~26                                               |
+| Locked decisions                        | 6 / 6                                             |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                               |
+| External dependencies blocked           | 0                                                 |
 
 ---
 
@@ -54,8 +54,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23  |
 | 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD          |
 | 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21 |
-| 03  | Vault                    | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT (depends on 02)          |
-| 04  | GitLab CE                | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                |
+| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal   |
+| 04  | GitLab CE                | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT (depends on 03)          |
 | 05  | Nomad cluster            | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                |
 | 06  | Nexus                    | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                |
 | 07  | Keycloak                 | 2     | 📋     | —          | —           | —                              | standalone first, AD-federated next    |
@@ -193,9 +193,15 @@ Append-only. Most recent first.
   - 22 fenced code blocks, 0 broken anchors
   - Sets the pattern for Phase 1 chapters: clear "Phase 1 vs Phase 5" upgrade path so each chapter can stop at minimal-but-complete
 
+- 📝 03-vault drafted (Phase 1, chapter 2 of 5)
+  - Sections: role + threat model, pre-flight, install, cluster config (vault.hcl + TLS), bootstrap (init/unseal/join), root token + Shamir unseal-key custody, operator authentication, policies, KV v2, audit device, Raft snapshot strategy, UFW, verification, Phase 5 upgrade
+  - 42 fenced code blocks, 0 broken anchors
+  - Bootstrap discipline emphasised: 5-of-3 Shamir split with 5 distinct custodians; root token revoked after operator tokens issued; init JSON file shredded
+  - Hourly Raft snapshots via systemd timer with leader-only execution
+
 ### 2026-05-XX (next planned)
 
-- 🚧 → 📝 03-vault drafting begins (Phase 1, chapter 2 of 5)
+- 🚧 → 📝 04-gitlab drafting begins (Phase 1, chapter 3 of 5)
 
 ---
 

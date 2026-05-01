@@ -147,7 +147,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 00 — Architecture                | —     | 📝 drafted  |
 | 01 — Capacity & sizing           | —     | 🔒 stub     |
 | 02 — Bastion                     | 1     | 📝 drafted  |
-| 03 — Vault                       | 1     | 📋 planned  |
+| 03 — Vault                       | 1     | 📝 drafted  |
 | 04 — GitLab CE                   | 1     | 📋 planned  |
 | 05 — Nomad cluster               | 1     | 📋 planned  |
 | 06 — Nexus                       | 1     | 📋 planned  |
