@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: 🚧 Phase 1 in progress
-> **Last updated**: 2026-05-01
+> **Last updated**: 2026-05-01 (chapter 02 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,15 +19,15 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                       |
-| --------------------------------------- | --------------------------- |
-| Phase                                   | 1 of 5                      |
-| Chapters drafted                        | 2 (README, 00-architecture) |
-| Chapters stubbed                        | 1 (01-capacity-sizing)      |
-| Chapters planned                        | ~28                         |
-| Locked decisions                        | 6 / 6                       |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)         |
-| External dependencies blocked           | 0                           |
+| Metric                                  | Value                                   |
+| --------------------------------------- | --------------------------------------- |
+| Phase                                   | 1 of 5                                  |
+| Chapters drafted                        | 3 (README, 00-architecture, 02-bastion) |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                  |
+| Chapters planned                        | ~27                                     |
+| Locked decisions                        | 6 / 6                                   |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                     |
+| External dependencies blocked           | 0                                       |
 
 ---
 
@@ -53,8 +53,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step    |
 | 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23  |
 | 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD          |
-| 02  | Bastion                  | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT                          |
-| 03  | Vault                    | 1     | 📋     | —          | —           | —                              | depends on 02 (operator access)        |
+| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21 |
+| 03  | Vault                    | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT (depends on 02)          |
 | 04  | GitLab CE                | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                |
 | 05  | Nomad cluster            | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                |
 | 06  | Nexus                    | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                |
@@ -186,9 +186,16 @@ Append-only. Most recent first.
 - D1-D6 locked (Nomad / Keycloak+AD / GitLab CE / LGTM / Consul / 6 VLANs)
 - Q1-Q6 raised (open questions awaiting AU IT input)
 
+### 2026-05-01 (later same day)
+
+- 📝 02-bastion drafted (Phase 1, chapter 1 of 5)
+  - Sections: role + threat model, base OS hardening cross-ref, SSH daemon hardening, operator account model, key auth setup, ProxyJump pattern, auditd + auth.log retention, UFW + perimeter rules, HA active/passive (DNS-driven), verification, Phase 5 upgrade pointer
+  - 22 fenced code blocks, 0 broken anchors
+  - Sets the pattern for Phase 1 chapters: clear "Phase 1 vs Phase 5" upgrade path so each chapter can stop at minimal-but-complete
+
 ### 2026-05-XX (next planned)
 
-- 🚧 → 📝 02-bastion drafting begins (Phase 1, chapter 1 of 5)
+- 🚧 → 📝 03-vault drafting begins (Phase 1, chapter 2 of 5)
 
 ---
 

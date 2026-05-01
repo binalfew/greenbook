@@ -144,9 +144,9 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | Chapter                          | Phase | Status      |
 | -------------------------------- | ----- | ----------- |
 | README (this file)               | —     | 🚧 drafting |
-| 00 — Architecture                | —     | 🚧 drafting |
-| 01 — Capacity & sizing           | —     | 📋 planned  |
-| 02 — Bastion                     | 1     | 📋 planned  |
+| 00 — Architecture                | —     | 📝 drafted  |
+| 01 — Capacity & sizing           | —     | 🔒 stub     |
+| 02 — Bastion                     | 1     | 📝 drafted  |
 | 03 — Vault                       | 1     | 📋 planned  |
 | 04 — GitLab CE                   | 1     | 📋 planned  |
 | 05 — Nomad cluster               | 1     | 📋 planned  |
