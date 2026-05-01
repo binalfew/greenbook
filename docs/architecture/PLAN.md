@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: ✅ Phase 1 drafted; 🚧 Phase 2 in progress
-> **Last updated**: 2026-05-01 (chapter 10 drafted)
+> **Last updated**: 2026-05-01 (chapter 11 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,17 +19,17 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                           |
-| --------------------------------------- | --------------------------------------------------------------- |
-| Phase                                   | 1 of 5                                                          |
-| Chapters drafted                        | 11 (README, 00, 02-10)                                          |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                                          |
-| Chapters planned                        | ~19                                                             |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                 |
-| **Phase 2 status**                      | 🚧 4 of 6 drafted (07, 08, 09, 10); next: 11, 12 (rest of LGTM) |
-| Locked decisions                        | 6 / 6                                                           |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                             |
-| External dependencies blocked           | 0                                                               |
+| Metric                                  | Value                                                             |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| Phase                                   | 1 of 5                                                            |
+| Chapters drafted                        | 12 (README, 00, 02-11)                                            |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                                            |
+| Chapters planned                        | ~18                                                               |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                   |
+| **Phase 2 status**                      | 🚧 5 of 6 drafted (07-11); next: 12 (Alertmanager closes Phase 2) |
+| Locked decisions                        | 6 / 6                                                             |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                                               |
+| External dependencies blocked           | 0                                                                 |
 
 ---
 
@@ -38,7 +38,7 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | Phase | Goal                                | Months  | Status         | Chapters in scope                       |
 | ----- | ----------------------------------- | ------- | -------------- | --------------------------------------- |
 | 1     | Developer foothold                  | 0-2     | 📝 drafted     | 02, 03, 04, 05, 06                      |
-| 2     | Identity + observability            | 2-4     | 🚧 in progress | 07, 08, 09, 10, 11, 12 (4 of 6 drafted) |
+| 2     | Identity + observability            | 2-4     | 🚧 in progress | 07, 08, 09, 10, 11, 12 (5 of 6 drafted) |
 | 3     | App scaling + edge HA               | 4-6     | 📋 planned     | 13, 14, 15, 16, 17, 18                  |
 | 4     | Resilience                          | 6-9     | 📋 planned     | 19, 20                                  |
 | 5     | Operational maturity                | 9-12    | 📋 planned     | 21, 22, 23                              |
@@ -64,8 +64,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 08  | Keycloak federated to AD | 2     | 📝     | 2026-05-01 | —           | —                              | AD as user lifecycle source; Q3 dependency surfaced in §8.2        |
 | 09  | Loki + Grafana           | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Loki cluster + Grafana SSO; Promtail on every platform VM   |
 | 10  | Prometheus + Mimir       | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Mimir colocated on obs01-03; Prometheus HA with Mimir dedup |
-| 11  | Tempo                    | 2     | 📋     | —          | —           | —                              | NEXT TO DRAFT — depends on 09; same obs VMs                        |
-| 12  | Alertmanager             | 2     | 📋     | —          | —           | —                              | depends on 10                                                      |
+| 11  | Tempo                    | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Tempo on obs01-03; OTLP receivers; logs↔traces wired       |
+| 12  | Alertmanager             | 2     | 📋     | —          | —           | —                              | NEXT TO DRAFT — closes Phase 2; depends on 10 + 11                 |
 | 13  | Postgres HA              | 3     | 📋     | —          | —           | —                              | streaming replication; PITR                                        |
 | 14  | Redis Sentinel           | 3     | 📋     | —          | —           | —                              | 3-node Sentinel pattern                                            |
 | 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | erasure-coded set ≥4 nodes                                         |
@@ -249,9 +249,16 @@ Append-only. Most recent first.
   - Cardinality discipline section (§10.10) calls out specifically what does NOT belong as a metric label (request IDs, user IDs, full URLs) — these go in logs (chapter 09) or traces (chapter 11)
   - Memberlist port choice (7946 vs 7947 for Loki/Mimir) documented as a deliberate decision
 
-### 2026-05-XX (next planned — rest of LGTM)
+- 📝 11-tempo drafted (Phase 2, chapter 5 of 6)
+  - Sections: role + threat model (forensic trail integrity; cardinality less-of-a-worry than Mimir; sampling is the lever), pre-flight (re-check obs VMs after Loki+Mimir landed; halt-and-resize gate), install Tempo from Grafana apt repo (already configured in ch09), cluster config (scalable single-binary mode, replication factor 3, memberlist on port 7948 — distinct from Loki's 7946 and Mimir's 7947), OTLP collector path (4317 gRPC + 4318 HTTP; legacy Jaeger/Zipkin time-boxed), Tempo as Grafana data source with tracesToLogsV2 + tracesToMetrics + serviceMap wired to Loki/Mimir UIDs, logs ↔ traces correlation completes the LGTM circuit (Loki ch09 §9.7 already provisioned the reverse link), span attribute conventions + 14d hot retention, **app instrumentation contract** (required vs forbidden — referenced from chapter 30 onboarding), UFW rules + Prometheus self-scrape addition, verification with synthetic OTLP span round-trip, Phase 3 MinIO migration path
+  - 20 fenced code blocks, 0 broken anchors
+  - **Memberlist port allocation table consolidated** (Loki 7946 / Mimir 7947 / Tempo 7948) so the LGTM gossip namespaces stay unambiguous on the shared obs VMs
+  - **App instrumentation contract** is the most consequential addition — 7 required + 4 forbidden items that chapter 30 (App onboarding) will enforce. Greenbook is named as the first adopter, with concrete OTel SDK/transport details for its TS/Express stack
+  - LGTM circuit closes with logs↔traces wiring: Loki's `derivedFields` (ch09 §9.7) and Tempo's `tracesToLogsV2` (this chapter §11.6) reference each other's data-source UIDs
 
-- 🚧 → 📝 11-tempo drafting begins (Phase 2, chapter 5 of 6) — Tempo for distributed traces; same obs01-03 host pattern
+### 2026-05-XX (next planned — closes Phase 2)
+
+- 🚧 → 📝 12-alertmanager drafting begins (Phase 2, chapter 6 of 6) — Alertmanager + Mimir ruler + initial alerting rules; chapter 12 closes Phase 2
 
 ---
 
