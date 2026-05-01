@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: 🚧 Phase 1 in progress
-> **Last updated**: 2026-05-01 (chapter 04 drafted)
+> **Last updated**: 2026-05-01 (chapter 05 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,15 +19,15 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                        |
-| --------------------------------------- | ------------------------------------------------------------ |
-| Phase                                   | 1 of 5                                                       |
-| Chapters drafted                        | 5 (README, 00-architecture, 02-bastion, 03-vault, 04-gitlab) |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                                       |
-| Chapters planned                        | ~25                                                          |
-| Locked decisions                        | 6 / 6                                                        |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                          |
-| External dependencies blocked           | 0                                                            |
+| Metric                                  | Value                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------ |
+| Phase                                   | 1 of 5                                                                         |
+| Chapters drafted                        | 6 (README, 00-architecture, 02-bastion, 03-vault, 04-gitlab, 05-nomad-cluster) |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                                                         |
+| Chapters planned                        | ~24                                                                            |
+| Locked decisions                        | 6 / 6                                                                          |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                                                            |
+| External dependencies blocked           | 0                                                                              |
 
 ---
 
@@ -48,40 +48,40 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 planned · 🔒 stub only
 
-| #   | Title                    | Phase | Status | Drafted    | Reviewed by | Validated against real install | Notes                                   |
-| --- | ------------------------ | ----- | ------ | ---------- | ----------- | ------------------------------ | --------------------------------------- |
-| —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step     |
-| 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23   |
-| 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD           |
-| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21  |
-| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal    |
-| 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA  |
-| 05  | Nomad cluster            | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT (Vault + GitLab consumer) |
-| 06  | Nexus                    | 1     | 📋     | —          | —           | —                              | depends on 03 (secrets)                 |
-| 07  | Keycloak                 | 2     | 📋     | —          | —           | —                              | standalone first, AD-federated next     |
-| 08  | Keycloak federated to AD | 2     | 📋     | —          | —           | —                              | depends on AU IT AD/LDAP access         |
-| 09  | Loki + Grafana           | 2     | 📋     | —          | —           | —                              | observability foundation                |
-| 10  | Prometheus + Mimir       | 2     | 📋     | —          | —           | —                              | depends on 09                           |
-| 11  | Tempo                    | 2     | 📋     | —          | —           | —                              | depends on 09                           |
-| 12  | Alertmanager             | 2     | 📋     | —          | —           | —                              | depends on 10                           |
-| 13  | Postgres HA              | 3     | 📋     | —          | —           | —                              | streaming replication; PITR             |
-| 14  | Redis Sentinel           | 3     | 📋     | —          | —           | —                              | 3-node Sentinel pattern                 |
-| 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | erasure-coded set ≥4 nodes              |
-| 16  | PgBouncer                | 3     | 📋     | —          | —           | —                              | depends on 13                           |
-| 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | active-active VRRP                      |
-| 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | folds in greenbook ch14 learnings       |
-| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | RPO ≤ 1h target                         |
-| 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                         |
-| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | upgrade from chapter 02 simple bastion  |
-| 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only         |
-| 23  | Runbook automation       | 5     | 📋     | —          | —           | —                              | Ansible playbooks for routine ops       |
-| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | the user-facing surface                 |
-| 40  | Verification ladder      | post  | 📋     | —          | —           | —                              | mirrors greenbook ch13                  |
-| 41  | Incident response        | post  | 📋     | —          | —           | —                              | playbooks per common failure mode       |
-| 42  | Hardening checklist      | post  | 📋     | —          | —           | —                              | pre-go-live audit                       |
-| A   | Command cheatsheet       | —     | 📋     | —          | —           | —                              | append rolling                          |
-| B   | Reference configs        | —     | 📋     | —          | —           | —                              | canonical files per chapter             |
-| C   | External references      | —     | 📋     | —          | —           | —                              | upstream docs, vendor links             |
+| #   | Title                    | Phase | Status | Drafted    | Reviewed by | Validated against real install | Notes                                                            |
+| --- | ------------------------ | ----- | ------ | ---------- | ----------- | ------------------------------ | ---------------------------------------------------------------- |
+| —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step                              |
+| 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23                            |
+| 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD                                    |
+| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21                           |
+| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal                             |
+| 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA                           |
+| 05  | Nomad cluster            | 1     | 📝     | 2026-05-01 | —           | —                              | 3 servers + 3 clients; Consul colocated; mTLS + ACLs + Vault JWT |
+| 06  | Nexus                    | 1     | 📋     | —          | —           | —                              | NEXT TO DRAFT (final Phase 1 chapter)                            |
+| 07  | Keycloak                 | 2     | 📋     | —          | —           | —                              | standalone first, AD-federated next                              |
+| 08  | Keycloak federated to AD | 2     | 📋     | —          | —           | —                              | depends on AU IT AD/LDAP access                                  |
+| 09  | Loki + Grafana           | 2     | 📋     | —          | —           | —                              | observability foundation                                         |
+| 10  | Prometheus + Mimir       | 2     | 📋     | —          | —           | —                              | depends on 09                                                    |
+| 11  | Tempo                    | 2     | 📋     | —          | —           | —                              | depends on 09                                                    |
+| 12  | Alertmanager             | 2     | 📋     | —          | —           | —                              | depends on 10                                                    |
+| 13  | Postgres HA              | 3     | 📋     | —          | —           | —                              | streaming replication; PITR                                      |
+| 14  | Redis Sentinel           | 3     | 📋     | —          | —           | —                              | 3-node Sentinel pattern                                          |
+| 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | erasure-coded set ≥4 nodes                                       |
+| 16  | PgBouncer                | 3     | 📋     | —          | —           | —                              | depends on 13                                                    |
+| 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | active-active VRRP                                               |
+| 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | folds in greenbook ch14 learnings                                |
+| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | RPO ≤ 1h target                                                  |
+| 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                                                  |
+| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | upgrade from chapter 02 simple bastion                           |
+| 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only                                  |
+| 23  | Runbook automation       | 5     | 📋     | —          | —           | —                              | Ansible playbooks for routine ops                                |
+| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | the user-facing surface                                          |
+| 40  | Verification ladder      | post  | 📋     | —          | —           | —                              | mirrors greenbook ch13                                           |
+| 41  | Incident response        | post  | 📋     | —          | —           | —                              | playbooks per common failure mode                                |
+| 42  | Hardening checklist      | post  | 📋     | —          | —           | —                              | pre-go-live audit                                                |
+| A   | Command cheatsheet       | —     | 📋     | —          | —           | —                              | append rolling                                                   |
+| B   | Reference configs        | —     | 📋     | —          | —           | —                              | canonical files per chapter                                      |
+| C   | External references      | —     | 📋     | —          | —           | —                              | upstream docs, vendor links                                      |
 
 ---
 
@@ -205,9 +205,16 @@ Append-only. Most recent first.
   - Establishes the "single VM with backup-driven recovery" pattern that GitLab CE forces; Phase 4 chapter 19 hardens this further with off-site replication
   - Vault integration baked in from day 1: root password, runner tokens, future SMTP creds — all stored under kv/platform/gitlab/
 
+- 📝 05-nomad-cluster drafted (Phase 1, chapter 4 of 5)
+  - Sections: role + threat model, pre-flight, install Nomad+Consul, mTLS for the cluster (CA + per-node certs + gossip keys), server bootstrap, ACL bootstrap (both Consul + Nomad), client install, Vault integration via JWT workload identity (NOT static tokens), end-to-end test job, GitLab Runner co-location on clients, audit logging, dual-cluster snapshot strategy, UFW (many ports!), verification, Phase 5 upgrade
+  - 30 fenced code blocks, 0 broken anchors
+  - Largest chapter in Phase 1 because Nomad + Consul together are non-trivial. Makes mTLS + ACLs mandatory from day one (default-deny posture)
+  - Establishes the workload-identity pattern explicitly to avoid the "static Vault token in job spec" anti-pattern
+  - GitLab Runners co-located on Nomad clients per chapter 04 §4.9 commitment; runner registration token fetched from Vault
+
 ### 2026-05-XX (next planned)
 
-- 🚧 → 📝 05-nomad-cluster drafting begins (Phase 1, chapter 4 of 5)
+- 🚧 → 📝 06-nexus drafting begins (Phase 1, chapter 5 of 5 — last in Phase 1)
 
 ---
 
