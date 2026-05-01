@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: ✅ Phase 1 drafted; 🚧 Phase 2 in progress
-> **Last updated**: 2026-05-01 (chapter 08 drafted)
+> **Last updated**: 2026-05-01 (chapter 09 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,17 +19,17 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                                                                                 |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Phase                                   | 1 of 5                                                                                                                |
-| Chapters drafted                        | 9 (README, 00-architecture, 02-bastion, 03-vault, 04-gitlab, 05-nomad-cluster, 06-nexus, 07-keycloak, 08-keycloak-ad) |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                                                                                                |
-| Chapters planned                        | ~21                                                                                                                   |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                                                                       |
-| **Phase 2 status**                      | 🚧 2 of 6 drafted (07, 08); next: 09, 10, 11, 12 (LGTM stack)                                                         |
-| Locked decisions                        | 6 / 6                                                                                                                 |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                                                                                   |
-| External dependencies blocked           | 0                                                                                                                     |
+| Metric                                  | Value                                                           |
+| --------------------------------------- | --------------------------------------------------------------- |
+| Phase                                   | 1 of 5                                                          |
+| Chapters drafted                        | 10 (README, 00, 02-09)                                          |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                                          |
+| Chapters planned                        | ~20                                                             |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                 |
+| **Phase 2 status**                      | 🚧 3 of 6 drafted (07, 08, 09); next: 10, 11, 12 (rest of LGTM) |
+| Locked decisions                        | 6 / 6                                                           |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                                             |
+| External dependencies blocked           | 0                                                               |
 
 ---
 
@@ -62,8 +62,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 06  | Nexus                    | 1     | 📝     | 2026-05-01 | —           | —                              | OSS single VM; Maven/npm/PyPI proxies + hosted repos             |
 | 07  | Keycloak                 | 2     | 📝     | 2026-05-01 | —           | —                              | Standalone HA pair + dedicated Postgres; au realm + OIDC clients |
 | 08  | Keycloak federated to AD | 2     | 📝     | 2026-05-01 | —           | —                              | AD as user lifecycle source; Q3 dependency surfaced in §8.2      |
-| 09  | Loki + Grafana           | 2     | 📋     | —          | —           | —                              | NEXT TO DRAFT — start of LGTM observability stack                |
-| 10  | Prometheus + Mimir       | 2     | 📋     | —          | —           | —                              | depends on 09                                                    |
+| 09  | Loki + Grafana           | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Loki cluster + Grafana SSO; Promtail on every platform VM |
+| 10  | Prometheus + Mimir       | 2     | 📋     | —          | —           | —                              | NEXT TO DRAFT — colocated on obs01-03 with Loki                  |
 | 11  | Tempo                    | 2     | 📋     | —          | —           | —                              | depends on 09                                                    |
 | 12  | Alertmanager             | 2     | 📋     | —          | —           | —                              | depends on 10                                                    |
 | 13  | Postgres HA              | 3     | 📋     | —          | —           | —                              | streaming replication; PITR                                      |
@@ -236,9 +236,15 @@ Append-only. Most recent first.
   - Rollback procedure documented + recommended quarterly drill; this is the highest-stakes Phase 2 chapter (federation breaks → no logins anywhere)
   - GitLab onboarding (§8.7) walks the OIDC client integration end-to-end as a template for Vault, Nexus, Nomad, Grafana
 
-### 2026-05-XX (next planned — LGTM observability stack)
+- 📝 09-loki drafted (Phase 2, chapter 3 of 6)
+  - Sections: role + threat model (audit log integrity; outage = no operational visibility; disk fill is the most likely failure), pre-flight (3 obs VMs sized to colocate Loki+Mimir+Tempo + 1 Grafana VM), install Loki on obs nodes (Grafana apt repo), 3-node cluster config (microservices mode, memberlist gossip, replication factor 3, 30-day retention), install Grafana with TLS via local nginx, Grafana SSO via Keycloak (chapter 08 OIDC client), Loki as Grafana data source via provisioning, Promtail on every platform VM (journald + nginx logs), standard label conventions (host/role/job/unit/level), initial dashboards via provisioning, UFW (3100 + 9095 + 7946 + 443), verification (ring formed, SSO works, cross-service correlation ID search), Phase 3 MinIO migration path
+  - 28 fenced code blocks, 0 broken anchors
+  - Phase 2 chunks live on local filesystem (replication factor 3 across nodes); Phase 3 ch15 swaps to MinIO without changing dashboards/SSO/Promtail
+  - Cross-service correlation ID search demonstrated as the first concrete operational benefit of centralised logs
 
-- 🚧 → 📝 09-loki drafting begins (Phase 2, chapter 3 of 6)
+### 2026-05-XX (next planned — rest of LGTM)
+
+- 🚧 → 📝 10-prometheus drafting begins (Phase 2, chapter 4 of 6) — Prometheus + Mimir for metrics; colocated on obs01-03 with Loki
 
 ---
 

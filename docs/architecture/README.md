@@ -153,7 +153,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 06 — Nexus                       | 1     | 📝 drafted  |
 | 07 — Keycloak                    | 2     | 📝 drafted  |
 | 08 — Keycloak federated to AD    | 2     | 📝 drafted  |
-| 09 — Loki + Grafana              | 2     | 📋 planned  |
+| 09 — Loki + Grafana              | 2     | 📝 drafted  |
 | 10 — Prometheus + Mimir          | 2     | 📋 planned  |
 | 11 — Tempo                       | 2     | 📋 planned  |
 | 12 — Alertmanager                | 2     | 📋 planned  |
