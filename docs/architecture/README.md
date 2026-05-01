@@ -152,7 +152,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 05 — Nomad cluster               | 1     | 📝 drafted  |
 | 06 — Nexus                       | 1     | 📝 drafted  |
 | 07 — Keycloak                    | 2     | 📝 drafted  |
-| 08 — Keycloak federated to AD    | 2     | 📋 planned  |
+| 08 — Keycloak federated to AD    | 2     | 📝 drafted  |
 | 09 — Loki + Grafana              | 2     | 📋 planned  |
 | 10 — Prometheus + Mimir          | 2     | 📋 planned  |
 | 11 — Tempo                       | 2     | 📋 planned  |
