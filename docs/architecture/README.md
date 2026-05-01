@@ -154,7 +154,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 07 — Keycloak                    | 2     | 📝 drafted  |
 | 08 — Keycloak federated to AD    | 2     | 📝 drafted  |
 | 09 — Loki + Grafana              | 2     | 📝 drafted  |
-| 10 — Prometheus + Mimir          | 2     | 📋 planned  |
+| 10 — Prometheus + Mimir          | 2     | 📝 drafted  |
 | 11 — Tempo                       | 2     | 📋 planned  |
 | 12 — Alertmanager                | 2     | 📋 planned  |
 | 13 — Postgres HA                 | 3     | 📋 planned  |
