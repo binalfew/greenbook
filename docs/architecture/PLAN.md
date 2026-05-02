@@ -2,8 +2,8 @@
 
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
-> **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; 🚧 Phase 3 in progress
-> **Last updated**: 2026-05-02 (chapter 17 drafted)
+> **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; ✅ Phase 3 drafted
+> **Last updated**: 2026-05-02 (chapter 18 drafted — Phase 3 complete)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,31 +19,32 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                            |
-| --------------------------------------- | ---------------------------------------------------------------- |
-| Phase                                   | 1 of 5                                                           |
-| Chapters drafted                        | 18 (README, 00, 02-17)                                           |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                                           |
-| Chapters planned                        | ~12                                                              |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**                  |
-| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)**                  |
-| **Phase 3 status**                      | 🚧 5 of 6 drafted (13-17); next: 18 (Cloudflare; closes Phase 3) |
-| Locked decisions                        | 6 / 6                                                            |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                              |
-| External dependencies blocked           | 0                                                                |
+| Metric                                  | Value                                           |
+| --------------------------------------- | ----------------------------------------------- |
+| Phase                                   | 1 of 5                                          |
+| Chapters drafted                        | 19 (README, 00, 02-18)                          |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                          |
+| Chapters planned                        | ~11                                             |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
+| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
+| **Phase 3 status**                      | **✅ all 6 component chapters drafted (13-18)** |
+| **Phase 4 status**                      | 📋 planned; next: 19 (Backup strategy)          |
+| Locked decisions                        | 6 / 6                                           |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
+| External dependencies blocked           | 0                                               |
 
 ---
 
 ## Phase summary
 
-| Phase | Goal                                | Months  | Status         | Chapters in scope                       |
-| ----- | ----------------------------------- | ------- | -------------- | --------------------------------------- |
-| 1     | Developer foothold                  | 0-2     | 📝 drafted     | 02, 03, 04, 05, 06                      |
-| 2     | Identity + observability            | 2-4     | 📝 drafted     | 07, 08, 09, 10, 11, 12 (all 6 drafted)  |
-| 3     | App scaling + edge HA               | 4-6     | 🚧 in progress | 13, 14, 15, 16, 17, 18 (5 of 6 drafted) |
-| 4     | Resilience                          | 6-9     | 📋 planned     | 19, 20                                  |
-| 5     | Operational maturity                | 9-12    | 📋 planned     | 21, 22, 23                              |
-| post  | Operational reference (cross-phase) | rolling | 📋 planned     | 30, 40, 41, 42, appendices A/B/C        |
+| Phase | Goal                                | Months  | Status     | Chapters in scope                      |
+| ----- | ----------------------------------- | ------- | ---------- | -------------------------------------- |
+| 1     | Developer foothold                  | 0-2     | 📝 drafted | 02, 03, 04, 05, 06                     |
+| 2     | Identity + observability            | 2-4     | 📝 drafted | 07, 08, 09, 10, 11, 12 (all 6 drafted) |
+| 3     | App scaling + edge HA               | 4-6     | 📝 drafted | 13, 14, 15, 16, 17, 18 (all 6 drafted) |
+| 4     | Resilience                          | 6-9     | 📋 planned | 19, 20                                 |
+| 5     | Operational maturity                | 9-12    | 📋 planned | 21, 22, 23                             |
+| post  | Operational reference (cross-phase) | rolling | 📋 planned | 30, 40, 41, 42, appendices A/B/C       |
 
 ---
 
@@ -72,8 +73,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 15  | MinIO                    | 3     | 📝     | 2026-05-02 | —           | —                              | 4-node EC; unlocks Loki/Mimir/Tempo/Postgres/Redis cold tier; per-consumer SAs  |
 | 16  | PgBouncer                | 3     | 📝     | 2026-05-02 | —           | —                              | 2-VM PgBouncer active-active; transaction-mode default; auth_query pattern      |
 | 17  | HAProxy HA pair          | 3     | 📝     | 2026-05-02 | —           | —                              | Internal LB; VRRP VIP; pg-rw/pg-ro split via xinetd; Consul SD for app backends |
-| 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | NEXT TO DRAFT — closes Phase 3; folds in greenbook ch14 learnings               |
-| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | RPO ≤ 1h target                                                                 |
+| 18  | Public DNS + Cloudflare  | 3     | 📝     | 2026-05-02 | —           | —                              | Cloudflare→AU NAT→DMZ; corporate-WAF bypass-list documented; closes Phase 3     |
+| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | NEXT TO DRAFT — Phase 4 begins; RPO ≤ 1h target                                 |
 | 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                                                                 |
 | 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | upgrade from chapter 02 simple bastion                                          |
 | 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only                                                 |
@@ -301,9 +302,17 @@ Append-only. Most recent first.
   - **Consul DNS service discovery** is the integration that makes Nomad apps reachable via stable hostnames — chapter 30 onboarding contract: every onboarded app declares a Nomad service block + health check; HAProxy picks it up automatically via SRV record
   - Multi-VIP layout (3 VIPs in §17.5.5) is the production-correct shape; documented as the recommendation after the §17.5.4 single-VIP simplification
 
-### 2026-05-XX (next planned — closes Phase 3)
+- 📝 18-public-dns drafted (Phase 3, chapter 6 of 6 — **PHASE 3 COMPLETE**)
+  - Sections: role + threat model (whole-platform exposure to public internet; corporate WAF as the realistic failure mode), topology recap (Cloudflare → AU NAT → DMZ → App; the existing greenbook DMZ nginx pair stays in place — chapter 18 wires Cloudflare in front), pre-flight (Cloudflare Pro+ plan, AU IT prerequisites including the **critical** corporate-WAF bypass-list `*.africanunion.org` step), zone configuration (Full Strict TLS, DNSSEC, HSTS preload, TLS 1.2 floor, Bot Fight Mode), origin TLS via Cloudflare Origin CA (15-year cert, ECC P-256), origin IP allowlist with weekly systemd timer that diffs Cloudflare's published ranges and alerts on changes, WAF rules + rate limiting (managed rules + 4-rule custom set + 3 rate-limit rules per platform), cache rules (default deny + per-extension allowlist; never cache POST/4xx/5xx; never cache Set-Cookie/Authorization responses), per-app DNS + cert workflow (the chapter 30 contract), **lessons from greenbook deployment ch14** distilled (Cloudflare 521 / TLS handshake fail / corporate WAF \*.data block / spec.data block / Always Use HTTPS loop), verification ladder cross-references the existing greenbook ch14 7-layer ladder (this chapter does NOT replicate it), Phase 4 path (Cloudflare Load Balancing for DR site), **Phase 3 close-out summary table** mapping every component to its Phase 5 upgrade chapter
+  - 16 fenced code blocks, 0 broken anchors
+  - **Critical AU IT dependency** surfaced in §18.3: corporate-WAF bypass-list `*.africanunion.org` — without it, internal AU users hitting platform apps trigger Symantec WSS / Bluecoat-class quarantine (greenbook deployment ch14 §14.10 spent two days diagnosing this the first time)
+  - Origin CA cert pattern: 15-year cert from Cloudflare's internal CA distributed to DMZ nginx via Vault; eliminates the 90-day rotation churn of Let's Encrypt while keeping Full Strict mode enforceable
+  - The chapter explicitly **does not duplicate** greenbook deployment ch14's verification ladder — that ladder is the authoritative test sheet for any platform app and chapter 18 just cross-references it
+  - **Phase 3 closes on 2026-05-02**: every "Phase 1+2 single-VM" entry from the close-out tables now has its HA upgrade. App teams have HA databases, fast caches, durable object storage, connection pooling, internal load balancing, and a public edge with WAF + DDoS protection.
 
-- 🚧 → 📝 18-public-dns drafting begins (Phase 3, chapter 6 of 6 — **CLOSES PHASE 3**) — Cloudflare in front of DMZ nginx; folds in greenbook deployment ch14 learnings
+### 2026-05-XX (next planned — Phase 4 begins)
+
+- 🚧 → 📝 19-backup-strategy drafting begins (Phase 4, chapter 1 of 2) — unified backup orchestration across the platform; RPO ≤ 1h target; restore drill cadence
 
 ---
 
