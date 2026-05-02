@@ -159,7 +159,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 12 — Alertmanager                | 2     | 📝 drafted  |
 | 13 — Postgres HA                 | 3     | 📝 drafted  |
 | 14 — Redis Sentinel              | 3     | 📝 drafted  |
-| 15 — MinIO                       | 3     | 📋 planned  |
+| 15 — MinIO                       | 3     | 📝 drafted  |
 | 16 — PgBouncer                   | 3     | 📋 planned  |
 | 17 — HAProxy HA pair             | 3     | 📋 planned  |
 | 18 — Public DNS + Cloudflare     | 3     | 📋 planned  |
