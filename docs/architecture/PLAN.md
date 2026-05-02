@@ -2,8 +2,8 @@
 
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
-> **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; ✅ Phase 3 drafted
-> **Last updated**: 2026-05-02 (chapter 18 drafted — Phase 3 complete)
+> **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; ✅ Phase 3 drafted; ✅ Phase 4 drafted
+> **Last updated**: 2026-05-02 (chapters 19 + 20 drafted — Phase 4 complete)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -22,13 +22,14 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | Metric                                  | Value                                           |
 | --------------------------------------- | ----------------------------------------------- |
 | Phase                                   | 1 of 5                                          |
-| Chapters drafted                        | 19 (README, 00, 02-18)                          |
+| Chapters drafted                        | 21 (README, 00, 02-20)                          |
 | Chapters stubbed                        | 1 (01-capacity-sizing)                          |
-| Chapters planned                        | ~11                                             |
+| Chapters planned                        | ~9                                              |
 | **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
 | **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
 | **Phase 3 status**                      | **✅ all 6 component chapters drafted (13-18)** |
-| **Phase 4 status**                      | 📋 planned; next: 19 (Backup strategy)          |
+| **Phase 4 status**                      | **✅ both chapters drafted (19, 20)**           |
+| **Phase 5 status**                      | 📋 planned; next: 21 (Teleport bastion)         |
 | Locked decisions                        | 6 / 6                                           |
 | Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
 | External dependencies blocked           | 0                                               |
@@ -42,7 +43,7 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | 1     | Developer foothold                  | 0-2     | 📝 drafted | 02, 03, 04, 05, 06                     |
 | 2     | Identity + observability            | 2-4     | 📝 drafted | 07, 08, 09, 10, 11, 12 (all 6 drafted) |
 | 3     | App scaling + edge HA               | 4-6     | 📝 drafted | 13, 14, 15, 16, 17, 18 (all 6 drafted) |
-| 4     | Resilience                          | 6-9     | 📋 planned | 19, 20                                 |
+| 4     | Resilience                          | 6-9     | 📝 drafted | 19, 20 (both drafted)                  |
 | 5     | Operational maturity                | 9-12    | 📋 planned | 21, 22, 23                             |
 | post  | Operational reference (cross-phase) | rolling | 📋 planned | 30, 40, 41, 42, appendices A/B/C       |
 
@@ -74,9 +75,9 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 16  | PgBouncer                | 3     | 📝     | 2026-05-02 | —           | —                              | 2-VM PgBouncer active-active; transaction-mode default; auth_query pattern      |
 | 17  | HAProxy HA pair          | 3     | 📝     | 2026-05-02 | —           | —                              | Internal LB; VRRP VIP; pg-rw/pg-ro split via xinetd; Consul SD for app backends |
 | 18  | Public DNS + Cloudflare  | 3     | 📝     | 2026-05-02 | —           | —                              | Cloudflare→AU NAT→DMZ; corporate-WAF bypass-list documented; closes Phase 3     |
-| 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | NEXT TO DRAFT — Phase 4 begins; RPO ≤ 1h target                                 |
-| 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                                                                 |
-| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | upgrade from chapter 02 simple bastion                                          |
+| 19  | Backup strategy          | 4     | 📝     | 2026-05-02 | —           | —                              | Unified backup view; RPO/RTO targets per service; quarterly drill cadence       |
+| 20  | DR site                  | 4     | 📝     | 2026-05-02 | —           | —                              | Warm-standby DR; CF Load Balancer failover; closes Phase 4; Q5 mechanism doc'd  |
+| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | NEXT TO DRAFT — Phase 5 begins; upgrade from chapter 02 simple bastion          |
 | 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only                                                 |
 | 23  | Runbook automation       | 5     | 📋     | —          | —           | —                              | Ansible playbooks for routine ops                                               |
 | 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | the user-facing surface                                                         |
@@ -104,14 +105,14 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 
 ### Open / pending
 
-| #   | Question                                                                                                                                                                                                     | Blocking which chapter | Notes                                                                         |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------- |
-| Q1  | Hypervisor capacity confirmed for Phase 1 (~13 VMs, ~30 vCPU, ~88 GB RAM, ~3 TB)?                                                                                                                            | 02-06 (provisioning)   | Need AU IT confirmation before any chapter directs operators to provision VMs |
-| Q2  | VLAN allocation approved (172.16.177.0/24 DMZ; 10.111.{10,20,30,40,99}.0/24 internal)?                                                                                                                       | 02-06                  | Need network team's blessing on subnet plan                                   |
-| Q3  | AU AD/LDAP read-only service account for Keycloak available?                                                                                                                                                 | 08                     | Phase 2 dependency; needs security review                                     |
-| Q4  | ~~Manual Postgres failover (Phase 1) acceptable, or do we need Patroni from day one?~~ ✅ **answered 2026-05-02**: manual-with-quarterly-drill in Phase 3 (ch13); Patroni in Phase 5 (slot reserved as ch24) | 13 — answered          | RTO target <30 min for drilled manual; <30 sec automatic with Patroni         |
-| Q5  | Off-site DR location confirmed?                                                                                                                                                                              | 19, 20                 | Phase 4 question                                                              |
-| Q6  | Paging integration target: Opsgenie? PagerDuty? AU's existing incident system?                                                                                                                               | 12                     | Phase 2 question                                                              |
+| #   | Question                                                                                                                                                                                                     | Blocking which chapter  | Notes                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------- |
+| Q1  | Hypervisor capacity confirmed for Phase 1 (~13 VMs, ~30 vCPU, ~88 GB RAM, ~3 TB)?                                                                                                                            | 02-06 (provisioning)    | Need AU IT confirmation before any chapter directs operators to provision VMs            |
+| Q2  | VLAN allocation approved (172.16.177.0/24 DMZ; 10.111.{10,20,30,40,99}.0/24 internal)?                                                                                                                       | 02-06                   | Need network team's blessing on subnet plan                                              |
+| Q3  | AU AD/LDAP read-only service account for Keycloak available?                                                                                                                                                 | 08                      | Phase 2 dependency; needs security review                                                |
+| Q4  | ~~Manual Postgres failover (Phase 1) acceptable, or do we need Patroni from day one?~~ ✅ **answered 2026-05-02**: manual-with-quarterly-drill in Phase 3 (ch13); Patroni in Phase 5 (slot reserved as ch24) | 13 — answered           | RTO target <30 min for drilled manual; <30 sec automatic with Patroni                    |
+| Q5  | Off-site DR location confirmed? — **2026-05-02: mechanism documented in ch20 §20.3; 3 candidate options listed; awaiting AU IT site selection**                                                              | 19, 20 — mechanism done | Chapter 20 works regardless of which site lands; the _what_ is open, the _how_ is closed |
+| Q6  | Paging integration target: Opsgenie? PagerDuty? AU's existing incident system?                                                                                                                               | 12                      | Phase 2 question                                                                         |
 
 ---
 
@@ -310,9 +311,23 @@ Append-only. Most recent first.
   - The chapter explicitly **does not duplicate** greenbook deployment ch14's verification ladder — that ladder is the authoritative test sheet for any platform app and chapter 18 just cross-references it
   - **Phase 3 closes on 2026-05-02**: every "Phase 1+2 single-VM" entry from the close-out tables now has its HA upgrade. App teams have HA databases, fast caches, durable object storage, connection pooling, internal load balancing, and a public edge with WAF + DDoS protection.
 
-### 2026-05-XX (next planned — Phase 4 begins)
+- 📝 19-backup-strategy drafted (Phase 4, chapter 1 of 2)
+  - Sections: role + threat model (HA replicates the present, backups preserve the past — they're not substitutes; untested backups as the realistic failure mode), per-component backup status table consolidating chapters 3-15, RPO/RTO targets per service (Postgres 1m/30m via WAL archive_timeout=60s being the most aggressive), the 3-2-1 rule applied to AU's environment, encryption at rest + in transit (pgBackRest AES-256, MinIO SSE-S3, Vault internal, GitLab built-in), **backup verification at three layers** (job exit code → output integrity per-tool checks → quarterly end-to-end restore drill), restore-drill calendar (quarterly Q1 Postgres / Q2 Vault / Q3 GitLab / Q4 full DR), 4 new alert rules added to ch12 (BackupJobFailed, BackupRepositoryFull, BackupVerificationFailed, WALArchiveStalled) + Loki rule for SuspiciousBackupDelete, audit trail via Loki, weekly verify-backups.sh systemd timer on the bastion, Phase 5 path (continuous-replication tiers via synchronous Postgres + active-active MinIO)
+  - 16 fenced code blocks, 0 broken anchors
+  - **Quarterly drill cadence is non-optional** — the chapter explicitly says skipping two consecutive drills invalidates the DR claim; reinforces the "untested backups are theatre" principle from §19.1
+  - The per-component backup status table consolidates 9 prior chapters' inline backup statements into a single source of truth; future audits start from this table
 
-- 🚧 → 📝 19-backup-strategy drafting begins (Phase 4, chapter 1 of 2) — unified backup orchestration across the platform; RPO ≤ 1h target; restore drill cadence
+- 📝 20-dr-site drafted (Phase 4, chapter 2 of 2 — **PHASE 4 COMPLETE**)
+  - Sections: role + threat model (DR scope = catastrophic site loss; HA + backups + DR are three different layers), DR tier model (cold/warm/hot — Phase 4 is warm), pre-flight (Q5 dependency surfaced explicitly with 3 candidate options + scaled-down DR footprint table — ~50% of primary headcount), replication strategy table per component (continuous for Postgres + MinIO; daily for everything else), Postgres async streaming standby at DR with `synchronous_standby_names=pdb02` for primary-replica sync + WAN-async to DR, MinIO site replication via `mc admin replicate add` (continuous; ~5 min lag), Vault snapshot ship + DR-side restore with **separate custodian split for DR recovery keys** (compromised primary keys must NOT unlock DR), GitLab + Nexus daily ship, Cloudflare Load Balancing for DNS-driven failover (3-failure threshold, ~90 sec to shift), **§20.10 DR activation runbook** with explicit T+0 → T+4h timing per step (Vault → Nomad → Postgres → GitLab → Keycloak → apps → CF LB shift → external verification), reverse migration when primary returns, RTO drill execution + measurement with stopwatch script, verification ladder, **Phase 4 close-out summary table**
+  - 28 fenced code blocks, 0 broken anchors
+  - **§20.10 DR activation runbook is the single most important section** — when DR is needed, runbook clarity makes the difference between 3-hour and 8-hour recovery. T+0 to T+4h sequence is calibrated to the 4h RTO target.
+  - **Q5 (DR location) doesn't fully close** because the location decision is AU IT leadership's; the chapter documents the _mechanism_ and works regardless of whether the chosen site is a secondary AU campus, a cloud region, or a partner DC. Decision moved from Q5 "open" to Q5 "mechanism documented; awaiting AU IT site selection"
+  - DR custodian split: DR Vault recovery keys live on physical media at the DR site, NOT in primary's Vault — that would be circular. Documented explicitly to prevent the obvious mistake.
+  - **Phase 4 closes on 2026-05-02**: the platform now has tested, drilled, documented resilience — primary site can be lost and the platform recovers within 4 hours.
+
+### 2026-05-XX (next planned — Phase 5 begins)
+
+- 🚧 → 📝 21-teleport drafting begins (Phase 5, chapter 1 of 3) — upgrade chapter 02's simple bastion to Teleport with session recording + RBAC + cert-based access
 
 ---
 
