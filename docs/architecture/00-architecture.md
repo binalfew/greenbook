@@ -63,49 +63,49 @@ Six logical tiers, each with distinct purpose, separation, and access pattern:
    ╔═════════════════════════════════════════════════════════════════════════════╗
    ║  AU on-premises platform                                                    ║
    ║                                                                             ║
-   ║  ┌─────────────────────────────────────────────────────────────────────┐   ║
-   ║  │ VLAN 1 — DMZ (public-facing)                                         │  ║
-   ║  │   HAProxy active-active pair                                         │  ║
-   ║  │   Origin TLS terminator (AU wildcard cert *.africanunion.org)        │  ║
-   ║  │   Forwards to App tier via Consul-discovered backends                │  ║
-   ║  └────────────────────────────┬────────────────────────────────────────┘   ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+   ║  │ VLAN 1 — DMZ (public-facing)                                        │    ║
+   ║  │   HAProxy active-active pair                                        │    ║
+   ║  │   Origin TLS terminator (AU wildcard cert *.africanunion.org)       │    ║
+   ║  │   Forwards to App tier via Consul-discovered backends               │    ║
+   ║  └────────────────────────────┬────────────────────────────────────────┘    ║
    ║                               │  HTTP (LAN trust boundary)                  ║
    ║                               ▼                                             ║
-   ║  ┌─────────────────────────────────────────────────────────────────────┐   ║
-   ║  │ VLAN 2 — App                                                         │  ║
-   ║  │   Nomad clients (N nodes; HA via Nomad scheduling)                   │  ║
-   ║  │   Per-app workloads — containers, exec drivers, etc.                 │  ║
-   ║  │   Apps register with Consul; HAProxy + apps both discover via DNS    │  ║
-   ║  └─────────────┬───────────────────────────────┬───────────────────────┘   ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+   ║  │ VLAN 2 — App                                                        │    ║
+   ║  │   Nomad clients (N nodes; HA via Nomad scheduling)                  │    ║
+   ║  │   Per-app workloads — containers, exec drivers, etc.                │    ║
+   ║  │   Apps register with Consul; HAProxy + apps both discover via DNS   │    ║
+   ║  └─────────────┬───────────────────────────────┬───────────────────────┘    ║
    ║                │                               │                            ║
    ║                ▼                               ▼                            ║
-   ║  ┌──────────────────────────────────┐ ┌─────────────────────────────────┐  ║
-   ║  │ VLAN 3 — Data                     │ │ VLAN 4 — Platform              │  ║
-   ║  │   Postgres primary + replica      │ │   Nomad servers (3)            │  ║
-   ║  │   PgBouncer (connection pooler)   │ │   Consul servers (3)           │  ║
-   ║  │   Redis (Sentinel HA)             │ │   Vault HA (3)                 │  ║
-   ║  │   MinIO (S3-compatible storage)   │ │   Keycloak HA (2)              │  ║
-   ║  │                                   │ │   GitLab CE                    │  ║
-   ║  │   Apps connect via TLS or mTLS    │ │   Nexus                        │  ║
-   ║  │                                   │ │   Loki + Mimir + Tempo (3)     │  ║
-   ║  │                                   │ │   Grafana + Alertmanager        │  ║
-   ║  └───────────────────────────────────┘ └─────────────────────────────────┘  ║
+   ║  ┌──────────────────────────────────┐ ┌────────────────────────────────┐    ║
+   ║  │ VLAN 3 — Data                    │ │ VLAN 4 — Platform              │    ║
+   ║  │   Postgres primary + replica     │ │   Nomad servers (3)            │    ║
+   ║  │   PgBouncer (connection pooler)  │ │   Consul servers (3)           │    ║
+   ║  │   Redis (Sentinel HA)            │ │   Vault HA (3)                 │    ║
+   ║  │   MinIO (S3-compatible storage)  │ │   Keycloak HA (2)              │    ║
+   ║  │                                  │ │   GitLab CE                    │    ║
+   ║  │   Apps connect via TLS or mTLS   │ │   Nexus                        │    ║
+   ║  │                                  │ │   Loki + Mimir + Tempo (3)     │    ║
+   ║  │                                  │ │   Grafana + Alertmanager       │    ║
+   ║  └──────────────────────────────────┘ └────────────────────────────────┘    ║
    ║                                                                             ║
-   ║  ┌─────────────────────────────────────────────────────────────────────┐   ║
-   ║  │ VLAN 5 — Operations                                                  │  ║
-   ║  │   Bastion / Teleport (2 nodes, active/passive)                       │  ║
-   ║  │   Ansible control node                                               │  ║
-   ║  │   Backup orchestration                                               │  ║
-   ║  │                                                                       │  ║
-   ║  │   Operator workstations enter the platform here; everything else     │  ║
-   ║  │   is reached via the bastion.                                        │  ║
-   ║  └─────────────────────────────────────────────────────────────────────┘   ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+   ║  │ VLAN 5 — Operations                                                 │    ║
+   ║  │   Bastion / Teleport (2 nodes, active/passive)                      │    ║
+   ║  │   Ansible control node                                              │    ║
+   ║  │   Backup orchestration                                              │    ║
+   ║  │                                                                     │    ║
+   ║  │   Operator workstations enter the platform here; everything else    │    ║
+   ║  │   is reached via the bastion.                                       │    ║
+   ║  └─────────────────────────────────────────────────────────────────────┘    ║
    ║                                                                             ║
-   ║  ┌─────────────────────────────────────────────────────────────────────┐   ║
-   ║  │ VLAN 6 — Management (out-of-band)                                    │  ║
-   ║  │   IPMI / hypervisor management interfaces                            │  ║
-   ║  │   Reachable only from operator workstations on a dedicated link      │  ║
-   ║  └─────────────────────────────────────────────────────────────────────┘   ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+   ║  │ VLAN 6 — Management (out-of-band)                                   │    ║
+   ║  │   IPMI / hypervisor management interfaces                           │    ║
+   ║  │   Reachable only from operator workstations on a dedicated link     │    ║
+   ║  └─────────────────────────────────────────────────────────────────────┘    ║
    ╚═════════════════════════════════════════════════════════════════════════════╝
 ```
 
