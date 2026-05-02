@@ -165,9 +165,9 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 18 — Public DNS + Cloudflare     | 3     | 📝 drafted  |
 | 19 — Backup strategy             | 4     | 📝 drafted  |
 | 20 — DR site                     | 4     | 📝 drafted  |
-| 21 — Teleport bastion            | 5     | 📋 planned  |
-| 22 — Dynamic Vault secrets       | 5     | 📋 planned  |
-| 23 — Runbook automation          | 5     | 📋 planned  |
+| 21 — Teleport bastion            | 5     | 📝 drafted  |
+| 22 — Dynamic Vault secrets       | 5     | 📝 drafted  |
+| 23 — Runbook automation          | 5     | 📝 drafted  |
 | 30 — App onboarding workflow     | post  | 📋 planned  |
 | 40 — Verification ladder         | post  | 📋 planned  |
 | 41 — Incident response           | post  | 📋 planned  |

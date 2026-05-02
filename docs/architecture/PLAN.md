@@ -2,8 +2,8 @@
 
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
-> **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; ✅ Phase 3 drafted; ✅ Phase 4 drafted
-> **Last updated**: 2026-05-02 (chapters 19 + 20 drafted — Phase 4 complete)
+> **Status**: ✅ All 5 numbered phases drafted (Phases 1-5 complete)
+> **Last updated**: 2026-05-02 (chapters 21 + 22 + 23 drafted — Phase 5 complete; full buildout drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -22,14 +22,14 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | Metric                                  | Value                                           |
 | --------------------------------------- | ----------------------------------------------- |
 | Phase                                   | 1 of 5                                          |
-| Chapters drafted                        | 21 (README, 00, 02-20)                          |
+| Chapters drafted                        | 24 (README, 00, 02-23)                          |
 | Chapters stubbed                        | 1 (01-capacity-sizing)                          |
-| Chapters planned                        | ~9                                              |
+| Post-phase chapters remaining           | 4 (30, 40, 41, 42) + 3 appendices               |
 | **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
 | **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
 | **Phase 3 status**                      | **✅ all 6 component chapters drafted (13-18)** |
 | **Phase 4 status**                      | **✅ both chapters drafted (19, 20)**           |
-| **Phase 5 status**                      | 📋 planned; next: 21 (Teleport bastion)         |
+| **Phase 5 status**                      | **✅ all 3 chapters drafted (21, 22, 23)**      |
 | Locked decisions                        | 6 / 6                                           |
 | Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
 | External dependencies blocked           | 0                                               |
@@ -44,7 +44,7 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | 2     | Identity + observability            | 2-4     | 📝 drafted | 07, 08, 09, 10, 11, 12 (all 6 drafted) |
 | 3     | App scaling + edge HA               | 4-6     | 📝 drafted | 13, 14, 15, 16, 17, 18 (all 6 drafted) |
 | 4     | Resilience                          | 6-9     | 📝 drafted | 19, 20 (both drafted)                  |
-| 5     | Operational maturity                | 9-12    | 📋 planned | 21, 22, 23                             |
+| 5     | Operational maturity                | 9-12    | 📝 drafted | 21, 22, 23 (all drafted)               |
 | post  | Operational reference (cross-phase) | rolling | 📋 planned | 30, 40, 41, 42, appendices A/B/C       |
 
 ---
@@ -77,10 +77,10 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 18  | Public DNS + Cloudflare  | 3     | 📝     | 2026-05-02 | —           | —                              | Cloudflare→AU NAT→DMZ; corporate-WAF bypass-list documented; closes Phase 3     |
 | 19  | Backup strategy          | 4     | 📝     | 2026-05-02 | —           | —                              | Unified backup view; RPO/RTO targets per service; quarterly drill cadence       |
 | 20  | DR site                  | 4     | 📝     | 2026-05-02 | —           | —                              | Warm-standby DR; CF Load Balancer failover; closes Phase 4; Q5 mechanism doc'd  |
-| 21  | Teleport bastion         | 5     | 📋     | —          | —           | —                              | NEXT TO DRAFT — Phase 5 begins; upgrade from chapter 02 simple bastion          |
-| 22  | Dynamic Vault secrets    | 5     | 📋     | —          | —           | —                              | upgrade from chapter 03 KV-only                                                 |
-| 23  | Runbook automation       | 5     | 📋     | —          | —           | —                              | Ansible playbooks for routine ops                                               |
-| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | the user-facing surface                                                         |
+| 21  | Teleport bastion         | 5     | 📝     | 2026-05-02 | —           | —                              | Cert-based access + RBAC + session recording; replaces ch02 SSH keys            |
+| 22  | Dynamic Vault secrets    | 5     | 📝     | 2026-05-02 | —           | —                              | DB + PKI + Transit + SSH CA engines; 1h leases vs 90d static rotation           |
+| 23  | Runbook automation       | 5     | 📝     | 2026-05-02 | —           | —                              | Ansible playbooks; CI lint + dry-run; nightly drift detection; closes Phase 5   |
+| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | NEXT POST-PHASE — consolidates every "ch30 contract" reference from chs 1-23    |
 | 40  | Verification ladder      | post  | 📋     | —          | —           | —                              | mirrors greenbook ch13                                                          |
 | 41  | Incident response        | post  | 📋     | —          | —           | —                              | playbooks per common failure mode                                               |
 | 42  | Hardening checklist      | post  | 📋     | —          | —           | —                              | pre-go-live audit                                                               |
@@ -325,9 +325,44 @@ Append-only. Most recent first.
   - DR custodian split: DR Vault recovery keys live on physical media at the DR site, NOT in primary's Vault — that would be circular. Documented explicitly to prevent the obvious mistake.
   - **Phase 4 closes on 2026-05-02**: the platform now has tested, drilled, documented resilience — primary site can be lost and the platform recovers within 4 hours.
 
-### 2026-05-XX (next planned — Phase 5 begins)
+- 📝 21-teleport drafted (Phase 5, chapter 1 of 3)
+  - Sections: role + threat model (operator-tier exposure if Auth Service compromised; misconfigured RBAC as the realistic failure mode), architecture (Auth + Proxy + Node agents with reverse-tunnel from nodes to proxy), pre-flight (3 new VMs + agent on every existing platform VM), Auth Service install + bootstrap with **Postgres app cluster + MinIO bucket as backends** (chapter 13 + chapter 15 reused — no new state stores), Proxy pair behind chapter 17 HAProxy via SSL passthrough, node agent rollout with role/vlan labels, **SSO via Keycloak OIDC client** (chapter 07 patterns; claims_to_roles maps AD groups → Teleport roles), roles + just-in-time access (default everyone is viewer; elevation requires another operator's approve), application access (Vault/GitLab/Grafana/MinIO console all become `tsh app`) + database access (psql/redis-cli through `tsh db`; bridge to chapter 22 Vault PKI), session recording landing in MinIO with Object Lock GOVERNANCE, **migration plan from ch02** (90-day window; legacy bastion as fallback), UFW + verification, decommissioning the chapter 02 bastion (kept as break-glass)
+  - 30 fenced code blocks, 0 broken anchors
+  - Replaces every "long-lived SSH key" pattern from chapter 02 with 15-minute certificates issued via OIDC; theft buys at most 15 minutes
+  - **Quarterly RBAC audit** becomes part of operational hygiene; roles in GitLab with code review
 
-- 🚧 → 📝 21-teleport drafting begins (Phase 5, chapter 1 of 3) — upgrade chapter 02's simple bastion to Teleport with session recording + RBAC + cert-based access
+- 📝 22-dynamic-secrets drafted (Phase 5, chapter 2 of 3)
+  - Sections: role + threat model (1-hour blast radius vs 90-day static; Postgres role accumulation as the realistic failure mode), four engines table (Database / PKI / Transit / SSH), pre-flight (no new VMs — runs on existing chapter 03 Vault cluster + per-app Vault Agent sidecars on Nomad), **Database engine** (replaces ch13/14/15/16 static passwords with 1h dynamic Postgres roles via `vault read database/creds/<role>`; full Vault Agent sidecar Nomad job spec for greenbook), **PKI engine** (root + intermediate CAs; cert roles for au-internal-server / au-internal-client; cashes in the "Phase 5 mTLS" deferrals from chs 14/15/16/17; Vault Agent template that auto-renews on file change), **Transit engine** (encryption-as-a-service; per-app keys; datakey pattern for high-throughput; replaces MinIO built-in KES), **SSH CA** (break-glass operator access for when Teleport itself is down — 1h cert TTL, only the break-glass-operator group can sign), Vault Agent sidecar pattern (auth + render + renew), per-app rollout playbook (greenbook first; smallest blast radius), verification with role-leak alert, path to chapter 24 (Patroni-aware DB engine — slot reserved)
+  - 28 fenced code blocks, 0 broken anchors
+  - **The chapters 13-17 "Phase 5 path" deferrals all cash in here**: dynamic Postgres credentials (ch13), per-app Redis ACLs (ch14), MinIO Authenticated Origin Pulls (ch15), PgBouncer per-app TLS (ch16), HAProxy stats API mTLS (ch17). One unified pattern for all of them.
+  - **Static-cred phase-out**: each app migrates over 90 days; chapter 30 onboarding eventually requires dynamic creds for new apps from day 1
+
+- 📝 23-runbook-automation drafted (Phase 5, chapter 3 of 3 — **PHASE 5 COMPLETE**)
+  - Sections: role + threat model (Ansible's reach is total → mandatory CI lint + 2 approvers; stale playbooks as the realistic failure mode), pre-flight (1 control node on Operations VLAN), install Ansible + ecosystem, **comprehensive inventory** mapping every platform VM to groups (single source of truth; chapter 30 onboarding adds rows here), **authentication via Teleport-issued SSH certs** (no static keys on the control node; ProxyCommand pattern routes Ansible through Teleport; every connection audited), playbook layout (per-component roles mirror chapters 13-21; per-action playbooks; tag system for partial runs), **GitLab CI for lint + dry-run on every PR** (CODEOWNERS + 2-approver branch protection on production), **drift detection** (nightly `--check` mode; alert on changes; manual remediation by default), **patch management** (rolling, health-checked, halt-on-fail; serial=1; per-group health-check task files), **DR drill automation** (semi-automated chapter 20 §20.10 — mechanical parts codified; decisions remain human), Vault → Ansible secret consumption (community.hashi_vault collection; no_log: true), verification + Loki rules for AnsibleDriftDetected / AnsibleDriftCheckMissed / AnsiblePlaybookFailed, **Phase 5 close-out summary** + final close-out summary table
+  - 36 fenced code blocks, 0 broken anchors
+  - **Reduces every chapter's "do these commands" from a doc-search task to `ansible-playbook X.yml`** — chapters remain the conceptual source; playbooks are derived runnable artifacts
+  - GitLab CI on the Ansible repo enforces lint + dry-run before any merge; production-apply stage is `when: manual` so humans push the button, not CI
+  - **Phase 5 closes on 2026-05-02. All 5 numbered phases complete.** Platform progresses from "documented" to "automated" — operator workflow shifts from "find chapter X §Y; type these commands carefully" to "review the diff; run the playbook"
+
+### Project state — 2026-05-02 milestone
+
+**21 of 24 main + post-phase chapters drafted.** All 5 numbered phases complete (Phases 1-5). Reserved Phase 5+ slots (chs 24/25/26 for Patroni / MinIO expansion / Redis Cluster) referenced inline but not drafted — they're conditional on AU's growth triggers.
+
+**What remains** (post-phase reference, no fixed order):
+
+- Chapter 30 — App onboarding workflow (the user-facing surface; consolidates every "ch30 contract" reference from chs 1-23)
+- Chapter 40 — Verification ladder (mirrors greenbook ch13 — comprehensive end-to-end test sheet)
+- Chapter 41 — Incident response (playbooks per common failure mode)
+- Chapter 42 — Hardening checklist (pre-go-live audit)
+- Appendix A — Command cheatsheet (rolling)
+- Appendix B — Reference configs (canonical files per chapter)
+- Appendix C — External references (upstream docs, vendor links)
+
+These can be drafted in any order as operational needs surface; the platform is fully described by chapters 02-23 + the README.
+
+### 2026-05-XX (next planned — post-phase reference)
+
+- 🚧 → 📝 30-app-onboarding drafting begins (post-phase) — consolidates every "chapter 30 contract" reference scattered through Phases 1-5 into the user-facing app-team workflow
 
 ---
 
