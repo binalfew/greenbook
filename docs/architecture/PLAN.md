@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; 🚧 Phase 3 in progress
-> **Last updated**: 2026-05-02 (chapter 13 drafted — Phase 3 begins)
+> **Last updated**: 2026-05-02 (chapter 14 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,18 +19,18 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                             |
-| --------------------------------------- | ------------------------------------------------- |
-| Phase                                   | 1 of 5                                            |
-| Chapters drafted                        | 14 (README, 00, 02-13)                            |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                            |
-| Chapters planned                        | ~16                                               |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**   |
-| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)**   |
-| **Phase 3 status**                      | 🚧 1 of 6 drafted (13); next: 14 (Redis Sentinel) |
-| Locked decisions                        | 6 / 6                                             |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                               |
-| External dependencies blocked           | 0                                                 |
+| Metric                                  | Value                                           |
+| --------------------------------------- | ----------------------------------------------- |
+| Phase                                   | 1 of 5                                          |
+| Chapters drafted                        | 15 (README, 00, 02-14)                          |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                          |
+| Chapters planned                        | ~15                                             |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
+| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
+| **Phase 3 status**                      | 🚧 2 of 6 drafted (13, 14); next: 15 (MinIO)    |
+| Locked decisions                        | 6 / 6                                           |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
+| External dependencies blocked           | 0                                               |
 
 ---
 
@@ -40,7 +40,7 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | ----- | ----------------------------------- | ------- | -------------- | --------------------------------------- |
 | 1     | Developer foothold                  | 0-2     | 📝 drafted     | 02, 03, 04, 05, 06                      |
 | 2     | Identity + observability            | 2-4     | 📝 drafted     | 07, 08, 09, 10, 11, 12 (all 6 drafted)  |
-| 3     | App scaling + edge HA               | 4-6     | 🚧 in progress | 13, 14, 15, 16, 17, 18 (1 of 6 drafted) |
+| 3     | App scaling + edge HA               | 4-6     | 🚧 in progress | 13, 14, 15, 16, 17, 18 (2 of 6 drafted) |
 | 4     | Resilience                          | 6-9     | 📋 planned     | 19, 20                                  |
 | 5     | Operational maturity                | 9-12    | 📋 planned     | 21, 22, 23                              |
 | post  | Operational reference (cross-phase) | rolling | 📋 planned     | 30, 40, 41, 42, appendices A/B/C        |
@@ -68,8 +68,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 11  | Tempo                    | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Tempo on obs01-03; OTLP receivers; logs↔traces wired                 |
 | 12  | Alertmanager             | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node AM cluster; Mimir+Loki rulers; 30+ initial rules; closes Phase 2      |
 | 13  | Postgres HA              | 3     | 📝     | 2026-05-02 | —           | —                              | Primary+replica streaming repl; pgBackRest PITR; Q4 manual-failover answered |
-| 14  | Redis Sentinel           | 3     | 📋     | —          | —           | —                              | NEXT TO DRAFT — 3-node Sentinel pattern                                      |
-| 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | erasure-coded set ≥4 nodes                                                   |
+| 14  | Redis Sentinel           | 3     | 📝     | 2026-05-02 | —           | —                              | 3-VM Redis+Sentinel; sessions/cache/queues; Sentinel-aware client contract   |
+| 15  | MinIO                    | 3     | 📋     | —          | —           | —                              | NEXT TO DRAFT — erasure-coded set ≥4 nodes; unlocks ch09-13 cold tier        |
 | 16  | PgBouncer                | 3     | 📋     | —          | —           | —                              | depends on 13                                                                |
 | 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | active-active VRRP                                                           |
 | 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | folds in greenbook ch14 learnings                                            |
@@ -273,9 +273,15 @@ Append-only. Most recent first.
   - Per-app role design (every app gets its own role + DB + 90d-rotated password in Vault) is the contract that chapter 30 (App onboarding) will enforce
   - **Phase 3 begins on 2026-05-02**: every Phase 3 chapter from here on adds one HA primitive (Redis ch14, MinIO ch15, PgBouncer ch16, HAProxy ch17, Cloudflare ch18) and progressively eliminates the Phase 1+2 "single VM" entries from the close-out tables.
 
+- 📝 14-redis-sentinel drafted (Phase 3, chapter 2 of 6)
+  - Sections: role + threat model (sessions+cache+queues use case; replication lag and split-brain as realistic failure modes), pre-flight (3 VMs at 4 vCPU / 16 GB; same-shape rule + mandatory THP / overcommit_memory / somaxconn tuning), install Redis 7 from upstream apt repo, master + replica configuration with shared requirepass + masterauth + min-replicas-to-write 1 (refuse writes if no replica online — protects against silent data loss), Sentinel configuration with quorum=2 + per-node announce-ip + the "Sentinel rewrites its own config" caveat, bootstrap sequence (master first, then replicas join), **application access pattern** (Sentinel-aware clients per language; key-namespacing convention `<app>:*`; KEYS-vs-SCAN warning), persistence + backup strategy (AOF + RDB hybrid; ExecCondition limits backup to current master), redis_exporter integration extending ch10's scrape config, **5 new alert rules in ch12's ruleset** (RedisDown / ReplicationBroken / MemoryHigh / RejectedConnections / SlowQuery), failover behaviour timeline + manual drill procedure (controlled `sentinel failover` + hard `systemctl stop`), UFW per VLAN, verification ladder, Phase 5 path (Redis Cluster for sharding when one node's RAM isn't enough)
+  - 34 fenced code blocks, 0 broken anchors
+  - **Sentinel-aware client contract** is the contract chapter 30 (App onboarding) will enforce — apps that use a plain `redis://` URL won't follow failovers and will silently break
+  - Key-namespacing convention (`<app>:*` prefix) becomes a soft constraint for Phase 3 + a hard constraint when Phase 5 ACLs land
+
 ### 2026-05-XX (next planned — Phase 3 continues)
 
-- 🚧 → 📝 14-redis-sentinel drafting begins (Phase 3, chapter 2 of 6) — 3-node Redis with Sentinel for cache + session store
+- 🚧 → 📝 15-minio drafting begins (Phase 3, chapter 3 of 6) — MinIO erasure-coded object storage; unlocks ch09-13's cold tier
 
 ---
 
