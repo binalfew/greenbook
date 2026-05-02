@@ -3,7 +3,7 @@
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
 > **Status**: ✅ Phase 1 drafted; ✅ Phase 2 drafted; 🚧 Phase 3 in progress
-> **Last updated**: 2026-05-02 (chapter 15 drafted — cold tier unlocked for ch09-13)
+> **Last updated**: 2026-05-02 (chapter 16 drafted)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,18 +19,18 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                                |
-| --------------------------------------- | ---------------------------------------------------- |
-| Phase                                   | 1 of 5                                               |
-| Chapters drafted                        | 16 (README, 00, 02-15)                               |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                               |
-| Chapters planned                        | ~14                                                  |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**      |
-| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)**      |
-| **Phase 3 status**                      | 🚧 3 of 6 drafted (13, 14, 15); next: 16 (PgBouncer) |
-| Locked decisions                        | 6 / 6                                                |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                                  |
-| External dependencies blocked           | 0                                                    |
+| Metric                                  | Value                                           |
+| --------------------------------------- | ----------------------------------------------- |
+| Phase                                   | 1 of 5                                          |
+| Chapters drafted                        | 17 (README, 00, 02-16)                          |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                          |
+| Chapters planned                        | ~13                                             |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
+| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
+| **Phase 3 status**                      | 🚧 4 of 6 drafted (13-16); next: 17 (HAProxy)   |
+| Locked decisions                        | 6 / 6                                           |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
+| External dependencies blocked           | 0                                               |
 
 ---
 
@@ -40,7 +40,7 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 | ----- | ----------------------------------- | ------- | -------------- | --------------------------------------- |
 | 1     | Developer foothold                  | 0-2     | 📝 drafted     | 02, 03, 04, 05, 06                      |
 | 2     | Identity + observability            | 2-4     | 📝 drafted     | 07, 08, 09, 10, 11, 12 (all 6 drafted)  |
-| 3     | App scaling + edge HA               | 4-6     | 🚧 in progress | 13, 14, 15, 16, 17, 18 (3 of 6 drafted) |
+| 3     | App scaling + edge HA               | 4-6     | 🚧 in progress | 13, 14, 15, 16, 17, 18 (4 of 6 drafted) |
 | 4     | Resilience                          | 6-9     | 📋 planned     | 19, 20                                  |
 | 5     | Operational maturity                | 9-12    | 📋 planned     | 21, 22, 23                              |
 | post  | Operational reference (cross-phase) | rolling | 📋 planned     | 30, 40, 41, 42, appendices A/B/C        |
@@ -70,8 +70,8 @@ Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 
 | 13  | Postgres HA              | 3     | 📝     | 2026-05-02 | —           | —                              | Primary+replica streaming repl; pgBackRest PITR; Q4 manual-failover answered   |
 | 14  | Redis Sentinel           | 3     | 📝     | 2026-05-02 | —           | —                              | 3-VM Redis+Sentinel; sessions/cache/queues; Sentinel-aware client contract     |
 | 15  | MinIO                    | 3     | 📝     | 2026-05-02 | —           | —                              | 4-node EC; unlocks Loki/Mimir/Tempo/Postgres/Redis cold tier; per-consumer SAs |
-| 16  | PgBouncer                | 3     | 📋     | —          | —           | —                              | NEXT TO DRAFT — connection pooling on top of ch13                              |
-| 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | active-active VRRP                                                             |
+| 16  | PgBouncer                | 3     | 📝     | 2026-05-02 | —           | —                              | 2-VM PgBouncer active-active; transaction-mode default; auth_query pattern     |
+| 17  | HAProxy HA pair          | 3     | 📋     | —          | —           | —                              | NEXT TO DRAFT — active-active VRRP; fronts pgbouncer + apps                    |
 | 18  | Public DNS + Cloudflare  | 3     | 📋     | —          | —           | —                              | folds in greenbook ch14 learnings                                              |
 | 19  | Backup strategy          | 4     | 📋     | —          | —           | —                              | RPO ≤ 1h target                                                                |
 | 20  | DR site                  | 4     | 📋     | —          | —           | —                              | RTO ≤ 4h target                                                                |
@@ -287,9 +287,16 @@ Append-only. Most recent first.
   - Per-consumer service-account pattern locked: every consumer gets bucket-scoped credentials in `kv/platform/minio/<consumer>` with rotation metadata. Becomes the contract for any future app that wants object storage (chapter 30 onboarding will reference this)
   - Object Lock GOVERNANCE on backup buckets is the ransomware mitigation; explicit upgrade to COMPLIANCE deferred to Phase 5 once procedures are validated
 
+- 📝 16-pgbouncer drafted (Phase 3, chapter 4 of 6)
+  - Sections: role + threat model (Postgres `max_connections` ceiling math; pool-mode tradeoffs table; pool exhaustion as the most likely failure mode), pre-flight (2 dedicated PgBouncer VMs at 4 vCPU / 8 GB; ulimit nofile 65536), install PgBouncer 1.22+ from PGDG (need ≥1.22 for SCRAM both directions), full pgbouncer.ini config (transaction mode default + per-app `<app>_session` opt-in for session-mode features; sizing math; `query_timeout=60` matching ch13's statement_timeout), **auth_query pattern** (PgBouncer holds ONE credential; reads pg_shadow via SECURITY DEFINER wrapper function — eliminates per-app rotation churn on PgBouncer side), TLS asymmetric (require client→PgBouncer; verify-ca PgBouncer→Postgres), apps switch to PgBouncer with greenbook as first adopter + transaction-mode caveats list (no LISTEN/NOTIFY, no advisory locks across txns, no SET SESSION, prepared-statement gotchas), pgbouncer_exporter integration, **4 new alert rules** (Down / ClientsWaiting / ServerErrors / HighConnectionCount), UFW per VLAN, verification with active-active failover drill, Phase 5 path (Patroni-aware backend rerouting via HAProxy writer-VIP)
+  - 30 fenced code blocks, 0 broken anchors
+  - **auth_query pattern** is the centrepiece — chapter 30 onboarding will reference: per-app password rotation in Vault no longer requires editing PgBouncer's userlist.txt because PgBouncer queries Postgres directly at connect time
+  - `<app>_session` opt-in convention added to the platform contracts list — apps that need LISTEN/NOTIFY or advisory locks across transactions get a separate database name with `pool_mode=session` rather than poisoning the default transaction-mode pool
+  - pg-primary.au-internal CNAME pattern: chapter 13 §13.10 already documented operator repointing during failover; chapter 16 explicitly relies on it; Phase 5 ch24 (Patroni) replaces with HAProxy writer-VIP
+
 ### 2026-05-XX (next planned — Phase 3 continues)
 
-- 🚧 → 📝 16-pgbouncer drafting begins (Phase 3, chapter 4 of 6) — connection pooling for the chapter 13 Postgres cluster
+- 🚧 → 📝 17-haproxy drafting begins (Phase 3, chapter 5 of 6) — HAProxy HA pair with VRRP; fronts PgBouncer + Nomad app workloads
 
 ---
 
