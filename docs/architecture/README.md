@@ -161,7 +161,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 14 — Redis Sentinel              | 3     | 📝 drafted  |
 | 15 — MinIO                       | 3     | 📝 drafted  |
 | 16 — PgBouncer                   | 3     | 📝 drafted  |
-| 17 — HAProxy HA pair             | 3     | 📋 planned  |
+| 17 — HAProxy HA pair             | 3     | 📝 drafted  |
 | 18 — Public DNS + Cloudflare     | 3     | 📋 planned  |
 | 19 — Backup strategy             | 4     | 📋 planned  |
 | 20 — DR site                     | 4     | 📋 planned  |
