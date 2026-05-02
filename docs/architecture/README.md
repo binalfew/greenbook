@@ -168,13 +168,13 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 21 — Teleport bastion            | 5     | 📝 drafted  |
 | 22 — Dynamic Vault secrets       | 5     | 📝 drafted  |
 | 23 — Runbook automation          | 5     | 📝 drafted  |
-| 30 — App onboarding workflow     | post  | 📋 planned  |
-| 40 — Verification ladder         | post  | 📋 planned  |
-| 41 — Incident response           | post  | 📋 planned  |
-| 42 — Hardening checklist         | post  | 📋 planned  |
-| Appendix A — Command cheatsheet  | —     | 📋 planned  |
-| Appendix B — Reference configs   | —     | 📋 planned  |
-| Appendix C — External references | —     | 📋 planned  |
+| 30 — App onboarding workflow     | post  | 📝 drafted  |
+| 40 — Verification ladder         | post  | 📝 drafted  |
+| 41 — Incident response           | post  | 📝 drafted  |
+| 42 — Hardening checklist         | post  | 📝 drafted  |
+| Appendix A — Command cheatsheet  | —     | 📝 drafted  |
+| Appendix B — Reference configs   | —     | 📝 drafted  |
+| Appendix C — External references | —     | 📝 drafted  |
 
 ---
 

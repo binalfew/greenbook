@@ -2,8 +2,8 @@
 
 > **Owner**: Binalfew Kassa (Senior Solutions & System Architect, MISD / AUC)
 > **Author**: this is the working tracker for the doc-writing project
-> **Status**: ✅ All 5 numbered phases drafted (Phases 1-5 complete)
-> **Last updated**: 2026-05-02 (chapters 21 + 22 + 23 drafted — Phase 5 complete; full buildout drafted)
+> **Status**: ✅ ALL CHAPTERS DRAFTED — every phase + every post-phase reference + all appendices
+> **Last updated**: 2026-05-02 (chapters 30, 40, 41, 42 + appendices A, B, C drafted — full doc set complete)
 
 This is the living tracker for the platform documentation effort. Updated after every chapter completion, every decision change, and every dependency unlock. The README's chapter-status table is a public-facing summary; **this doc is the source of truth** for what's been done, what's blocked, and what's next.
 
@@ -19,33 +19,34 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 ## Project state at a glance
 
-| Metric                                  | Value                                           |
-| --------------------------------------- | ----------------------------------------------- |
-| Phase                                   | 1 of 5                                          |
-| Chapters drafted                        | 24 (README, 00, 02-23)                          |
-| Chapters stubbed                        | 1 (01-capacity-sizing)                          |
-| Post-phase chapters remaining           | 4 (30, 40, 41, 42) + 3 appendices               |
-| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)** |
-| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)** |
-| **Phase 3 status**                      | **✅ all 6 component chapters drafted (13-18)** |
-| **Phase 4 status**                      | **✅ both chapters drafted (19, 20)**           |
-| **Phase 5 status**                      | **✅ all 3 chapters drafted (21, 22, 23)**      |
-| Locked decisions                        | 6 / 6                                           |
-| Decisions awaiting stakeholder sign-off | 6 (full list below)                             |
-| External dependencies blocked           | 0                                               |
+| Metric                                  | Value                                                |
+| --------------------------------------- | ---------------------------------------------------- |
+| Phase                                   | 1 of 5                                               |
+| Chapters drafted                        | 31 (README, 00, 02-23, 30, 40-42, A, B, C)           |
+| Chapters stubbed                        | 1 (01-capacity-sizing)                               |
+| Post-phase chapters remaining           | **0 — all drafted**                                  |
+| **Phase 1 status**                      | **✅ all 5 component chapters drafted (02-06)**      |
+| **Phase 2 status**                      | **✅ all 6 component chapters drafted (07-12)**      |
+| **Phase 3 status**                      | **✅ all 6 component chapters drafted (13-18)**      |
+| **Phase 4 status**                      | **✅ both chapters drafted (19, 20)**                |
+| **Phase 5 status**                      | **✅ all 3 chapters drafted (21, 22, 23)**           |
+| **Post-phase status**                   | **✅ all 4 + 3 appendices drafted (30, 40-42, A-C)** |
+| Locked decisions                        | 6 / 6                                                |
+| Decisions awaiting stakeholder sign-off | 6 (full list below)                                  |
+| External dependencies blocked           | 0                                                    |
 
 ---
 
 ## Phase summary
 
-| Phase | Goal                                | Months  | Status     | Chapters in scope                      |
-| ----- | ----------------------------------- | ------- | ---------- | -------------------------------------- |
-| 1     | Developer foothold                  | 0-2     | 📝 drafted | 02, 03, 04, 05, 06                     |
-| 2     | Identity + observability            | 2-4     | 📝 drafted | 07, 08, 09, 10, 11, 12 (all 6 drafted) |
-| 3     | App scaling + edge HA               | 4-6     | 📝 drafted | 13, 14, 15, 16, 17, 18 (all 6 drafted) |
-| 4     | Resilience                          | 6-9     | 📝 drafted | 19, 20 (both drafted)                  |
-| 5     | Operational maturity                | 9-12    | 📝 drafted | 21, 22, 23 (all drafted)               |
-| post  | Operational reference (cross-phase) | rolling | 📋 planned | 30, 40, 41, 42, appendices A/B/C       |
+| Phase | Goal                                | Months  | Status     | Chapters in scope                              |
+| ----- | ----------------------------------- | ------- | ---------- | ---------------------------------------------- |
+| 1     | Developer foothold                  | 0-2     | 📝 drafted | 02, 03, 04, 05, 06                             |
+| 2     | Identity + observability            | 2-4     | 📝 drafted | 07, 08, 09, 10, 11, 12 (all 6 drafted)         |
+| 3     | App scaling + edge HA               | 4-6     | 📝 drafted | 13, 14, 15, 16, 17, 18 (all 6 drafted)         |
+| 4     | Resilience                          | 6-9     | 📝 drafted | 19, 20 (both drafted)                          |
+| 5     | Operational maturity                | 9-12    | 📝 drafted | 21, 22, 23 (all drafted)                       |
+| post  | Operational reference (cross-phase) | rolling | 📝 drafted | 30, 40, 41, 42, appendices A/B/C (all drafted) |
 
 ---
 
@@ -53,40 +54,40 @@ Anchored on six locked decisions (Nomad / Keycloak+AD / GitLab CE / LGTM / Consu
 
 Legend: ✅ validated · 📝 drafted (review pending) · 🚧 drafting · 📋 planned · 🔒 stub only
 
-| #   | Title                    | Phase | Status | Drafted    | Reviewed by | Validated against real install | Notes                                                                           |
-| --- | ------------------------ | ----- | ------ | ---------- | ----------- | ------------------------------ | ------------------------------------------------------------------------------- |
-| —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step                                             |
-| 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23                                           |
-| 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD                                                   |
-| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21                                          |
-| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal                                            |
-| 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA                                          |
-| 05  | Nomad cluster            | 1     | 📝     | 2026-05-01 | —           | —                              | 3 servers + 3 clients; Consul colocated; mTLS + ACLs + Vault JWT                |
-| 06  | Nexus                    | 1     | 📝     | 2026-05-01 | —           | —                              | OSS single VM; Maven/npm/PyPI proxies + hosted repos                            |
-| 07  | Keycloak                 | 2     | 📝     | 2026-05-01 | —           | —                              | Standalone HA pair + dedicated Postgres; au realm + OIDC clients                |
-| 08  | Keycloak federated to AD | 2     | 📝     | 2026-05-01 | —           | —                              | AD as user lifecycle source; Q3 dependency surfaced in §8.2                     |
-| 09  | Loki + Grafana           | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Loki cluster + Grafana SSO; Promtail on every platform VM                |
-| 10  | Prometheus + Mimir       | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Mimir colocated on obs01-03; Prometheus HA with Mimir dedup              |
-| 11  | Tempo                    | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Tempo on obs01-03; OTLP receivers; logs↔traces wired                    |
-| 12  | Alertmanager             | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node AM cluster; Mimir+Loki rulers; 30+ initial rules; closes Phase 2         |
-| 13  | Postgres HA              | 3     | 📝     | 2026-05-02 | —           | —                              | Primary+replica streaming repl; pgBackRest PITR; Q4 manual-failover answered    |
-| 14  | Redis Sentinel           | 3     | 📝     | 2026-05-02 | —           | —                              | 3-VM Redis+Sentinel; sessions/cache/queues; Sentinel-aware client contract      |
-| 15  | MinIO                    | 3     | 📝     | 2026-05-02 | —           | —                              | 4-node EC; unlocks Loki/Mimir/Tempo/Postgres/Redis cold tier; per-consumer SAs  |
-| 16  | PgBouncer                | 3     | 📝     | 2026-05-02 | —           | —                              | 2-VM PgBouncer active-active; transaction-mode default; auth_query pattern      |
-| 17  | HAProxy HA pair          | 3     | 📝     | 2026-05-02 | —           | —                              | Internal LB; VRRP VIP; pg-rw/pg-ro split via xinetd; Consul SD for app backends |
-| 18  | Public DNS + Cloudflare  | 3     | 📝     | 2026-05-02 | —           | —                              | Cloudflare→AU NAT→DMZ; corporate-WAF bypass-list documented; closes Phase 3     |
-| 19  | Backup strategy          | 4     | 📝     | 2026-05-02 | —           | —                              | Unified backup view; RPO/RTO targets per service; quarterly drill cadence       |
-| 20  | DR site                  | 4     | 📝     | 2026-05-02 | —           | —                              | Warm-standby DR; CF Load Balancer failover; closes Phase 4; Q5 mechanism doc'd  |
-| 21  | Teleport bastion         | 5     | 📝     | 2026-05-02 | —           | —                              | Cert-based access + RBAC + session recording; replaces ch02 SSH keys            |
-| 22  | Dynamic Vault secrets    | 5     | 📝     | 2026-05-02 | —           | —                              | DB + PKI + Transit + SSH CA engines; 1h leases vs 90d static rotation           |
-| 23  | Runbook automation       | 5     | 📝     | 2026-05-02 | —           | —                              | Ansible playbooks; CI lint + dry-run; nightly drift detection; closes Phase 5   |
-| 30  | App onboarding workflow  | post  | 📋     | —          | —           | —                              | NEXT POST-PHASE — consolidates every "ch30 contract" reference from chs 1-23    |
-| 40  | Verification ladder      | post  | 📋     | —          | —           | —                              | mirrors greenbook ch13                                                          |
-| 41  | Incident response        | post  | 📋     | —          | —           | —                              | playbooks per common failure mode                                               |
-| 42  | Hardening checklist      | post  | 📋     | —          | —           | —                              | pre-go-live audit                                                               |
-| A   | Command cheatsheet       | —     | 📋     | —          | —           | —                              | append rolling                                                                  |
-| B   | Reference configs        | —     | 📋     | —          | —           | —                              | canonical files per chapter                                                     |
-| C   | External references      | —     | 📋     | —          | —           | —                              | upstream docs, vendor links                                                     |
+| #   | Title                    | Phase | Status | Drafted    | Reviewed by | Validated against real install | Notes                                                                             |
+| --- | ------------------------ | ----- | ------ | ---------- | ----------- | ------------------------------ | --------------------------------------------------------------------------------- |
+| —   | README                   | —     | 📝     | 2026-05-01 | —           | n/a                            | Living document; no validation step                                               |
+| 00  | Architecture             | —     | 📝     | 2026-05-01 | —           | n/a                            | Reference; commands deferred to 02-23                                             |
+| 01  | Capacity & sizing        | —     | 🔒     | 2026-05-01 | —           | n/a                            | Phase-1 sizing only; rest TBD                                                     |
+| 02  | Bastion                  | 1     | 📝     | 2026-05-01 | —           | —                              | Phase 1 simple bastion; Teleport in 21                                            |
+| 03  | Vault                    | 1     | 📝     | 2026-05-01 | —           | —                              | 3-node Raft HA; KV v2; Shamir unseal                                              |
+| 04  | GitLab CE                | 1     | 📝     | 2026-05-01 | —           | —                              | Single VM (CE limit); backup-driven HA                                            |
+| 05  | Nomad cluster            | 1     | 📝     | 2026-05-01 | —           | —                              | 3 servers + 3 clients; Consul colocated; mTLS + ACLs + Vault JWT                  |
+| 06  | Nexus                    | 1     | 📝     | 2026-05-01 | —           | —                              | OSS single VM; Maven/npm/PyPI proxies + hosted repos                              |
+| 07  | Keycloak                 | 2     | 📝     | 2026-05-01 | —           | —                              | Standalone HA pair + dedicated Postgres; au realm + OIDC clients                  |
+| 08  | Keycloak federated to AD | 2     | 📝     | 2026-05-01 | —           | —                              | AD as user lifecycle source; Q3 dependency surfaced in §8.2                       |
+| 09  | Loki + Grafana           | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Loki cluster + Grafana SSO; Promtail on every platform VM                  |
+| 10  | Prometheus + Mimir       | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Mimir colocated on obs01-03; Prometheus HA with Mimir dedup                |
+| 11  | Tempo                    | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node Tempo on obs01-03; OTLP receivers; logs↔traces wired                      |
+| 12  | Alertmanager             | 2     | 📝     | 2026-05-01 | —           | —                              | 3-node AM cluster; Mimir+Loki rulers; 30+ initial rules; closes Phase 2           |
+| 13  | Postgres HA              | 3     | 📝     | 2026-05-02 | —           | —                              | Primary+replica streaming repl; pgBackRest PITR; Q4 manual-failover answered      |
+| 14  | Redis Sentinel           | 3     | 📝     | 2026-05-02 | —           | —                              | 3-VM Redis+Sentinel; sessions/cache/queues; Sentinel-aware client contract        |
+| 15  | MinIO                    | 3     | 📝     | 2026-05-02 | —           | —                              | 4-node EC; unlocks Loki/Mimir/Tempo/Postgres/Redis cold tier; per-consumer SAs    |
+| 16  | PgBouncer                | 3     | 📝     | 2026-05-02 | —           | —                              | 2-VM PgBouncer active-active; transaction-mode default; auth_query pattern        |
+| 17  | HAProxy HA pair          | 3     | 📝     | 2026-05-02 | —           | —                              | Internal LB; VRRP VIP; pg-rw/pg-ro split via xinetd; Consul SD for app backends   |
+| 18  | Public DNS + Cloudflare  | 3     | 📝     | 2026-05-02 | —           | —                              | Cloudflare→AU NAT→DMZ; corporate-WAF bypass-list documented; closes Phase 3       |
+| 19  | Backup strategy          | 4     | 📝     | 2026-05-02 | —           | —                              | Unified backup view; RPO/RTO targets per service; quarterly drill cadence         |
+| 20  | DR site                  | 4     | 📝     | 2026-05-02 | —           | —                              | Warm-standby DR; CF Load Balancer failover; closes Phase 4; Q5 mechanism doc'd    |
+| 21  | Teleport bastion         | 5     | 📝     | 2026-05-02 | —           | —                              | Cert-based access + RBAC + session recording; replaces ch02 SSH keys              |
+| 22  | Dynamic Vault secrets    | 5     | 📝     | 2026-05-02 | —           | —                              | DB + PKI + Transit + SSH CA engines; 1h leases vs 90d static rotation             |
+| 23  | Runbook automation       | 5     | 📝     | 2026-05-02 | —           | —                              | Ansible playbooks; CI lint + dry-run; nightly drift detection; closes Phase 5     |
+| 30  | App onboarding workflow  | post  | 📝     | 2026-05-02 | —           | —                              | Consolidates every "ch30 contract" reference from chs 1-23; pre-go-live checklist |
+| 40  | Verification ladder      | post  | 📝     | 2026-05-02 | —           | —                              | 11-layer ladder (mirrors greenbook ch13); per-component health checks             |
+| 41  | Incident response        | post  | 📝     | 2026-05-02 | —           | —                              | 11 named playbooks (P-01 to P-11); detection→triage→mitigate→verify→PIR shape     |
+| 42  | Hardening checklist      | post  | 📝     | 2026-05-02 | —           | —                              | Pre-go-live + quarterly audit; 8 domains; YES/NO with evidence                    |
+| A   | Command cheatsheet       | —     | 📝     | 2026-05-02 | —           | —                              | Per-service operational commands extracted from chs 02-23                         |
+| B   | Reference configs        | —     | 📝     | 2026-05-02 | —           | —                              | Pointers to canonical config blocks across all chapters                           |
+| C   | External references      | —     | 📝     | 2026-05-02 | —           | —                              | Upstream docs, vendor links, RFC pointers                                         |
 
 ---
 
@@ -360,9 +361,52 @@ Append-only. Most recent first.
 
 These can be drafted in any order as operational needs surface; the platform is fully described by chapters 02-23 + the README.
 
-### 2026-05-XX (next planned — post-phase reference)
+- 📝 30-app-onboarding drafted (post-phase reference)
+  - Sections: intent + scope (user-facing surface for app teams), platform contract (16-row "what apps get" + 7-item "what apps must provide"), 8-gate onboarding workflow, app instrumentation requirements consolidated from ch11 §11.9, per-app credentials in Vault (`kv/apps/<app>/...` namespace), per-app Postgres role + DB with Vault DB engine binding, Redis access pattern (Sentinel-aware client + `<app>:*` prefix), MinIO bucket allocation, **complete Nomad job spec template** with Vault Agent sidecar + OTel + health checks, public DNS + Cloudflare workflow (per ch18 §18.9), comprehensive **pre-go-live checklist** (5 domains; ~30 items), decommissioning workflow
+  - 8 fenced code blocks, 0 broken anchors
+  - **The user-facing surface of the platform** — every "chapter 30 contract" reference scattered through chapters 1-23 cashes in here; app teams arrive with "we want to deploy app X" and leave with a running platform-compliant deployment
 
-- 🚧 → 📝 30-app-onboarding drafting begins (post-phase) — consolidates every "chapter 30 contract" reference scattered through Phases 1-5 into the user-facing app-team workflow
+- 📝 40-verification-ladder drafted (post-phase reference)
+  - Sections: 11-layer end-to-end test ladder mirroring greenbook deployment ch13 (VM health → service liveness → Vault round-trip → Nomad/Consul → GitLab/Nexus → Keycloak SSO → LGTM stack → HA layer drill summary → backup verification → DR site reachability → public edge), failure interpretation guide mapping each layer to first-move chapter
+  - 24 fenced code blocks, 0 broken anchors
+  - The single test sheet operators run after any major change or quarterly as standing hygiene; cross-references chapter 14 of greenbook deployment for the public-edge layer
+
+- 📝 41-incident-response drafted (post-phase reference)
+  - Sections: IR shape (detection → triage → mitigate → verify → PIR), **11 named playbooks**: P-01 Postgres primary down, P-02 Vault sealed, P-03 Keycloak unreachable, P-04 Nomad scheduler unavailable, P-05 GitLab down, P-06 MinIO node loss, P-07 Redis Sentinel split-brain, P-08 HAProxy VRRP split-brain, P-09 Cloudflare 521, P-10 Corporate WAF blocking, P-11 Object Lock blocking ops cleanup (each: detection signals + triage commands + mitigation steps + verification + post-incident actions), severity declaration + escalation, post-incident review template
+  - 38 fenced code blocks, 0 broken anchors
+  - The realistic failure modes encountered through chapters 1-23, each with a runnable playbook the on-call operator can execute cold
+
+- 📝 42-hardening-checklist drafted (post-phase reference)
+  - Sections: usage instructions, 8 audit domains (network, auth + access, secrets, audit, backup, DR, observability, compliance + governance) — each a YES/NO checklist with verification commands, output report template at `docs/audits/<date>-hardening.md`
+  - 16 fenced code blocks, 0 broken anchors
+  - Pre-go-live audit + quarterly thereafter; each item maps back to a chapter section for verifiability
+
+- 📝 Appendix A — Command cheatsheet drafted (rolling)
+  - 18 sections of operationally-frequent commands extracted from chapters 02-23, organised per service. Source-of-truth remains the chapter; appendix is the lookup-while-on-call reference.
+
+- 📝 Appendix B — Reference configs drafted (rolling)
+  - 16 sections of pointers to canonical config files / blocks per service. **Not duplication** — pure navigation aid pointing at the chapter section that contains the authoritative content.
+
+- 📝 Appendix C — External references drafted (rolling)
+  - 15 sections of upstream documentation links, vendor docs, RFCs, technical specs. Per-product (HashiCorp / GitLab / Keycloak / LGTM / Postgres / Redis / MinIO / etc.) plus a standards section.
+
+### Project state — final milestone (2026-05-02)
+
+**31 of 31 chapters drafted.** Every numbered phase + every post-phase reference + all appendices.
+
+The platform documentation now covers:
+
+1. **Phase 1 (chs 02-06)** — Developer foothold: bastion, Vault, GitLab, Nomad, Nexus
+2. **Phase 2 (chs 07-12)** — Identity + observability: Keycloak SSO + AD federation; full LGTM stack
+3. **Phase 3 (chs 13-18)** — App scaling + edge HA: Postgres HA, Redis, MinIO, PgBouncer, HAProxy, Cloudflare
+4. **Phase 4 (chs 19-20)** — Resilience: backup strategy + DR site
+5. **Phase 5 (chs 21-23)** — Operational maturity: Teleport, dynamic Vault secrets, Ansible automation
+6. **Post-phase (chs 30, 40-42)** — App onboarding workflow + verification ladder + incident response playbooks + hardening checklist
+7. **Appendices A-C** — Command cheatsheet + reference configs + external references
+
+Reserved Phase 5+ slots (chs 24/25/26 for Patroni / MinIO expansion / Redis Cluster) referenced inline but not drafted — they remain conditional on AU's growth triggers and can be drafted when those triggers fire.
+
+**The next state transition is from "drafted" to "validated" — every chapter awaits a real-install walkthrough that promotes its status from 📝 to ✅.**
 
 ---
 
