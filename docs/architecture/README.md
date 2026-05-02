@@ -157,7 +157,7 @@ Legend: ✅ done · 🚧 drafting · 📋 planned · _italic_ = stub only
 | 10 — Prometheus + Mimir          | 2     | 📝 drafted  |
 | 11 — Tempo                       | 2     | 📝 drafted  |
 | 12 — Alertmanager                | 2     | 📝 drafted  |
-| 13 — Postgres HA                 | 3     | 📋 planned  |
+| 13 — Postgres HA                 | 3     | 📝 drafted  |
 | 14 — Redis Sentinel              | 3     | 📋 planned  |
 | 15 — MinIO                       | 3     | 📋 planned  |
 | 16 — PgBouncer                   | 3     | 📋 planned  |
