@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { getTenantWithCounts } from "~/services/tenants.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { BRAND_THEMES } from "~/utils/schemas/organization";
 import type { Route } from "./+types/index";
 
@@ -15,8 +15,9 @@ export function meta({ data }: Route.MetaArgs) {
   return [{ title: data?.tenant?.name ?? "Tenant" }];
 }
 
+// Tenant management is global-admin-only (policy).
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "tenant", "read");
+  await requireGlobalAdmin(request);
 
   const tenant = await getTenantWithCounts(params.tenantId);
   if (!tenant) {

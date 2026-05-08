@@ -248,8 +248,6 @@ model Tenant {
   webhookSubscriptions WebhookSubscription[]
   titles               Title[]
   languages            Language[]
-  ssoConfigurations    SSOConfiguration[]
-  ssoConnections       SSOConnection[]
   organizations        Organization[]
   organizationTypes    OrganizationType[]
   people               Person[]
@@ -526,10 +524,11 @@ enum SSOProtocol {
   SAML
 }
 
+// Global SSO configuration. Single platform-wide IdP set; tenant assignment for
+// signed-in users is read from `User.tenantId`, not from per-tenant SSO config.
+// See app/routes/_auth/sso/callback.tsx for the post-auth tenant resolution.
 model SSOConfiguration {
   id              String      @id @default(cuid())
-  tenantId        String
-  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   provider        SSOProvider
   protocol        SSOProtocol @default(OIDC)
   displayName     String?     @db.VarChar(200)
@@ -548,18 +547,17 @@ model SSOConfiguration {
   isActive        Boolean     @default(true)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-
-  @@index([tenantId])
 }
 
+// Per-user binding between a user and an external IdP identity. Tenant
+// affinity is implicit through `user.tenantId` — connections themselves are
+// not tenant-scoped under global SSO.
 model SSOConnection {
   id             String      @id @default(cuid())
   userId         String
   user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider       SSOProvider
   providerUserId String      @db.VarChar(255)
-  tenantId       String
-  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email          String      @db.VarChar(255)
   displayName    String?     @db.VarChar(200)
   avatarUrl      String?     @db.VarChar(500)
@@ -568,9 +566,8 @@ model SSOConnection {
   updatedAt      DateTime    @updatedAt
 
   @@unique([provider, providerUserId])
-  @@unique([userId, provider, tenantId])
+  @@unique([userId, provider])
   @@index([userId])
-  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

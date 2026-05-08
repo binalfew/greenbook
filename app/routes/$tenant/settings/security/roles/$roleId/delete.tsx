@@ -4,7 +4,7 @@ import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { deleteRole, getRoleDetail } from "~/services/roles.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -16,15 +16,16 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Delete role" }];
 }
 
+// Role definition is global-admin-only (policy).
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "role", "delete");
+  await requireGlobalAdmin(request);
   const role = await getRoleDetail(params.roleId);
   if (!role) throw data({ error: "Role not found" }, { status: 404 });
   return data({ role });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const actor = await requirePermission(request, "role", "delete");
+  const actor = await requireGlobalAdmin(request);
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 

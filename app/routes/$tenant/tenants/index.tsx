@@ -5,7 +5,7 @@ import type { ColumnDef, PaginationMeta } from "~/components/data-table/data-tab
 import { Badge } from "~/components/ui/badge";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { listTenantsPaginatedWithCounts } from "~/services/tenants.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Tenants" };
@@ -21,8 +21,9 @@ const PLAN_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   enterprise: "default",
 };
 
+// Tenant management is global-admin-only (policy).
 export async function loader({ request }: Route.LoaderArgs) {
-  await requirePermission(request, "tenant", "read");
+  await requireGlobalAdmin(request);
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);

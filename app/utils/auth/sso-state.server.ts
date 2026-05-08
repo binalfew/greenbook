@@ -3,8 +3,11 @@ import { createCookieSessionStorage } from "react-router";
 import { logger } from "~/utils/monitoring/logger.server";
 
 // ─── SSO State Cookie ────────────────────────────────────
-// Stores PKCE code_verifier, state, nonce, and tenant info
+// Stores PKCE code_verifier, state, nonce, and flow metadata
 // during the OIDC authorization flow. Short-lived (10 min).
+//
+// Tenant context is no longer carried here — under global SSO the user's
+// tenant is resolved from `user.tenantId` after the callback succeeds.
 
 export const ssoStateStorage = createCookieSessionStorage({
   cookie: {
@@ -22,8 +25,6 @@ export interface SSOFlowState {
   state: string;
   nonce: string;
   codeVerifier: string;
-  tenantId: string;
-  tenantSlug: string;
   redirectTo: string;
   mode: "login" | "link";
   protocol: "OIDC" | "SAML";
@@ -42,8 +43,6 @@ export async function setSSOFlowState(request: Request, flowState: SSOFlowState)
   session.set("state", flowState.state);
   session.set("nonce", flowState.nonce);
   session.set("codeVerifier", flowState.codeVerifier);
-  session.set("tenantId", flowState.tenantId);
-  session.set("tenantSlug", flowState.tenantSlug);
   session.set("redirectTo", flowState.redirectTo);
   session.set("mode", flowState.mode);
   session.set("protocol", flowState.protocol);
@@ -62,8 +61,6 @@ export async function getSSOFlowState(request: Request): Promise<SSOFlowState | 
     state: session.get("state"),
     nonce: session.get("nonce"),
     codeVerifier: session.get("codeVerifier"),
-    tenantId: session.get("tenantId"),
-    tenantSlug: session.get("tenantSlug"),
     redirectTo: session.get("redirectTo"),
     mode: session.get("mode") ?? "login",
     protocol: session.get("protocol") ?? "OIDC",
@@ -106,8 +103,6 @@ const RELAY_STATE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 export function encodeSAMLRelayState(flowState: SSOFlowState): string {
   const payload = Buffer.from(
     JSON.stringify({
-      t: flowState.tenantId,
-      s: flowState.tenantSlug,
       r: flowState.redirectTo,
       m: flowState.mode,
       c: flowState.ssoConfigId,
@@ -129,7 +124,7 @@ export function decodeSAMLRelayState(relayState: string): SSOFlowState | null {
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
 
-    if (!data.c || !data.t) {
+    if (!data.c) {
       logger.warn("SAML RelayState missing required fields", data);
       return null;
     }
@@ -143,8 +138,6 @@ export function decodeSAMLRelayState(relayState: string): SSOFlowState | null {
       state: "",
       nonce: "",
       codeVerifier: "",
-      tenantId: data.t,
-      tenantSlug: data.s,
       redirectTo: data.r || "",
       mode: data.m || "login",
       protocol: "SAML",

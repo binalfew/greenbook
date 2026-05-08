@@ -221,17 +221,58 @@ export default function App({ loaderData }: Route.ComponentProps) {
   );
 }
 
+// Pull a user-friendly message out of an RR data-response error. Loaders /
+// actions in this app surface 4xx via `throw data({ error, message }, ...)`,
+// so the useful text lives on `error.data`, not `error.statusText`. Falls
+// back to a status-specific default when the payload is missing.
+function detailsForRouteError(error: unknown): { message: string; details: string } {
+  if (!isRouteErrorResponse(error)) {
+    return { message: "Oops!", details: "An unexpected error occurred." };
+  }
+
+  // Prefer the actor-supplied message from the data payload.
+  const payload =
+    typeof error.data === "object" && error.data !== null
+      ? (error.data as { error?: unknown; message?: unknown })
+      : null;
+  const payloadMessage =
+    typeof payload?.message === "string" && payload.message.length > 0
+      ? payload.message
+      : typeof payload?.error === "string" && payload.error.length > 0
+        ? payload.error
+        : null;
+
+  switch (error.status) {
+    case 401:
+      return {
+        message: "Sign in required",
+        details: payloadMessage ?? "You need to sign in to view this page.",
+      };
+    case 403:
+      return {
+        message: "Forbidden",
+        details:
+          payloadMessage ??
+          "You don't have permission to view this page. If you think you should, contact your administrator.",
+      };
+    case 404:
+      return {
+        message: "404",
+        details: payloadMessage ?? "The requested page could not be found.",
+      };
+    default:
+      return {
+        message: "Error",
+        details: payloadMessage ?? (error.statusText || "An unexpected error occurred."),
+      };
+  }
+}
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
+  const { message, details } = detailsForRouteError(error);
   let stack: string | undefined;
 
-  if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
-    details =
-      error.status === 404 ? "The requested page could not be found." : error.statusText || details;
-  } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
+  if (!isRouteErrorResponse(error) && import.meta.env.DEV && error instanceof Error) {
     stack = error.stack;
   }
 

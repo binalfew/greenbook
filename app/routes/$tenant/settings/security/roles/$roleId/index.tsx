@@ -3,6 +3,7 @@ import { Link, data } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { RoleScope } from "~/generated/prisma/client";
 import { getRoleDetail } from "~/services/roles.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import type { Route } from "./+types/index";
@@ -14,14 +15,15 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "role", "read");
+  const actor = await requirePermission(request, "role", "read");
+  const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
   const role = await getRoleDetail(params.roleId);
   if (!role) throw data({ error: "Role not found" }, { status: 404 });
-  return data({ role });
+  return data({ role, isGlobalAdmin });
 }
 
 export default function RoleDetailPage({ loaderData, params }: Route.ComponentProps) {
-  const { role } = loaderData;
+  const { role, isGlobalAdmin } = loaderData;
   const basePath = `/${params.tenant}/settings/security/roles`;
 
   // Group permissions by module for readability
@@ -56,26 +58,30 @@ export default function RoleDetailPage({ loaderData, params }: Route.ComponentPr
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" asChild>
-            <Link to={`${basePath}/${role.id}/edit`}>
-              <Pencil className="mr-1.5 size-3.5" />
-              Edit
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link to={`${basePath}/${role.id}/permissions`}>
-              <KeyRound className="mr-1.5 size-3.5" />
-              Permissions
-            </Link>
-          </Button>
-          <Button variant="destructive" size="sm" asChild>
-            <Link to={`${basePath}/${role.id}/delete`}>
-              <Trash2 className="mr-1.5 size-3.5" />
-              Delete
-            </Link>
-          </Button>
-        </div>
+        {/* Role mutations are global-admin-only (policy). Tenant admins see
+            the role detail read-only — no Edit / Permissions / Delete. */}
+        {isGlobalAdmin && (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" asChild>
+              <Link to={`${basePath}/${role.id}/edit`}>
+                <Pencil className="mr-1.5 size-3.5" />
+                Edit
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`${basePath}/${role.id}/permissions`}>
+                <KeyRound className="mr-1.5 size-3.5" />
+                Permissions
+              </Link>
+            </Button>
+            <Button variant="destructive" size="sm" asChild>
+              <Link to={`${basePath}/${role.id}/delete`}>
+                <Trash2 className="mr-1.5 size-3.5" />
+                Delete
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       {role.description && (

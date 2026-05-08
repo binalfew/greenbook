@@ -73,30 +73,37 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           end: true,
         },
         {
+          // The whole Directory group is hidden if the user has no read
+          // perm on any directory entity — keeps the sidebar tidy for
+          // tenant admins (who only do user CRUD per platform policy).
           title: "Directory",
           tKey: "directory",
           description: "AU organizations, people, and the positions that connect them.",
           url: `${basePrefix}/directory`,
           icon: Network,
           featureFlag: "FF_DIRECTORY",
+          permission: "organization:read",
           children: [
             {
               title: "Organizations",
               tKey: "orgs",
               url: `${basePrefix}/directory/organizations`,
               featureFlag: "FF_DIRECTORY",
+              permission: "organization:read",
             },
             {
               title: "People",
               tKey: "people",
               url: `${basePrefix}/directory/people`,
               featureFlag: "FF_DIRECTORY",
+              permission: "person:read",
             },
             {
               title: "Positions",
               tKey: "positions",
               url: `${basePrefix}/directory/positions`,
               featureFlag: "FF_DIRECTORY",
+              permission: "position:read",
             },
             {
               title: "Approvals",
@@ -120,6 +127,10 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           description: "Full audit trail of every change in this tenant.",
           url: `${basePrefix}/logs`,
           icon: ClipboardList,
+          // Audit log is global-admin-only per platform policy. The route
+          // also requires the perm at the loader; this keeps the link from
+          // rendering for users who would 403 on click.
+          permission: "audit-log:read",
         },
         {
           title: "Notifications",
@@ -137,26 +148,34 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
 export function buildSettingsChildren(basePrefix: string): NavChild[] {
   return [
     {
+      // Most settings tabs are global-admin-only per platform policy. Each
+      // is gated on the perm its loader requires; tenant admins land on
+      // /settings/security/users (their only allowed surface) and only see
+      // the Security tab in the side-nav.
       title: "General",
       tKey: "general",
       url: `${basePrefix}/settings`,
       end: true,
+      permission: "settings:read",
     },
     {
       title: "Organization",
       tKey: "organization",
       url: `${basePrefix}/settings/organization`,
+      permission: "settings:read",
     },
     {
       title: "Features",
       tKey: "featureFlags",
       url: `${basePrefix}/settings/features`,
+      permission: "feature-flag:read",
     },
     {
       title: "Webhooks",
       tKey: "webhooks",
       url: `${basePrefix}/settings/webhooks`,
       featureFlag: "FF_WEBHOOKS",
+      permission: "webhook:read",
     },
     {
       title: "Security",
@@ -168,6 +187,7 @@ export function buildSettingsChildren(basePrefix: string): NavChild[] {
       title: "References",
       tKey: "references",
       url: `${basePrefix}/settings/references`,
+      permission: "reference-data:read",
     },
   ];
 }

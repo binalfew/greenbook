@@ -4,11 +4,13 @@ import { prisma } from "~/utils/db/db.server";
 import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
 
 export async function listRolesPaginated(
-  tenantId: string | undefined,
+  _tenantId: string | undefined,
   options: PaginatedQueryOptions,
 ) {
+  // Roles are platform-global (4 canonical rows). The tenantId argument is
+  // retained for callsite parity with other paginated lists but is no longer
+  // used to scope the result — every viewer sees the same role catalog.
   const where: Prisma.RoleWhereInput = {
-    ...(tenantId ? { OR: [{ tenantId }, { scope: "GLOBAL" }] } : {}),
     ...(options.where as Prisma.RoleWhereInput | undefined),
   };
   const orderBy: Prisma.RoleOrderByWithRelationInput[] = options.orderBy?.length

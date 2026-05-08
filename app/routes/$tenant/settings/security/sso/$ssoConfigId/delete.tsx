@@ -10,36 +10,26 @@ import {
   getSSOConnectionCountByConfig,
 } from "~/services/sso.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
-import { buildServiceContext } from "~/utils/request-context.server";
 import type { Route } from "./+types/delete";
 
 export const handle = { breadcrumb: "Delete" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "sso", "read");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requirePermission(request, "sso", "read");
 
   const config = await getSSOConfigById(params.ssoConfigId);
-  if (!config || config.tenantId !== tenantId) {
+  if (!config) {
     throw data({ error: "SSO configuration not found" }, { status: 404 });
   }
 
-  const connectionCount = await getSSOConnectionCountByConfig(config.provider, config.tenantId);
+  const connectionCount = await getSSOConnectionCountByConfig(config.provider);
   return data({ config, connectionCount });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const user = await requirePermission(request, "sso", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
 
-  const ctx = buildServiceContext(request, user, tenantId);
-  await deleteSSOConfiguration(params.ssoConfigId, ctx);
+  await deleteSSOConfiguration(params.ssoConfigId, { userId: user.id });
   return redirect(`/${params.tenant}/settings/security/sso`);
 }
 

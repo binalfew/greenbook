@@ -3,6 +3,7 @@ import { Link, data } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef, PaginationMeta } from "~/components/data-table/data-table-types";
+import { RoleScope } from "~/generated/prisma/client";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { listRolesPaginated } from "~/services/roles.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
@@ -19,6 +20,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const user = await requirePermission(request, "role", "read");
   const tenantId = user.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
+  const isGlobalAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -34,7 +36,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       }
     : {};
 
-  const { items, totalCount } = await listRolesPaginated(tenantId, {
+  // Roles are platform-global (4 canonical rows). Every viewer with role:read
+  // sees the same catalog; the tenantId argument is preserved for signature
+  // parity with the other paginated lists but is ignored in the service.
+  const { items, totalCount } = await listRolesPaginated(undefined, {
     where: searchWhere,
     page,
     pageSize,
@@ -44,6 +49,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return data({
     roles: items,
     pagination: { page, pageSize, totalCount, totalPages } satisfies PaginationMeta,
+    isGlobalAdmin,
   });
 }
 
@@ -127,9 +133,13 @@ export default function RolesListPage({ loaderData }: Route.ComponentProps) {
             permission: "role:update",
           },
           {
+            // Editing a role's permission grants is global-admin-only (the
+            // route does requireGlobalAdmin). Gate the button on role:update
+            // — only global admins still hold that permission.
             label: "Permissions",
             icon: KeyRound,
             href: (row) => `${basePath}/${row.id}/permissions`,
+            permission: "role:update",
           },
           {
             label: "Delete",

@@ -12,11 +12,9 @@ import type { Route } from "./+types/index";
 export const handle = { breadcrumb: "SSO" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "sso", "read");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  // SSO config is platform-global; the route lives under $tenant for URL
+  // continuity, but the data is not tenant-scoped.
+  await requirePermission(request, "sso", "read");
 
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() || "";
@@ -24,10 +22,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   const status = url.searchParams.get("status") || undefined;
 
   const [configs, connectionCounts] = await Promise.all([
-    getSSOConfigurations(tenantId),
+    getSSOConfigurations(),
     prisma.sSOConnection.groupBy({
       by: ["provider"],
-      where: { tenantId },
       _count: true,
     }),
   ]);

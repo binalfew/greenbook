@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { getRoleDetail, replaceRolePermissions } from "~/services/roles.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -18,8 +18,11 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Role permissions" }];
 }
 
+// Permission grants are global-admin-only (policy). Otherwise a tenant
+// admin could grant tenant:create / tenant:delete to their own admin role
+// and effectively elevate to a global admin without flipping any scope.
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "role", "update");
+  await requireGlobalAdmin(request);
   const [role, allPermissions] = await Promise.all([
     getRoleDetail(params.roleId),
     prisma.permission.findMany({
@@ -34,7 +37,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const actor = await requirePermission(request, "role", "update");
+  const actor = await requireGlobalAdmin(request);
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 

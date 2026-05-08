@@ -2,6 +2,7 @@ import { Mail, Pencil, Plus, Shield, Trash2, User, Users } from "lucide-react";
 import { Link, data } from "react-router";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef, PaginationMeta } from "~/components/data-table/data-table-types";
+import { RoleScope } from "~/generated/prisma/client";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { listUsersPaginated } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
@@ -25,6 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const user = await requirePermission(request, "user", "read");
   const tenantId = user.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
+  const isGlobalAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -41,7 +43,9 @@ export async function loader({ request }: Route.LoaderArgs) {
       }
     : {};
 
-  const { items, totalCount } = await listUsersPaginated(tenantId, {
+  // Global admins see every user (including tenantless "regular" users).
+  // Tenant admins see only their own tenant's users.
+  const { items, totalCount } = await listUsersPaginated(isGlobalAdmin ? undefined : tenantId, {
     where: searchWhere,
     page,
     pageSize,
@@ -52,13 +56,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   return data({
     users: items,
     pagination: { page, pageSize, totalCount, totalPages } satisfies PaginationMeta,
+    isGlobalAdmin,
   });
 }
 
 type UserRow = Route.ComponentProps["loaderData"]["users"][number];
 
 export default function UsersListPage({ loaderData }: Route.ComponentProps) {
-  const { users, pagination } = loaderData;
+  const { users, pagination, isGlobalAdmin } = loaderData;
   const base = useBasePrefix();
   const basePath = `${base}/settings/security/users`;
 
@@ -85,6 +90,23 @@ export default function UsersListPage({ loaderData }: Route.ComponentProps) {
       cell: "email",
       cellClassName: "text-muted-foreground",
     },
+    // Tenant column shows up only when a global admin is viewing the
+    // platform-wide list — tenant-scoped views don't need it (every row would
+    // be the same tenant).
+    ...(isGlobalAdmin
+      ? [
+          {
+            id: "tenant",
+            header: "Tenant",
+            cell: (row: UserRow) =>
+              row.tenant ? (
+                <span className="text-muted-foreground">{row.tenant.name}</span>
+              ) : (
+                <span className="text-muted-foreground text-xs italic">— Regular —</span>
+              ),
+          } satisfies ColumnDef<UserRow>,
+        ]
+      : []),
     {
       id: "status",
       header: "Status",

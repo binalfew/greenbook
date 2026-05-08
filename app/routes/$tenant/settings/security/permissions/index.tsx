@@ -5,7 +5,7 @@ import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef, PaginationMeta } from "~/components/data-table/data-table-types";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { listPermissionsPaginated } from "~/services/permissions.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { prisma } from "~/utils/db/db.server";
 import type { Route } from "./+types/index";
 
@@ -15,8 +15,10 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Permissions" }];
 }
 
+// Permission catalog is global-admin-only (policy). Tenant admins don't
+// need to see the master permission list; they just assign existing roles.
 export async function loader({ request }: Route.LoaderArgs) {
-  await requirePermission(request, "permission", "read");
+  await requireGlobalAdmin(request);
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);

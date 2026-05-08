@@ -18,13 +18,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   const tenantId = user.tenantId;
 
   const userWhere = tenantId ? { tenantId, deletedAt: null } : { deletedAt: null };
-  const roleWhere = tenantId ? { OR: [{ tenantId }, { scope: "GLOBAL" as const }] } : {};
 
   const [userCount, roleCount, permissionCount, ssoCount] = await Promise.all([
     prisma.user.count({ where: userWhere }),
-    prisma.role.count({ where: roleWhere }),
+    // Roles are platform-global (4 canonical rows). Count is the same for
+    // every viewer.
+    prisma.role.count(),
     prisma.permission.count(),
-    tenantId ? prisma.sSOConfiguration.count({ where: { tenantId } }) : 0,
+    // SSO is platform-global; the count is shared across all tenants.
+    prisma.sSOConfiguration.count(),
   ]);
 
   // 2FA-enabled user count: Verification rows with type "2fa" whose `target`

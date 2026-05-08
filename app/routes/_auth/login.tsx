@@ -5,7 +5,7 @@ import { Form, Link, data, redirect, useSearchParams } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { HoneypotInputs } from "remix-utils/honeypot/react";
 import { safeRedirect } from "remix-utils/safe-redirect";
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail } from "lucide-react";
 import { z } from "zod";
 import { AuthContent } from "~/components/auth/auth-layout";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
@@ -13,6 +13,8 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import type { SSOProvider } from "~/generated/prisma/client";
+import { getActiveSSOConfigurations } from "~/services/sso.server";
 import { isPasswordExpired, login, requireAnonymous } from "~/utils/auth/auth.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { prisma } from "~/utils/db/db.server";
@@ -42,9 +44,35 @@ export const LoginFormSchema = z.object({
   redirectTo: z.string().optional(),
 });
 
+interface SSOOption {
+  id: string;
+  provider: SSOProvider;
+  displayName: string;
+}
+
+const PROVIDER_LABELS: Record<SSOProvider, string> = {
+  OKTA: "Okta",
+  AZURE_AD: "Microsoft / Azure AD",
+  GOOGLE: "Google",
+  CUSTOM_OIDC: "OIDC",
+  CUSTOM_SAML: "SAML",
+};
+
+function labelFor(config: { displayName: string | null; provider: SSOProvider }): string {
+  return config.displayName?.trim() || PROVIDER_LABELS[config.provider];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAnonymous(request);
-  return data({});
+
+  const configs = await getActiveSSOConfigurations();
+  const ssoOptions: SSOOption[] = configs.map((c) => ({
+    id: c.id,
+    provider: c.provider,
+    displayName: labelFor(c),
+  }));
+
+  return data({ ssoOptions });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -169,12 +197,14 @@ async function resolveDefaultRedirect(userId: string): Promise<string> {
   return user?.tenant?.slug ? `/${user.tenant.slug}` : "/";
 }
 
-export default function LoginRoute({ actionData }: Route.ComponentProps) {
+export default function LoginRoute({ loaderData, actionData }: Route.ComponentProps) {
+  const { ssoOptions } = loaderData;
   const isPending = useIsPending();
   const { t } = useTranslation("auth");
   const { t: tCommon } = useTranslation("common");
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? "";
+  const ssoError = searchParams.get("error") ?? "";
   const emailRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -194,6 +224,50 @@ export default function LoginRoute({ actionData }: Route.ComponentProps) {
         <h1 className="text-foreground text-3xl font-bold tracking-tight">{t("loginTitle")}</h1>
         <p className="text-muted-foreground mt-2">{t("loginSubtitle")}</p>
       </div>
+
+      {ssoError ? (
+        <div className="border-destructive/30 bg-destructive/5 mb-6 flex items-start gap-3 rounded-lg border px-4 py-3">
+          <Lock className="text-destructive mt-0.5 size-4 shrink-0" />
+          <p className="text-destructive text-sm">{ssoError}</p>
+        </div>
+      ) : null}
+
+      {ssoOptions.length > 0 ? (
+        <>
+          <div className="mb-6 space-y-3">
+            {ssoOptions.map((option) => {
+              const params = new URLSearchParams({ configId: option.id });
+              if (redirectTo) params.set("redirectTo", redirectTo);
+              return (
+                <Button
+                  key={option.id}
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="h-11 w-full justify-start gap-3 text-base font-medium"
+                >
+                  <Link to={`/sso/start?${params.toString()}`} prefetch="intent">
+                    <KeyRound className="text-primary size-4" />
+                    <span className="flex-1 text-left">Sign in with {option.displayName}</span>
+                    <ArrowRight className="text-muted-foreground size-4" />
+                  </Link>
+                </Button>
+              );
+            })}
+          </div>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="border-border w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-background text-muted-foreground px-3">
+                or sign in with email
+              </span>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       <Form method="post" {...getFormProps(form)} className="space-y-5">
         <AuthenticityTokenInput />

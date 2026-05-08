@@ -18,28 +18,25 @@ import { getSSOConfigById, updateSSOConfiguration } from "~/services/sso.server"
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { SSO_PROTOCOL_OPTIONS, SSO_PROVIDER_OPTIONS } from "~/utils/constants/sso";
 import { prisma } from "~/utils/db/db.server";
-import { buildServiceContext } from "~/utils/request-context.server";
 import { createSSOConfigSchema } from "~/utils/schemas/sso";
 import type { Route } from "./+types/edit";
 
 export const handle = { breadcrumb: "Edit" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "sso", "read");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requirePermission(request, "sso", "read");
 
   const config = await getSSOConfigById(params.ssoConfigId);
-  if (!config || config.tenantId !== tenantId) {
+  if (!config) {
     throw data({ error: "SSO configuration not found" }, { status: 404 });
   }
 
   const appUrl = process.env.APP_URL ?? "http://localhost:5173";
   const callbackUrl = `${appUrl}/sso/callback`;
+  // Default-role list intentionally returns every role (global + per-tenant) —
+  // SSO is platform-global so a default role assignment is global too.
   const roles = await prisma.role.findMany({
-    where: { OR: [{ tenantId }, { tenantId: null }], name: { not: "admin" } },
+    where: { name: { not: "admin" } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -49,10 +46,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export async function action({ request, params }: Route.ActionArgs) {
   const user = await requirePermission(request, "sso", "write");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
 
   const formData = await request.formData();
   const submission = parseWithZod(formData, { schema: createSSOConfigSchema });
@@ -61,8 +54,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     return data(submission.reply(), { status: 400 });
   }
 
-  const ctx = buildServiceContext(request, user, tenantId);
-  await updateSSOConfiguration(params.ssoConfigId, submission.value, ctx);
+  await updateSSOConfiguration(params.ssoConfigId, submission.value, { userId: user.id });
   return redirect(`/${params.tenant}/settings/security/sso/${params.ssoConfigId}`);
 }
 

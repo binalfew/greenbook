@@ -20,8 +20,16 @@ import {
 } from "~/utils/auth/saml.server";
 import { prisma } from "~/utils/db/db.server";
 import type { CreateSSOConfigInput } from "~/utils/schemas/sso";
-import type { TenantServiceContext } from "~/utils/types.server";
 import { logger } from "~/utils/monitoring/logger.server";
+
+/**
+ * Audit-only context for SSO admin operations. Under global SSO, configs are
+ * not tenant-scoped, so we no longer carry a `tenantId` here. The userId is
+ * retained for log lines.
+ */
+export interface SSOAdminContext {
+  userId: string;
+}
 
 export class SSOError extends Error {
   status: number;
@@ -62,10 +70,17 @@ function buildSAMLConfig(config: {
 
 // ─── CRUD ─────────────────────────────────────────────────
 
-export async function getSSOConfigurations(tenantId: string) {
+export async function getSSOConfigurations() {
   return prisma.sSOConfiguration.findMany({
-    where: { tenantId },
     orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function getActiveSSOConfigurations() {
+  return prisma.sSOConfiguration.findMany({
+    where: { isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, provider: true, displayName: true, protocol: true },
   });
 }
 
@@ -73,15 +88,11 @@ export async function getSSOConfigById(id: string) {
   return prisma.sSOConfiguration.findUnique({ where: { id } });
 }
 
-export async function createSSOConfiguration(
-  input: CreateSSOConfigInput,
-  ctx: TenantServiceContext,
-) {
-  logger.info(`Creating SSO configuration [${input.provider}] for tenant ${ctx.tenantId}`);
+export async function createSSOConfiguration(input: CreateSSOConfigInput, ctx: SSOAdminContext) {
+  logger.info(`Creating SSO configuration [${input.provider}] [actor=${ctx.userId}]`);
 
   return prisma.sSOConfiguration.create({
     data: {
-      tenantId: ctx.tenantId,
       provider: input.provider,
       protocol: input.protocol,
       displayName: input.displayName || undefined,
@@ -104,7 +115,7 @@ export async function createSSOConfiguration(
 export async function updateSSOConfiguration(
   id: string,
   input: CreateSSOConfigInput,
-  _ctx: TenantServiceContext,
+  ctx: SSOAdminContext,
 ) {
   const existing = await prisma.sSOConfiguration.findUnique({ where: { id } });
 
@@ -112,7 +123,7 @@ export async function updateSSOConfiguration(
     throw new SSOError("SSO configuration not found", 404);
   }
 
-  logger.info(`Updating SSO configuration ${id} [${input.provider}]`);
+  logger.info(`Updating SSO configuration ${id} [${input.provider}] [actor=${ctx.userId}]`);
 
   return prisma.sSOConfiguration.update({
     where: { id },
@@ -137,7 +148,7 @@ export async function updateSSOConfiguration(
   });
 }
 
-export async function deleteSSOConfiguration(id: string, ctx: TenantServiceContext) {
+export async function deleteSSOConfiguration(id: string, ctx: SSOAdminContext) {
   const existing = await prisma.sSOConfiguration.findUnique({ where: { id } });
 
   if (!existing) {
@@ -148,15 +159,12 @@ export async function deleteSSOConfiguration(id: string, ctx: TenantServiceConte
   return prisma.sSOConfiguration.delete({ where: { id } });
 }
 
-export async function getSSOConnectionCount(tenantId: string): Promise<number> {
-  return prisma.sSOConnection.count({ where: { tenantId } });
+export async function getSSOConnectionCount(): Promise<number> {
+  return prisma.sSOConnection.count();
 }
 
-export async function getSSOConnectionCountByConfig(
-  provider: SSOProvider,
-  tenantId: string,
-): Promise<number> {
-  return prisma.sSOConnection.count({ where: { provider, tenantId } });
+export async function getSSOConnectionCountByConfig(provider: SSOProvider): Promise<number> {
+  return prisma.sSOConnection.count({ where: { provider } });
 }
 
 // ─── Test Connection ──────────────────────────────────────
@@ -206,18 +214,12 @@ export interface SSOFlowResult {
   state: string;
   nonce: string;
   codeVerifier: string;
-  tenantId: string;
-  tenantSlug: string;
   ssoConfigId: string;
   protocol: "OIDC" | "SAML";
   requestId?: string;
 }
 
-export async function initiateSSOFlow(
-  configId: string,
-  tenantSlug: string,
-  _redirectTo: string,
-): Promise<SSOFlowResult> {
+export async function initiateSSOFlow(configId: string): Promise<SSOFlowResult> {
   const config = await prisma.sSOConfiguration.findUnique({ where: { id: configId } });
   if (!config || !config.isActive) {
     throw new SSOError("SSO configuration not found or inactive", 404);
@@ -226,16 +228,15 @@ export async function initiateSSOFlow(
   const callbackUrl = `${getAppUrl()}/sso/callback`;
 
   if (config.protocol === "SAML") {
-    return initiateSAMLFlow(config, configId, tenantSlug, callbackUrl);
+    return initiateSAMLFlow(config, configId, callbackUrl);
   }
 
-  return initiateOIDCFlow(config, configId, tenantSlug, callbackUrl);
+  return initiateOIDCFlow(config, configId, callbackUrl);
 }
 
 async function initiateOIDCFlow(
   config: NonNullable<Awaited<ReturnType<typeof prisma.sSOConfiguration.findUnique>>>,
   configId: string,
-  tenantSlug: string,
   callbackUrl: string,
 ): Promise<SSOFlowResult> {
   if (!config.clientId || !config.clientSecret || !config.issuerUrl) {
@@ -265,17 +266,13 @@ async function initiateOIDCFlow(
     codeChallenge,
   });
 
-  logger.info(
-    `SSO flow initiated [tenant=${tenantSlug} provider=${config.provider} protocol=OIDC]`,
-  );
+  logger.info(`SSO flow initiated [provider=${config.provider} protocol=OIDC]`);
 
   return {
     authorizationUrl,
     state,
     nonce,
     codeVerifier,
-    tenantId: config.tenantId,
-    tenantSlug,
     ssoConfigId: configId,
     protocol: "OIDC",
   };
@@ -284,7 +281,6 @@ async function initiateOIDCFlow(
 async function initiateSAMLFlow(
   config: NonNullable<Awaited<ReturnType<typeof prisma.sSOConfiguration.findUnique>>>,
   configId: string,
-  tenantSlug: string,
   _callbackUrl: string,
 ): Promise<SSOFlowResult> {
   if (!config.issuerUrl || !config.x509Certificate || !config.ssoUrl) {
@@ -299,21 +295,23 @@ async function initiateSAMLFlow(
 
   const authorizationUrl = await samlBuildRedirectUrl(buildSAMLConfig(config), requestId, state);
 
-  logger.info(
-    `SSO flow initiated [tenant=${tenantSlug} provider=${config.provider} protocol=SAML]`,
-  );
+  logger.info(`SSO flow initiated [provider=${config.provider} protocol=SAML]`);
 
   return {
     authorizationUrl,
     state,
     nonce: "",
     codeVerifier: "",
-    tenantId: config.tenantId,
-    tenantSlug,
     ssoConfigId: configId,
     protocol: "SAML",
     requestId,
   };
+}
+
+export interface SSOCallbackResult {
+  userId: string;
+  /** The user's tenant slug, or `null` for global / tenantless users. */
+  tenantSlug: string | null;
 }
 
 export async function handleSSOCallback(params: {
@@ -329,7 +327,7 @@ export async function handleSSOCallback(params: {
   requestId?: string;
   // Common
   ssoConfigId: string;
-}): Promise<{ userId: string; tenantId: string }> {
+}): Promise<SSOCallbackResult> {
   if (params.protocol === "SAML") {
     return handleSAMLCallback(
       params as {
@@ -353,6 +351,18 @@ export async function handleSSOCallback(params: {
   );
 }
 
+/**
+ * After provisioning/resolving a user, look up their tenant slug. Returns
+ * `null` for users with no tenant (e.g. global admins).
+ */
+async function resolveTenantSlug(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tenant: { select: { slug: true } } },
+  });
+  return user?.tenant?.slug ?? null;
+}
+
 async function handleOIDCCallback(params: {
   code: string;
   callbackUrl: URL;
@@ -360,7 +370,7 @@ async function handleOIDCCallback(params: {
   nonce: string;
   state: string;
   ssoConfigId: string;
-}): Promise<{ userId: string; tenantId: string }> {
+}): Promise<SSOCallbackResult> {
   const config = await prisma.sSOConfiguration.findUnique({
     where: { id: params.ssoConfigId },
   });
@@ -392,21 +402,21 @@ async function handleOIDCCallback(params: {
 
   const userId = await resolveOrProvisionUser({
     claims,
-    tenantId: config.tenantId,
     provider: config.provider,
     autoProvision: config.autoProvision,
     defaultRoleId: config.defaultRoleId,
   });
 
+  const tenantSlug = await resolveTenantSlug(userId);
   logger.info(`SSO OIDC callback successful [user=${userId} provider=${config.provider}]`);
-  return { userId, tenantId: config.tenantId };
+  return { userId, tenantSlug };
 }
 
 async function handleSAMLCallback(params: {
   samlResponse: string;
   requestId: string;
   ssoConfigId: string;
-}): Promise<{ userId: string; tenantId: string }> {
+}): Promise<SSOCallbackResult> {
   const config = await prisma.sSOConfiguration.findUnique({
     where: { id: params.ssoConfigId },
   });
@@ -430,14 +440,14 @@ async function handleSAMLCallback(params: {
       email: claims.email,
       name: claims.name,
     },
-    tenantId: config.tenantId,
     provider: config.provider,
     autoProvision: config.autoProvision,
     defaultRoleId: config.defaultRoleId,
   });
 
+  const tenantSlug = await resolveTenantSlug(userId);
   logger.info(`SSO SAML callback successful [user=${userId} provider=${config.provider}]`);
-  return { userId, tenantId: config.tenantId };
+  return { userId, tenantSlug };
 }
 
 // ─── Account Linking ──────────────────────────────────────
@@ -496,7 +506,6 @@ export async function linkSSOAccount(params: {
       userId: params.userId,
       provider: config.provider,
       providerUserId: claims.sub,
-      tenantId: config.tenantId,
       email: claims.email,
       displayName: claims.name,
       avatarUrl: claims.picture,
@@ -547,7 +556,6 @@ export async function linkSAMLAccount(params: {
       userId: params.userId,
       provider: config.provider,
       providerUserId: claims.nameId,
-      tenantId: config.tenantId,
       email: claims.email,
       displayName: claims.name,
     },
@@ -594,19 +602,19 @@ function splitName(fullName?: string | null): { firstName: string; lastName: str
 
 async function resolveOrProvisionUser(params: {
   claims: OIDCUserClaims;
-  tenantId: string;
   provider: SSOProvider;
   autoProvision: boolean;
   defaultRoleId: string | null;
 }): Promise<string> {
-  const { claims, tenantId, provider, autoProvision, defaultRoleId } = params;
+  const { claims, provider, autoProvision, defaultRoleId } = params;
 
-  // 1. Check existing SSOConnection
+  // 1. Existing SSOConnection — sign in directly. No tenant matching needed
+  //    under global SSO; the user's tenant comes from `user.tenantId`.
   const existingConnection = await prisma.sSOConnection.findUnique({
     where: { provider_providerUserId: { provider, providerUserId: claims.sub } },
     include: {
       user: {
-        select: { id: true, tenantId: true, userStatus: { select: { code: true } } },
+        select: { id: true, userStatus: { select: { code: true } } },
       },
     },
   });
@@ -614,9 +622,6 @@ async function resolveOrProvisionUser(params: {
   if (existingConnection) {
     if (existingConnection.user.userStatus?.code !== "ACTIVE") {
       throw new SSOError("Your account is inactive. Contact your administrator.", 403);
-    }
-    if (existingConnection.user.tenantId !== tenantId) {
-      throw new SSOError("Account is associated with a different organization.", 403);
     }
 
     await prisma.sSOConnection.update({
@@ -632,20 +637,16 @@ async function resolveOrProvisionUser(params: {
     return existingConnection.userId;
   }
 
-  // 2. Check existing user by email (case-insensitive)
+  // 2. Existing user by email (case-insensitive) — link the connection.
   const existingUser = await prisma.user.findFirst({
     where: { email: { equals: claims.email, mode: "insensitive" } },
     select: {
       id: true,
-      tenantId: true,
       userStatus: { select: { code: true } },
     },
   });
 
   if (existingUser) {
-    if (existingUser.tenantId && existingUser.tenantId !== tenantId) {
-      throw new SSOError("An account with this email exists in a different organization.", 409);
-    }
     if (existingUser.userStatus?.code !== "ACTIVE") {
       throw new SSOError("Your account is inactive. Contact your administrator.", 403);
     }
@@ -655,7 +656,6 @@ async function resolveOrProvisionUser(params: {
         userId: existingUser.id,
         provider,
         providerUserId: claims.sub,
-        tenantId,
         email: claims.email,
         displayName: claims.name,
         avatarUrl: claims.picture,
@@ -666,7 +666,9 @@ async function resolveOrProvisionUser(params: {
     return existingUser.id;
   }
 
-  // 3. Auto-provision new user
+  // 3. Auto-provision new user. Under global SSO we have no platform-side
+  //    tenant signal; the user is created tenantless and an admin must assign
+  //    them later (or the IdP can carry tenant info via claims — future work).
   if (!autoProvision) {
     throw new SSOError(
       "No account found for this email. Contact your administrator to create an account.",
@@ -687,7 +689,6 @@ async function resolveOrProvisionUser(params: {
         email: claims.email.toLowerCase(),
         firstName: firstName || claims.email.split("@")[0],
         lastName,
-        tenantId,
         userStatusId: activeStatus?.id,
       },
     });
@@ -697,7 +698,6 @@ async function resolveOrProvisionUser(params: {
         userId: newUser.id,
         provider,
         providerUserId: claims.sub,
-        tenantId,
         email: claims.email,
         displayName: claims.name,
         avatarUrl: claims.picture,

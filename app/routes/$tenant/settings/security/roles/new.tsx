@@ -9,7 +9,7 @@ import { getFormProps, getInputProps, SelectField, useForm } from "~/components/
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { createRole } from "~/services/roles.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -22,13 +22,15 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "New role" }];
 }
 
+// Role definition is global-admin-only (policy). Tenant admins assign
+// existing roles to users but can't create / edit / delete them.
 export async function loader({ request }: Route.LoaderArgs) {
-  await requirePermission(request, "role", "create");
+  await requireGlobalAdmin(request);
   return data({});
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const actor = await requirePermission(request, "role", "create");
+  const actor = await requireGlobalAdmin(request);
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 

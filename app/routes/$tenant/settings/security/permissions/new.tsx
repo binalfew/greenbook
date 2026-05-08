@@ -9,7 +9,7 @@ import { getFormProps, getInputProps, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { createPermission } from "~/services/permissions.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -22,13 +22,14 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "New permission" }];
 }
 
+// Permission catalog is global-admin-only (policy).
 export async function loader({ request }: Route.LoaderArgs) {
-  await requirePermission(request, "permission", "create");
+  await requireGlobalAdmin(request);
   return data({});
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const actor = await requirePermission(request, "permission", "create");
+  const actor = await requireGlobalAdmin(request);
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 

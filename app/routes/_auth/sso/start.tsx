@@ -8,8 +8,11 @@ import type { Route } from "./+types/start";
 
 // Loader-only route — redirects to the IdP authorization URL.
 // Supports two modes:
-//   Login:  /sso/start?tenant=acme&configId=xxx
-//   Link:   /sso/start?tenant=acme&configId=xxx&link=true  (requires active session)
+//   Login:  /sso/start?configId=xxx
+//   Link:   /sso/start?configId=xxx&link=true        (requires active session)
+//
+// Tenant context is intentionally not part of the URL: under global SSO the
+// user's tenant is resolved from `user.tenantId` after the callback succeeds.
 
 async function getUserIdFromRequest(request: Request): Promise<string | null> {
   const cookieSession = await authSessionStorage.getSession(request.headers.get("cookie"));
@@ -24,35 +27,41 @@ async function getUserIdFromRequest(request: Request): Promise<string | null> {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
-  const tenantSlug = url.searchParams.get("tenant");
   const configId = url.searchParams.get("configId");
   const rawRedirectTo = url.searchParams.get("redirectTo") ?? "";
   const redirectTo = rawRedirectTo.startsWith("/") ? rawRedirectTo : "";
   const isLinkMode = url.searchParams.get("link") === "true";
 
-  if (!tenantSlug || !configId) {
-    return redirect("/login?error=missing_tenant");
+  if (!configId) {
+    return redirect("/login?error=missing_config");
   }
 
   let linkUserId: string | undefined;
+  let linkRedirect = redirectTo;
   if (isLinkMode) {
     const userId = await getUserIdFromRequest(request);
     if (!userId) {
-      return redirect(`/login?tenant=${encodeURIComponent(tenantSlug)}&error=session_expired`);
+      return redirect("/login?error=session_expired");
     }
     linkUserId = userId;
+    // Default link-mode redirect: bounce back to the user's tenant profile.
+    if (!linkRedirect) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tenant: { select: { slug: true } } },
+      });
+      linkRedirect = user?.tenant?.slug ? `/${user.tenant.slug}/profile` : "/";
+    }
   }
 
   try {
-    const result = await initiateSSOFlow(configId, tenantSlug, redirectTo);
+    const result = await initiateSSOFlow(configId);
 
     const flowState = {
       state: result.state,
       nonce: result.nonce,
       codeVerifier: result.codeVerifier,
-      tenantId: result.tenantId,
-      tenantSlug: result.tenantSlug,
-      redirectTo: isLinkMode ? `/${tenantSlug}/profile` : redirectTo,
+      redirectTo: isLinkMode ? linkRedirect : redirectTo,
       mode: (isLinkMode ? "link" : "login") as "login" | "link",
       protocol: result.protocol,
       ssoConfigId: result.ssoConfigId,
@@ -76,8 +85,6 @@ export async function loader({ request }: Route.LoaderArgs) {
   } catch (error) {
     const message = error instanceof SSOError ? error.message : "SSO initialization failed";
     console.error("SSO start failed", error);
-    return redirect(
-      `/login?error=${encodeURIComponent(message)}&tenant=${encodeURIComponent(tenantSlug)}`,
-    );
+    return redirect(`/login?error=${encodeURIComponent(message)}`);
   }
 }

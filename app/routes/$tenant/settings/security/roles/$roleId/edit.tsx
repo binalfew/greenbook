@@ -9,7 +9,7 @@ import { getFormProps, getInputProps, SelectField, useForm } from "~/components/
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { getRoleDetail, updateRole } from "~/services/roles.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -22,15 +22,17 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Edit role" }];
 }
 
+// Role definition is global-admin-only (policy). Closes scope-flip and
+// permission-grant escalation paths for tenant admins.
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "role", "update");
+  await requireGlobalAdmin(request);
   const role = await getRoleDetail(params.roleId);
   if (!role) throw data({ error: "Role not found" }, { status: 404 });
   return data({ role });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const actor = await requirePermission(request, "role", "update");
+  const actor = await requireGlobalAdmin(request);
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 

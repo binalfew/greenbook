@@ -45,7 +45,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     await Promise.all([
       isFeatureEnabled(FEATURE_FLAG_KEYS.TWO_FACTOR, { tenantId, roles, userId: actor.id }),
       getTwoFAPolicy(tenantId),
-      listRolesPaginated(tenantId, { page: 1, pageSize: 500 }),
+      // Roles are platform-global (4 canonical rows) — pass undefined so the
+      // 2FA policy role-targets list shows all of them.
+      listRolesPaginated(undefined, { page: 1, pageSize: 500 }),
       prisma.user.findMany({
         where: { tenantId, deletedAt: null },
         select: { id: true },

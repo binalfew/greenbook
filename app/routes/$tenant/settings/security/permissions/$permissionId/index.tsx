@@ -4,7 +4,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { getPermissionDetail } from "~/services/permissions.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Detail" };
@@ -14,8 +14,9 @@ export function meta({ data }: Route.MetaArgs) {
   return [{ title: p ? `${p.resource}:${p.action}` : "Permission" }];
 }
 
+// Permission catalog is global-admin-only (policy).
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "permission", "read");
+  await requireGlobalAdmin(request);
   const permission = await getPermissionDetail(params.permissionId);
   if (!permission) throw data({ error: "Permission not found" }, { status: 404 });
   return data({ permission });

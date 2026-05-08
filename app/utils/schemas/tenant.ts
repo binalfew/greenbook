@@ -62,6 +62,13 @@ export const createTenantSchema = z.object({
   subscriptionPlan: subscriptionPlanSchema.optional(),
   logoUrl: z.string().optional(),
   brandTheme: z.string().optional(),
+  // Optional: existing user to bootstrap as the new tenant's admin. Empty
+  // string from the form means "create the tenant without an initial admin"
+  // (admins can be assigned later via the user-edit form).
+  initialAdminUserId: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();

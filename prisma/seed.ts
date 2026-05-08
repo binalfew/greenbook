@@ -124,33 +124,10 @@ async function main() {
     },
   });
 
-  // Remove legacy @example.com demo accounts so re-seeding an existing DB
-  // converges to the africanunion.org demo users without duplicates. User
-  // cascade handles sessions/passwords/roles; ChangeRequest references
-  // (submittedBy is required, reviewedBy is nullable) need explicit handling
-  // since their relations have no onDelete Cascade.
-  const legacyUserIds = await prisma.user
-    .findMany({
-      where: { email: { endsWith: "@example.com" } },
-      select: { id: true },
-    })
-    .then((rows) => rows.map((r) => r.id));
-  if (legacyUserIds.length > 0) {
-    await prisma.changeRequest.deleteMany({
-      where: { submittedById: { in: legacyUserIds } },
-    });
-    await prisma.changeRequest.updateMany({
-      where: { reviewedById: { in: legacyUserIds } },
-      data: { reviewedById: null },
-    });
-    const { count } = await prisma.user.deleteMany({
-      where: { id: { in: legacyUserIds } },
-    });
-    console.log(`Removed ${count} legacy @example.com user(s).`);
-  }
-
   // Resolve or create the AU Commission tenant (slug kept as `system` so
-  // route prefixes and fallbacks stay stable across template + fork).
+  // route prefixes and fallbacks stay stable). Once the row exists, the seed
+  // leaves it alone — admins can edit name/contact/brand from the UI without
+  // worrying about being overwritten on the next run.
   console.log("Resolving default tenant...");
   const existingTenant = await prisma.tenant.findFirst({
     where: { slug: "system", deletedAt: null },
@@ -169,19 +146,6 @@ async function main() {
         brandTheme: "auc",
       },
     }));
-  // Keep name/contact/brand in sync for forks that already ran an older seed.
-  await prisma.tenant.update({
-    where: { id: tenant.id },
-    data: {
-      name: "African Union Commission",
-      email: "info@africanunion.org",
-      phone: "+251 11 551 7700",
-      city: "Addis Ababa",
-      state: "Addis Ababa",
-      address: "Roosevelt Street (Old Airport Area), P.O. Box 3243, Addis Ababa, Ethiopia",
-      brandTheme: "auc",
-    },
-  });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -194,33 +158,74 @@ async function main() {
   }
 
   // Create roles
+  //
+  // Roles are now defined ONCE platform-wide (tenantId = null). There are
+  // exactly four:
+  //   admin   (GLOBAL) — platform admin; manages tenants, settings, role defs
+  //   focal   (TENANT) — submits directory changes for the user's home tenant
+  //   manager (TENANT) — approves focal submissions for the user's home tenant
+  //                      + handles user CRUD inside the tenant
+  //   user    (GLOBAL) — authenticated cross-tenant directory reader
+  //
+  // RoleScope.TENANT no longer means "owned by tenant X via Role.tenantId" —
+  // it now means "permissions apply to the user's home tenant" (services
+  // already scope writes by ctx.tenantId resolved from User.tenantId, so this
+  // falls out for free).
   console.log("Creating default roles...");
-  const userRole = await prisma.role.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: "user" } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      name: "user",
-      scope: "TENANT",
-      description: "Default user role with basic permissions",
-    },
-  });
+  // Each canonical role uses findFirst + create/update because Prisma's
+  // compound unique key `tenantId_name` doesn't accept `null` for tenantId.
+  // The Role model still has `@@unique([tenantId, name])` so the underlying
+  // DB constraint is honoured; we just can't address it via the compound
+  // key from JS when one component is null.
+  async function upsertGlobalRole(
+    name: string,
+    scope: "GLOBAL" | "TENANT",
+    description: string,
+  ): Promise<{ id: string }> {
+    const existing = await prisma.role.findFirst({
+      where: { tenantId: null, name },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.role.update({
+        where: { id: existing.id },
+        data: { scope, description },
+      });
+      return existing;
+    }
+    return prisma.role.create({
+      data: { tenantId: null, name, scope, description },
+      select: { id: true },
+    });
+  }
 
-  const adminRole = await prisma.role.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: "admin" } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      name: "admin",
-      scope: "GLOBAL",
-      description: "Administrator role with full permissions",
-    },
-  });
+  const adminRole = await upsertGlobalRole(
+    "admin",
+    "GLOBAL",
+    "Platform administrator — full access across all tenants",
+  );
+  const userRole = await upsertGlobalRole(
+    "user",
+    "GLOBAL",
+    "Authenticated cross-tenant directory reader",
+  );
+  const focalRole = await upsertGlobalRole(
+    "focal",
+    "TENANT",
+    "Submits directory changes for the user's home tenant",
+  );
+  const managerRole = await upsertGlobalRole(
+    "manager",
+    "TENANT",
+    "Approves focal submissions and manages users within the user's home tenant",
+  );
 
   // Assign permissions via RolePermission
   console.log("Assigning permissions to roles...");
 
-  // User role: read own + update own user data
+  // User role: read own + update own user data; cross-tenant directory reads
+  // are always permitted at the public layer, but the `user` role still needs
+  // baseline self-access for the in-app dashboard.
   await prisma.rolePermission.deleteMany({ where: { roleId: userRole.id } });
   for (const { resource, action, access } of [
     { resource: "user", action: "read", access: "own" },
@@ -236,7 +241,7 @@ async function main() {
     }
   }
 
-  // Admin role: all permissions
+  // Admin role: all permissions (platform-wide).
   await prisma.rolePermission.deleteMany({ where: { roleId: adminRole.id } });
   const allPerms = await prisma.permission.findMany();
   for (const perm of allPerms) {
@@ -244,29 +249,6 @@ async function main() {
       data: { roleId: adminRole.id, permissionId: perm.id, access: "any" },
     });
   }
-
-  // Directory roles — focal (authors submissions) + manager (reviewer)
-  console.log("Seeding directory roles...");
-  const focalRole = await prisma.role.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: "focal" } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      name: "focal",
-      scope: "TENANT",
-      description: "Authors directory submissions; cannot approve",
-    },
-  });
-  const managerRole = await prisma.role.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: "manager" } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      name: "manager",
-      scope: "TENANT",
-      description: "Reviews + approves directory submissions; can self-approve direct edits",
-    },
-  });
 
   const focalPerms = [
     { resource: "organization", action: "read" },
@@ -290,6 +272,15 @@ async function main() {
     { resource: "directory-change", action: "read-all" },
     { resource: "directory-change", action: "approve" },
     { resource: "directory-change", action: "reject" },
+    // User CRUD inside the manager's home tenant — this is the slot that
+    // used to belong to "tenant admin" before the role consolidation. Role
+    // / permission definitions stay platform-admin-only (managers get
+    // role:read so the user-roles picker can populate).
+    { resource: "user", action: "read" },
+    { resource: "user", action: "create" },
+    { resource: "user", action: "update" },
+    { resource: "user", action: "delete" },
+    { resource: "role", action: "read" },
   ];
 
   await prisma.rolePermission.deleteMany({ where: { roleId: focalRole.id } });
@@ -316,12 +307,30 @@ async function main() {
     }
   }
 
-  // Create admin user
+  // The `system` tenant is reserved for the platform admin. Demo accounts
+  // for the working roles (focal / manager / regular user) live in a
+  // separate working tenant — `misd` if it has been provisioned via the UI,
+  // otherwise we fall back to system so a fresh DB still has somewhere to
+  // attach them. seedDirectory uses the same fallback below.
+  const workingTenant =
+    (await prisma.tenant.findFirst({
+      where: { slug: "misd", deletedAt: null },
+      select: { id: true, slug: true },
+    })) ?? { id: tenant.id, slug: tenant.slug };
+  if (workingTenant.id !== tenant.id) {
+    console.log(`Demo working accounts will be attached to tenant "${workingTenant.slug}".`);
+  } else {
+    console.log(
+      `Tenant "misd" not provisioned yet — demo working accounts will fall back to "${tenant.slug}".`,
+    );
+  }
+
+  // Create platform admin (lives in the system tenant only).
   console.log("Creating admin user...");
   const adminPassword = await hash("admin123", 10);
   await prisma.user.upsert({
     where: { email: "admin@africanunion.org" },
-    update: {},
+    update: { tenantId: tenant.id },
     create: {
       email: "admin@africanunion.org",
       firstName: "Admin",
@@ -333,17 +342,17 @@ async function main() {
     },
   });
 
-  // Create regular user
+  // Create regular user (working tenant — exercises cross-tenant search).
   console.log("Creating regular user...");
   const userPassword = await hash("user123", 10);
   await prisma.user.upsert({
     where: { email: "user@africanunion.org" },
-    update: {},
+    update: { tenantId: workingTenant.id },
     create: {
       email: "user@africanunion.org",
       firstName: "Regular",
       lastName: "User",
-      tenantId: tenant.id,
+      tenantId: workingTenant.id,
       userStatusId: activeStatus.id,
       userRoles: { create: { roleId: userRole.id } },
       password: { create: { hash: userPassword } },
@@ -425,13 +434,19 @@ async function main() {
   // feature-flags.server.ts). Opt the system tenant in so the demo users
   // can actually reach the admin directory + public directory out of the
   // box.
+  // Opt the system tenant + the working tenant (misd, if provisioned) into
+  // FF_DIRECTORY / FF_PUBLIC_DIRECTORY. Membership in `enabledForTenants` is
+  // the actual gate for tenant-scoped flags; the `enabled` boolean is
+  // ignored. Dedupe ids so we don't double-add when working tenant fell
+  // back to system.
+  const directoryTenantIds = Array.from(new Set([tenant.id, workingTenant.id]));
   await prisma.featureFlag.update({
     where: { key: "FF_DIRECTORY" },
-    data: { enabledForTenants: { set: [tenant.id] } },
+    data: { enabledForTenants: { set: directoryTenantIds } },
   });
   await prisma.featureFlag.update({
     where: { key: "FF_PUBLIC_DIRECTORY" },
-    data: { enabledForTenants: { set: [tenant.id] } },
+    data: { enabledForTenants: { set: directoryTenantIds } },
   });
 
   // Wipe directory + reference data for the tenant before reseeding so the
@@ -446,9 +461,17 @@ async function main() {
   await seedReferenceData(tenant.id);
 
   // Seed directory baseline for the system tenant: org types, position
-  // types, regions, member states, starter org tree, demo focal/manager users.
+  // types, regions, member states, starter org tree. Demo focal/manager
+  // user accounts go to the working tenant (misd if provisioned, else
+  // system) so the demo flow is exercised end-to-end against a "real"
+  // working tenant rather than the platform-admin home.
   console.log("Seeding directory baseline...");
-  await seedDirectory(tenant.id, { activeStatusId: activeStatus.id, focalRoleId: focalRole.id, managerRoleId: managerRole.id });
+  await seedDirectory(tenant.id, {
+    activeStatusId: activeStatus.id,
+    focalRoleId: focalRole.id,
+    managerRoleId: managerRole.id,
+    userTenantId: workingTenant.id,
+  });
 
   console.log("✅ Seeding completed!");
   console.log("🔑 Users created:");
@@ -626,12 +649,17 @@ const MEMBER_STATES: Array<{
 
 async function seedDirectory(
   tenantId: string,
-  { activeStatusId, focalRoleId, managerRoleId }: {
+  { activeStatusId, focalRoleId, managerRoleId, userTenantId }: {
     activeStatusId: string;
     focalRoleId: string;
     managerRoleId: string;
+    /** Tenant the demo focal / manager *user accounts* belong to. Defaults
+     *  to `tenantId` (system) when not provided. The directory data itself
+     *  always lives in `tenantId`. */
+    userTenantId?: string;
   },
 ) {
+  const demoUserTenantId = userTenantId ?? tenantId;
   for (const [i, t] of ORGANIZATION_TYPES.entries()) {
     await prisma.organizationType.upsert({
       where: { tenantId_code: { tenantId, code: t.code } },
@@ -750,15 +778,17 @@ async function seedDirectory(
   });
 
   // Demo users: focal person + manager. Idempotent on email.
+  // These accounts belong to the *working* tenant (where focal/manager
+  // exercise the directory workflow), not the directory data tenant.
   const focalPassword = await hash("focal123", 10);
   await prisma.user.upsert({
     where: { email: "focal@africanunion.org" },
-    update: {},
+    update: { tenantId: demoUserTenantId },
     create: {
       email: "focal@africanunion.org",
       firstName: "Fola",
       lastName: "Adeyemi",
-      tenantId,
+      tenantId: demoUserTenantId,
       userStatusId: activeStatusId,
       userRoles: { create: { roleId: focalRoleId } },
       password: { create: { hash: focalPassword } },
@@ -767,12 +797,12 @@ async function seedDirectory(
   const managerPassword = await hash("manager123", 10);
   await prisma.user.upsert({
     where: { email: "manager@africanunion.org" },
-    update: {},
+    update: { tenantId: demoUserTenantId },
     create: {
       email: "manager@africanunion.org",
       firstName: "Marta",
       lastName: "Okonkwo",
-      tenantId,
+      tenantId: demoUserTenantId,
       userStatusId: activeStatusId,
       userRoles: { create: { roleId: managerRoleId } },
       password: { create: { hash: managerPassword } },

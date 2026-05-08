@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { deleteTenant, getTenantWithCounts } from "~/services/tenants.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import type { Route } from "./+types/delete";
@@ -15,8 +15,9 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Delete tenant" }];
 }
 
+// Tenant management is global-admin-only (policy).
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "tenant", "read");
+  await requireGlobalAdmin(request);
   const tenant = await getTenantWithCounts(params.tenantId);
   if (!tenant) {
     throw data({ error: "Tenant not found" }, { status: 404 });
@@ -25,7 +26,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "tenant", "delete");
+  const user = await requireGlobalAdmin(request);
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);

@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { deletePermission, getPermissionDetail } from "~/services/permissions.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -17,15 +17,16 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Delete permission" }];
 }
 
+// Permission catalog is global-admin-only (policy).
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "permission", "delete");
+  await requireGlobalAdmin(request);
   const permission = await getPermissionDetail(params.permissionId);
   if (!permission) throw data({ error: "Permission not found" }, { status: 404 });
   return data({ permission });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const actor = await requirePermission(request, "permission", "delete");
+  const actor = await requireGlobalAdmin(request);
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 

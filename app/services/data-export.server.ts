@@ -80,9 +80,11 @@ export async function exportUsers(tenantId: string, format: ExportFormat): Promi
   return rowsToExport(rows, "users", format);
 }
 
-export async function exportRoles(tenantId: string, format: ExportFormat): Promise<ExportPayload> {
+export async function exportRoles(_tenantId: string, format: ExportFormat): Promise<ExportPayload> {
+  // Roles are platform-global (4 canonical rows). The tenantId argument is
+  // retained for the dispatch signature parity with other exporters but is
+  // no longer used.
   const roles = await prisma.role.findMany({
-    where: { tenantId },
     select: {
       id: true,
       name: true,

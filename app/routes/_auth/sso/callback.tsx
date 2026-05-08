@@ -44,6 +44,17 @@ async function createSessionAndRedirect(args: {
   return redirect(args.redirectTo, { headers });
 }
 
+/**
+ * Resolve the post-SSO landing URL. If the explicit `redirectTo` from flow
+ * state is present we honour it (already restricted to relative paths in
+ * /sso/start); otherwise land on the user's tenant home, falling back to `/`
+ * for tenantless users (e.g. global admins, fresh auto-provisioned users).
+ */
+function defaultPostAuthRedirect(redirectTo: string, tenantSlug: string | null): string {
+  if (redirectTo) return redirectTo;
+  return tenantSlug ? `/${tenantSlug}` : "/";
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
 
@@ -87,19 +98,19 @@ export async function loader({ request }: Route.LoaderArgs) {
         userId: flowState.linkUserId,
       });
 
-      return redirect(flowState.redirectTo || `/${flowState.tenantSlug}/profile`, {
+      return redirect(flowState.redirectTo || "/", {
         headers: [["Set-Cookie", destroyCookie]],
       });
     } catch (error) {
       const message = error instanceof SSOError ? error.message : "Failed to link account";
       console.error("SSO link failed", error);
-      return data({ error: message, tenantSlug: flowState.tenantSlug }, { status: 400 });
+      return data({ error: message }, { status: 400 });
     }
   }
 
   // ─── Login Mode ─────────────────────────────────────────
   try {
-    const { userId } = await handleSSOCallback({
+    const { userId, tenantSlug } = await handleSSOCallback({
       protocol: flowState.protocol,
       code,
       callbackUrl: url,
@@ -110,20 +121,18 @@ export async function loader({ request }: Route.LoaderArgs) {
     });
 
     await writeAudit({
-      tenantId: flowState.tenantId,
       userId,
       action: "LOGIN",
       entityType: "user",
       entityId: userId,
       description: "SSO login successful",
-      metadata: { method: "sso", tenantSlug: flowState.tenantSlug },
+      metadata: { method: "sso", tenantSlug },
       request,
     });
 
-    const redirectTo = flowState.redirectTo || `/${flowState.tenantSlug}`;
     return createSessionAndRedirect({
       userId,
-      redirectTo,
+      redirectTo: defaultPostAuthRedirect(flowState.redirectTo, tenantSlug),
       destroyCookieHeader: destroyCookie,
     });
   } catch (error) {
@@ -131,17 +140,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     console.error("SSO callback failed", error);
 
     void writeAudit({
-      tenantId: flowState.tenantId,
       userId: null,
       action: "LOGIN",
       entityType: "user",
       entityId: null,
       description: `SSO login failed: ${message}`,
-      metadata: { method: "sso", tenantSlug: flowState.tenantSlug, error: message },
+      metadata: { method: "sso", error: message },
       request,
     });
 
-    return data({ error: message, tenantSlug: flowState.tenantSlug }, { status: 400 });
+    return data({ error: message }, { status: 400 });
   }
 }
 
@@ -172,10 +180,10 @@ export async function action({ request }: Route.ActionArgs) {
         userId: flowState.linkUserId,
       });
 
-      return redirect(flowState.redirectTo || `/${flowState.tenantSlug}/profile`);
+      return redirect(flowState.redirectTo || "/");
     }
 
-    const { userId } = await handleSSOCallback({
+    const { userId, tenantSlug } = await handleSSOCallback({
       protocol: "SAML",
       samlResponse,
       requestId: flowState.requestId || "",
@@ -183,42 +191,40 @@ export async function action({ request }: Route.ActionArgs) {
     });
 
     await writeAudit({
-      tenantId: flowState.tenantId,
       userId,
       action: "LOGIN",
       entityType: "user",
       entityId: userId,
       description: "SSO SAML login successful",
-      metadata: { method: "sso-saml", tenantSlug: flowState.tenantSlug },
+      metadata: { method: "sso-saml", tenantSlug },
       request,
     });
 
-    const redirectTo = flowState.redirectTo || `/${flowState.tenantSlug}`;
-    return createSessionAndRedirect({ userId, redirectTo });
+    return createSessionAndRedirect({
+      userId,
+      redirectTo: defaultPostAuthRedirect(flowState.redirectTo, tenantSlug),
+    });
   } catch (error) {
     const message = error instanceof SSOError ? error.message : "SAML authentication failed";
     console.error("SAML callback failed", error);
 
     void writeAudit({
-      tenantId: flowState.tenantId,
       userId: null,
       action: "LOGIN",
       entityType: "user",
       entityId: null,
       description: `SAML login failed: ${message}`,
-      metadata: { method: "sso-saml", tenantSlug: flowState.tenantSlug, error: message },
+      metadata: { method: "sso-saml", error: message },
       request,
     });
 
-    return data({ error: message, tenantSlug: flowState.tenantSlug }, { status: 400 });
+    return data({ error: message }, { status: 400 });
   }
 }
 
 export default function SSOCallbackPage({ loaderData }: Route.ComponentProps) {
-  const { error, tenantSlug } = loaderData as { error: string; tenantSlug?: string };
-  const loginUrl = tenantSlug
-    ? `/login?tenant=${encodeURIComponent(tenantSlug)}&error=${encodeURIComponent(error)}`
-    : `/login?error=${encodeURIComponent(error)}`;
+  const { error } = loaderData as { error: string };
+  const loginUrl = `/login?error=${encodeURIComponent(error)}`;
 
   return (
     <div className="flex min-h-svh items-center justify-center p-6">

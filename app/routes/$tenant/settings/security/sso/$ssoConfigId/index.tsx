@@ -16,18 +16,14 @@ import type { Route } from "./+types/index";
 export const handle = { breadcrumb: "Detail" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "sso", "read");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requirePermission(request, "sso", "read");
 
   const config = await getSSOConfigById(params.ssoConfigId);
-  if (!config || config.tenantId !== tenantId) {
+  if (!config) {
     throw data({ error: "SSO configuration not found" }, { status: 404 });
   }
 
-  const connectionCount = await getSSOConnectionCountByConfig(config.provider, config.tenantId);
+  const connectionCount = await getSSOConnectionCountByConfig(config.provider);
   const appUrl = process.env.APP_URL ?? "http://localhost:5173";
   const callbackUrl = `${appUrl}/sso/callback`;
 
@@ -41,10 +37,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "sso", "read");
-  if (!user.tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requirePermission(request, "sso", "read");
 
   const formData = await request.formData();
   const intent = formData.get("intent");

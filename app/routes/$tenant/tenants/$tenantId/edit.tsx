@@ -10,7 +10,7 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { getTenantById, updateTenant } from "~/services/tenants.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import { PLAN_OPTIONS, updateTenantSchema } from "~/utils/schemas/tenant";
@@ -22,8 +22,9 @@ export function meta({ data }: Route.MetaArgs) {
   return [{ title: data?.tenant?.name ? `Edit · ${data.tenant.name}` : "Edit tenant" }];
 }
 
+// Tenant management is global-admin-only (policy).
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "tenant", "update");
+  await requireGlobalAdmin(request);
   const tenant = await getTenantById(params.tenantId);
   if (!tenant) {
     throw data({ error: "Tenant not found" }, { status: 404 });
@@ -32,7 +33,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "tenant", "update");
+  const user = await requireGlobalAdmin(request);
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);

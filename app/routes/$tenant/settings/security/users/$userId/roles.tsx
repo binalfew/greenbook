@@ -4,6 +4,7 @@ import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { RoleScope } from "~/generated/prisma/client";
 import { getUserDetail, replaceUserRoles } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
@@ -22,11 +23,18 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const actor = await requirePermission(request, "user", "update");
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
+  const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+
+  // Roles are global definitions (4 platform-wide rows). Managers see only
+  // TENANT-scope roles (focal, manager) — granting GLOBAL roles (admin, user)
+  // is platform-admin-only, otherwise a manager could self-elevate by
+  // granting themselves the GLOBAL `admin` role.
+  const roleWhere = isGlobalAdmin ? {} : { scope: RoleScope.TENANT };
 
   const [user, allRoles] = await Promise.all([
     getUserDetail(params.userId),
     prisma.role.findMany({
-      where: { OR: [{ tenantId }, { scope: "GLOBAL" }] },
+      where: roleWhere,
       select: { id: true, name: true, scope: true, description: true },
       orderBy: [{ scope: "asc" }, { name: "asc" }],
     }),
@@ -41,11 +49,34 @@ export async function action({ request, params }: Route.ActionArgs) {
   const actor = await requirePermission(request, "user", "update");
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
+  const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
 
   const roleIds = formData.getAll("roleIds").filter((v): v is string => typeof v === "string");
+
+  // Defense in depth: validate every submitted role id is one the actor is
+  // authorised to assign. Managers can only assign TENANT-scope roles
+  // (focal, manager). Granting GLOBAL roles (admin, user) is platform-admin-
+  // only — hand-crafted POSTs that smuggle in a GLOBAL role id are rejected
+  // here even though the loader hides them from the UI.
+  if (roleIds.length > 0 && !isGlobalAdmin) {
+    const submitted = await prisma.role.findMany({
+      where: { id: { in: roleIds } },
+      select: { id: true, scope: true },
+    });
+    const disallowed = submitted.filter((r) => r.scope !== RoleScope.TENANT);
+    if (disallowed.length > 0) {
+      throw data(
+        {
+          error: "Forbidden",
+          message: "Only platform admins can grant GLOBAL-scope roles.",
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   const ctx = buildServiceContext(request, actor, tenantId);
   await replaceUserRoles(params.userId, roleIds, ctx);

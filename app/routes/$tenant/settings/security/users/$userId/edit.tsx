@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
-import { getUserDetail, updateUser } from "~/services/users.server";
+import { RoleScope } from "~/generated/prisma/client";
+import { getUserDetail, setUserTenantAssignment, updateUser } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
@@ -23,23 +24,35 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "user", "update");
-  const [user, statuses] = await Promise.all([
+  const actor = await requirePermission(request, "user", "update");
+  const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+
+  const [user, statuses, tenants] = await Promise.all([
     getUserDetail(params.userId),
     prisma.userStatus.findMany({
       where: { isActive: true },
       select: { id: true, code: true, name: true },
       orderBy: { order: "asc" },
     }),
+    // Tenant picker is only useful for global admins. For everyone else we
+    // skip the query — the form won't render a picker anyway.
+    isGlobalAdmin
+      ? prisma.tenant.findMany({
+          where: { deletedAt: null },
+          select: { id: true, name: true, slug: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
   if (!user) throw data({ error: "User not found" }, { status: 404 });
-  return data({ user, statuses });
+  return data({ user, statuses, tenants, isGlobalAdmin });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const actor = await requirePermission(request, "user", "update");
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
+  const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
@@ -49,14 +62,24 @@ export async function action({ request, params }: Route.ActionArgs) {
     return data(submission.reply(), { status: 400 });
   }
 
+  // Strip the tenant-assignment field for non-global actors so a tenant admin
+  // can't elevate or move users by hand-crafting a POST.
+  const { tenantId: targetTenantId, ...rest } = submission.value;
+
   const ctx = buildServiceContext(request, actor, tenantId);
-  await updateUser(params.userId, submission.value, ctx);
+
+  // Always update the basic profile fields. The tenant assignment goes
+  // through its own helper so role wiring + tenant bootstrapping happen too.
+  await updateUser(params.userId, rest, ctx);
+  if (isGlobalAdmin) {
+    await setUserTenantAssignment(params.userId, targetTenantId, ctx);
+  }
 
   return redirect(`/${params.tenant}/settings/security/users/${params.userId}`);
 }
 
 export default function EditUserPage({ loaderData, actionData, params }: Route.ComponentProps) {
-  const { user, statuses } = loaderData;
+  const { user, statuses, tenants, isGlobalAdmin } = loaderData;
   const { form, fields } = useForm(updateUserSchema, {
     lastResult: actionData,
     defaultValue: {
@@ -64,6 +87,7 @@ export default function EditUserPage({ loaderData, actionData, params }: Route.C
       lastName: user.lastName,
       email: user.email,
       userStatusId: user.userStatus?.id ?? "",
+      tenantId: user.tenantId ?? "",
     },
   });
   const backTo = `/${params.tenant}/settings/security/users/${user.id}`;
@@ -132,6 +156,34 @@ export default function EditUserPage({ loaderData, actionData, params }: Route.C
             </Field>
           </CardContent>
         </Card>
+
+        {isGlobalAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Tenant assignment</CardTitle>
+              <p className="text-muted-foreground text-sm">
+                Set the user's home tenant. This sets only their tenant binding — focal / manager
+                role grants are managed separately via the Roles page. Moving a user between tenants
+                strips any tenant-scoped role grants; re-grant them in the new tenant context as
+                needed.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Field>
+                <FieldLabel htmlFor={fields.tenantId.id}>Tenant</FieldLabel>
+                <SelectField
+                  meta={fields.tenantId}
+                  options={[
+                    { value: "", label: "— None (regular user) —" },
+                    ...tenants.map((t) => ({ value: t.id, label: `${t.name} (${t.slug})` })),
+                  ]}
+                  placeholder="Select tenant"
+                />
+                {fields.tenantId.errors && <FieldError>{fields.tenantId.errors}</FieldError>}
+              </Field>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex gap-3">
           <Button type="submit">Save changes</Button>

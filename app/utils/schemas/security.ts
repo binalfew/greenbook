@@ -3,6 +3,13 @@ import { z } from "zod/v4";
 const emailField = z.email("Valid email is required");
 const nameField = z.string().min(1, "Required").max(100);
 
+// Empty string from the form means "no tenant" (regular user). Convert to null
+// so the service layer sees the explicit-null contract instead of "".
+const tenantIdField = z
+  .string()
+  .optional()
+  .transform((v) => (v && v.length > 0 ? v : null));
+
 export const createUserSchema = z.object({
   firstName: nameField,
   lastName: nameField,
@@ -14,6 +21,9 @@ export const createUserSchema = z.object({
     .regex(/[a-z]/, "Must contain a lowercase letter")
     .regex(/[0-9]/, "Must contain a number"),
   userStatusId: z.string().optional(),
+  // Optional override: only honoured when the actor is a global admin.
+  // Empty/undefined → fall back to actor's own tenant (existing behaviour).
+  tenantId: tenantIdField,
   roleIds: z.array(z.string()).optional(),
 });
 
@@ -22,6 +32,9 @@ export const updateUserSchema = z.object({
   lastName: nameField,
   email: emailField,
   userStatusId: z.string().optional(),
+  // Optional override: only honoured when the actor is a global admin.
+  // Empty string → make the user tenantless (regular user).
+  tenantId: tenantIdField,
 });
 
 export const assignRolesSchema = z.object({

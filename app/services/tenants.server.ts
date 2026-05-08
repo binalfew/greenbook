@@ -1,4 +1,5 @@
 import type { Prisma, Tenant } from "~/generated/prisma/client";
+import { bootstrapNewTenant } from "~/services/tenant-setup.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { prisma } from "~/utils/db/db.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
@@ -42,6 +43,12 @@ export type CreateTenantInput = {
   logoUrl?: string | null;
   brandTheme?: string;
   subscriptionPlan?: string;
+  /**
+   * Existing user to attach as the new tenant's first admin. When omitted,
+   * the tenant is created with its standard roles but no admin assigned —
+   * the global admin can promote users via the user-edit form.
+   */
+  initialAdminUserId?: string | null;
 };
 
 export type UpdateTenantInput = Partial<Omit<CreateTenantInput, "slug">> & {
@@ -198,6 +205,15 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
     },
   });
 
+  // Every new tenant gets its standard `admin` and `user` roles wired up the
+  // moment it's created. The optional initialAdminUserId, when provided,
+  // attaches that user as the tenant's first admin so they can sign in and
+  // manage it immediately.
+  await bootstrapNewTenant({
+    tenantId: tenant.id,
+    initialAdminUserId: input.initialAdminUserId ?? undefined,
+  });
+
   await writeAudit({
     tenantId: tenant.id,
     userId: ctx.userId,
@@ -205,7 +221,10 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
     entityType: "tenant",
     entityId: tenant.id,
     description: `Created tenant "${tenant.name}"`,
-    metadata: { slug: tenant.slug },
+    metadata: {
+      slug: tenant.slug,
+      initialAdminUserId: input.initialAdminUserId ?? null,
+    },
   });
 
   emitDomainEvent(tenant.id, "tenant.created", {

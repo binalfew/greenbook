@@ -28,7 +28,9 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
-  const tenant = await resolveTenant(params.tenant);
+  // Validate the tenant slug (404 on bad slug). The tenant object itself is
+  // unused — SSO config is platform-global, queried without tenant scoping.
+  await resolveTenant(params.tenant);
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: { id: true, firstName: true, lastName: true, email: true },
@@ -39,7 +41,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       where: { userId, deletedAt: null, expiresAt: { gt: new Date() } },
     }),
     getUserSSOConnections(userId),
-    getSSOConfigurations(tenant.id),
+    getSSOConfigurations(),
   ]);
 
   const connectedProviders = new Set(ssoConnections.map((c) => c.provider));
@@ -57,7 +59,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     sessionCount,
     ssoConnections,
     availableConfigs,
-    tenantSlug: params.tenant,
   });
 }
 
@@ -101,7 +102,7 @@ function getInitials(firstName: string, lastName: string, email: string): string
 }
 
 export default function ProfilePage({ loaderData, actionData }: Route.ComponentProps) {
-  const { user, sessionCount, ssoConnections, availableConfigs, tenantSlug } = loaderData;
+  const { user, sessionCount, ssoConnections, availableConfigs } = loaderData;
   const disconnectFetcher = useFetcher();
 
   const isSubmissionReply = actionData && typeof actionData === "object" && "status" in actionData;
@@ -292,9 +293,7 @@ export default function ProfilePage({ loaderData, actionData }: Route.ComponentP
                   </div>
                 </div>
                 <Button variant="outline" size="sm" asChild>
-                  <Link
-                    to={`/sso/start?tenant=${encodeURIComponent(tenantSlug)}&configId=${config.id}&link=true`}
-                  >
+                  <Link to={`/sso/start?configId=${config.id}&link=true`}>
                     <Link2 className="mr-1.5 size-3.5" />
                     Connect
                   </Link>

@@ -11,8 +11,9 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { createTenant } from "~/services/tenants.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
+import { prisma } from "~/utils/db/db.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import { PLAN_OPTIONS, createTenantSchema } from "~/utils/schemas/tenant";
 import type { Route } from "./+types/new";
@@ -23,13 +24,22 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "New tenant" }];
 }
 
+// Tenant management is global-admin-only (policy).
 export async function loader({ request }: Route.LoaderArgs) {
-  await requirePermission(request, "tenant", "create");
-  return data({});
+  await requireGlobalAdmin(request);
+  // Tenantless ("regular") users are eligible to be promoted as the new
+  // tenant's first admin. Filtering to tenantless avoids accidentally moving
+  // an existing tenant admin away from their current tenant via this form.
+  const eligibleAdmins = await prisma.user.findMany({
+    where: { tenantId: null, deletedAt: null },
+    select: { id: true, email: true, firstName: true, lastName: true },
+    orderBy: [{ email: "asc" }],
+  });
+  return data({ eligibleAdmins });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "tenant", "create");
+  const user = await requireGlobalAdmin(request);
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
@@ -46,6 +56,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       address: submission.value.address ?? "",
       city: submission.value.city ?? "",
       state: submission.value.state ?? "",
+      initialAdminUserId: submission.value.initialAdminUserId,
     },
     ctx,
   );
@@ -61,7 +72,8 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export default function NewTenantPage({ actionData }: Route.ComponentProps) {
+export default function NewTenantPage({ loaderData, actionData }: Route.ComponentProps) {
+  const { eligibleAdmins } = loaderData;
   const basePrefix = useBasePrefix();
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const slugInputRef = useRef<HTMLInputElement>(null);
@@ -214,6 +226,42 @@ export default function NewTenantPage({ actionData }: Route.ComponentProps) {
               />
               {fields.subscriptionPlan.errors && (
                 <FieldError>{fields.subscriptionPlan.errors}</FieldError>
+              )}
+            </Field>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Initial manager</CardTitle>
+            <p className="text-muted-foreground text-sm">
+              Optionally attach a tenantless user as this tenant's first manager (approves directory
+              submissions and manages users within the tenant). Leave empty to create the tenant
+              unattached — you can grant the manager role later via the user-edit form.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Field>
+              <FieldLabel htmlFor={fields.initialAdminUserId.id}>User</FieldLabel>
+              <SelectField
+                meta={fields.initialAdminUserId}
+                options={[
+                  { value: "", label: "— None (assign later) —" },
+                  ...eligibleAdmins.map((u) => ({
+                    value: u.id,
+                    label: `${u.firstName} ${u.lastName} (${u.email})`,
+                  })),
+                ]}
+                placeholder="Select user"
+              />
+              {fields.initialAdminUserId.errors && (
+                <FieldError>{fields.initialAdminUserId.errors}</FieldError>
+              )}
+              {eligibleAdmins.length === 0 && (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  No tenantless users available. Create a regular user first, or leave this empty
+                  and promote someone later.
+                </p>
               )}
             </Field>
           </CardContent>
