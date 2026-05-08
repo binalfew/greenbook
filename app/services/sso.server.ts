@@ -394,7 +394,8 @@ async function handleOIDCCallback(params: {
     !config.isActive ||
     !config.clientId ||
     !config.clientSecret ||
-    !config.issuerUrl
+    !config.issuerUrl ||
+    !config.callbackUrl
   ) {
     throw new SSOError("SSO configuration is missing or inactive", 400);
   }
@@ -406,9 +407,20 @@ async function handleOIDCCallback(params: {
     clientSecret: config.clientSecret,
   });
 
+  // Build the URL that openid-client uses to derive `redirect_uri` for the
+  // token exchange. It MUST match what we sent at /authorize (i.e., the
+  // DB-stored callbackUrl) — proxies and X-Forwarded-* drift can make
+  // `request.url` differ from the public URL the IdP knows about. We start
+  // from `config.callbackUrl` and copy across the IdP's query params so
+  // openid-client can still extract `code` and `state`.
+  const exchangeUrl = new URL(config.callbackUrl);
+  for (const [key, value] of params.callbackUrl.searchParams) {
+    exchangeUrl.searchParams.set(key, value);
+  }
+
   const claims = await exchangeCodeForClaims({
     config: oidcConfig,
-    callbackUrl: params.callbackUrl,
+    callbackUrl: exchangeUrl,
     codeVerifier: params.codeVerifier,
     expectedNonce: params.nonce,
     expectedState: params.state,
@@ -484,7 +496,8 @@ export async function linkSSOAccount(params: {
     !config.isActive ||
     !config.clientId ||
     !config.clientSecret ||
-    !config.issuerUrl
+    !config.issuerUrl ||
+    !config.callbackUrl
   ) {
     throw new SSOError("SSO configuration is missing or inactive", 400);
   }
@@ -496,9 +509,17 @@ export async function linkSSOAccount(params: {
     clientSecret: config.clientSecret,
   });
 
+  // See handleOIDCCallback — `redirect_uri` at token exchange must match
+  // what was sent at /authorize. Use the DB-stored callbackUrl, not the
+  // request URL (which may differ behind a proxy).
+  const exchangeUrl = new URL(config.callbackUrl);
+  for (const [key, value] of params.callbackUrl.searchParams) {
+    exchangeUrl.searchParams.set(key, value);
+  }
+
   const claims = await exchangeCodeForClaims({
     config: oidcConfig,
-    callbackUrl: params.callbackUrl,
+    callbackUrl: exchangeUrl,
     codeVerifier: params.codeVerifier,
     expectedNonce: params.nonce,
     expectedState: params.state,
