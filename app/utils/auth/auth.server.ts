@@ -314,25 +314,31 @@ export async function logout(
   responseInit?: ResponseInit,
 ) {
   const cookieSession = await authSessionStorage.getSession(request.headers.get("cookie"));
-
   const sessionId = cookieSession.get(sessionKey);
-  const session = await prisma.session.findUnique({
-    select: { userId: true },
-    where: { id: sessionId },
-  });
 
-  if (session?.userId) {
-    await writeAudit({
-      userId: session.userId,
-      action: "LOGOUT",
-      entityType: "user",
-      entityId: session.userId,
-      description: "User logged out",
-      request,
+  // If the cookie session has no session id (cookie missing, expired, or
+  // never populated — e.g., a stale public-layout sign-out submit), just
+  // destroy the cookie and redirect. Skipping the DB lookup avoids a
+  // `where: { id: undefined }` validation error from Prisma.
+  if (sessionId) {
+    const session = await prisma.session.findUnique({
+      select: { userId: true },
+      where: { id: sessionId },
     });
-  }
 
-  void prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
+    if (session?.userId) {
+      await writeAudit({
+        userId: session.userId,
+        action: "LOGOUT",
+        entityType: "user",
+        entityId: session.userId,
+        description: "User logged out",
+        request,
+      });
+    }
+
+    void prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
+  }
 
   throw redirect(
     safeRedirect(redirectTo),
