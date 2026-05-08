@@ -40,14 +40,11 @@ export class SSOError extends Error {
   }
 }
 
-function getAppUrl(): string {
-  return process.env.APP_URL ?? "http://localhost:5173";
-}
-
 function buildSAMLConfig(config: {
   issuerUrl: string | null;
   x509Certificate: string | null;
   ssoUrl: string | null;
+  callbackUrl: string;
   spEntityId: string | null;
   nameIdFormat: string | null;
 }): SAMLProviderConfig {
@@ -57,13 +54,20 @@ function buildSAMLConfig(config: {
       400,
     );
   }
-  const appUrl = getAppUrl();
+  if (!config.callbackUrl) {
+    throw new SSOError(
+      "SAML configuration is missing a callback URL — re-save the configuration in settings.",
+      400,
+    );
+  }
   return {
     issuerUrl: config.issuerUrl,
     x509Certificate: config.x509Certificate,
     ssoUrl: config.ssoUrl,
-    callbackUrl: `${appUrl}/sso/callback`,
-    spEntityId: config.spEntityId || appUrl,
+    callbackUrl: config.callbackUrl,
+    // SAML SP entity ID falls back to the callback URL's origin when the
+    // admin didn't set one explicitly. Same hostname source — no env reads.
+    spEntityId: config.spEntityId || new URL(config.callbackUrl).origin,
     nameIdFormat: config.nameIdFormat || undefined,
   };
 }
@@ -225,7 +229,17 @@ export async function initiateSSOFlow(configId: string): Promise<SSOFlowResult> 
     throw new SSOError("SSO configuration not found or inactive", 404);
   }
 
-  const callbackUrl = `${getAppUrl()}/sso/callback`;
+  // Use the callback URL stored on the SSO configuration row — this is what
+  // the admin entered (and is what's registered with the IdP). Falling back
+  // to APP_URL would be misleading when the env hostname drifts from the
+  // public-facing URL the IdP knows about.
+  const callbackUrl = config.callbackUrl;
+  if (!callbackUrl) {
+    throw new SSOError(
+      "SSO configuration is missing a callback URL — re-save the configuration in settings.",
+      400,
+    );
+  }
 
   if (config.protocol === "SAML") {
     return initiateSAMLFlow(config, configId, callbackUrl);
