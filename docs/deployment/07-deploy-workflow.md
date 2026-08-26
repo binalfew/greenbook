@@ -88,6 +88,21 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 | `HONEYPOT_SECRET` | `app/utils/auth/honeypot.server.ts`                                                                                                                                                                              | Used as the encryption seed for the honeypot anti-bot form field. Independent from SESSION_SECRET by design.                                                                               |
 | `RESEND_API_KEY`  | `app/utils/email/email.server.ts`                                                                                                                                                                                | Auth token for the Resend transactional email API. Verification emails, password resets, DSAR exports, tenant invites all flow through this.                                               |
 
+##### Not applicable: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
+
+Other apps on this estate — facilities, for one — let the first admin account be set from the env file, and their guides tell you to put `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in place before the first-run seed. **Greenbook has no such path.** `prisma/seed.ts` never reads either variable; adding them to `/etc/greenbook.env` does nothing at all.
+
+Greenbook instead hard-codes four demo accounts, with passwords published in this repository:
+
+| Account                    | Password     | Role                                     |
+| -------------------------- | ------------ | ---------------------------------------- |
+| `admin@africanunion.org`   | `admin123`   | `admin` — every permission, global scope |
+| `manager@africanunion.org` | `manager123` | `manager`                                |
+| `focal@africanunion.org`   | `focal123`   | `focal`                                  |
+| `user@africanunion.org`    | `user123`    | `user`                                   |
+
+So the lockdown in [§7.7](#77-first-run-bootstrap-one-time) is not a nice-to-have for this app — rotating the admin and deleting the other three is the _only_ control over who can log in as a global administrator. There is nothing to configure here beforehand.
+
 ##### Optional (operational knobs)
 
 | Variable                    | Default                 | Consumer                               | Notes                                                                                                                                                                    |
@@ -504,10 +519,16 @@ $ curl -sI https://greenbook.africanunion.org/  | grep -E "HTTP|strict-transport
 # ────────────────────────────────────────────────────────────────
 # STEP 8. Rotate the seeded demo passwords (FIRST DEPLOY ONLY).
 # ────────────────────────────────────────────────────────────────
+# No env variable controls this — greenbook's seed hard-codes the four
+# demo accounts (§7.2.2). Rotating them is the only control there is.
+#
 # Log into the admin UI as admin@africanunion.org / admin123,
 # IMMEDIATELY change the admin password, then delete the three demo
 # users (manager@, focal@, user@) before opening the URL to anyone
 # else. See §7.7 for details.
+#
+# Do this BEFORE step 7's public URL is shared, not after — between the
+# seed and the rotation, admin123 is a working global-admin login.
 ```
 
 That's it. From here on, re-deploys follow the six-command walkthrough below — same shape with steps 4 (seed) and 8 (rotate demo passwords) removed.
@@ -1271,8 +1292,37 @@ $ docker run --rm --env-file /etc/greenbook.env \
 
 The seed script is idempotent in the sense that re-running it overwrites the demo data (by design — see `wipeDirectoryData` in seed.ts). **Do not re-run seed against a production DB with real user edits** unless you're intentionally resetting demo content.
 
-> **⚠ Seed uses `@africanunion.org` email addresses for demo users**
+> **⚠ Harden the seeded accounts before anyone else gets the URL**
 >
-> `prisma/seed.ts` creates four demo users (`admin@africanunion.org`, `manager@africanunion.org`, `focal@africanunion.org`, `user@africanunion.org`) with fixed demo passwords. **Rotate or delete these accounts immediately** before exposing the deployment to anyone outside the deployment team. The safest sequence: seed → log in as admin → change admin's password → delete the other three demo users.
+> `prisma/seed.ts` creates four demo users with fixed passwords that are published in this repository:
+>
+> | Account                    | Password     | Do this                               |
+> | -------------------------- | ------------ | ------------------------------------- |
+> | `admin@africanunion.org`   | `admin123`   | change the password, keep the account |
+> | `manager@africanunion.org` | `manager123` | delete                                |
+> | `focal@africanunion.org`   | `focal123`   | delete                                |
+> | `user@africanunion.org`    | `user123`    | delete                                |
+>
+> `admin@africanunion.org` holds the `admin` role at global scope — every permission, in every tenant. From the moment nginx serves the public hostname until you rotate it, `admin123` is a working global-admin login for anyone who has read this repo.
+>
+> **There is no env-file fix.** Unlike facilities, greenbook's seed reads no `SEED_ADMIN_*` variables ([§7.2.2](#not-applicable-seed_admin_email--seed_admin_password)) — you cannot pre-empt this, only clean up after it. The sequence:
+>
+> 1. Log in as `admin@africanunion.org` / `admin123`.
+> 2. `/$tenant/profile/change-password` — set a real password. Record the **date** in the deployment register, never the password.
+> 3. `/$tenant/profile/change-email` — if this deployment's admin should be a different address, move it to a mailbox you control so password reset works.
+> 4. Delete `manager@`, `focal@`, and `user@`.
+>
+> Do step 2 before step 3: if you change the email first and lose the session, reset mail goes to an inbox you may not have.
+>
+> Then verify from the App VM, which bypasses the CDN's bot challenge — every one of these should fail:
+>
+> ```bash
+> $ for c in admin:admin123 manager:manager123 focal:focal123 user:user123; do
+>     u=${c%%:*}; p=${c#*:}
+>     printf '%-8s ' "$u"
+>     curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: greenbook.africanunion.org' \
+>       -X POST http://127.0.0.1/login -d "email=$u@africanunion.org&password=$p"
+>   done
+> ```
 
 ---
