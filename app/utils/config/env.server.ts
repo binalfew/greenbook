@@ -6,6 +6,7 @@ const schema = z.object({
   SESSION_SECRET: z.string(),
   HONEYPOT_SECRET: z.string(),
   RESEND_API_KEY: z.string(),
+  EMAIL_FROM: z.string().min(1),
   APP_URL: z.string().default("http://localhost:5173"),
   // Operational — optional, boot succeeds without them.
   APP_NAME: z.string().optional(),

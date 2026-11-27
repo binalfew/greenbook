@@ -4,34 +4,16 @@ import { bootstrapNewTenant } from "~/services/tenant-setup.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { prisma } from "~/utils/db/db.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
+import {
+  DUPLICATE_SLUG_MESSAGE,
+  RESERVED_SLUG_MESSAGE,
+  isReservedSlug,
+} from "~/utils/reserved-slugs";
 import type {
   PaginatedQueryOptions,
   ServiceContext,
   TenantServiceContext,
 } from "~/utils/types.server";
-
-// Slugs reserved for framework/system routes — never hand these out to tenants.
-const RESERVED_SLUGS = new Set([
-  "admin",
-  "api",
-  "auth",
-  "login",
-  "logout",
-  "signup",
-  "onboarding",
-  "verify",
-  "forgot-password",
-  "reset-password",
-  "change-expired-password",
-  "accept-invite",
-  "2fa-setup",
-  "2fa-verify",
-  "2fa-recovery",
-  "home",
-  "resources",
-  "system",
-  "_health",
-]);
 
 export type CreateTenantInput = {
   name: string;
@@ -68,9 +50,27 @@ export function slugify(name: string): string {
   return base || "tenant";
 }
 
+/**
+ * A slug the tenant cannot have, for a reason the admin can fix. The message
+ * is safe to show next to the slug field.
+ */
+export class TenantSlugError extends Error {
+  constructor(public readonly reason: "reserved" | "taken") {
+    super(reason === "reserved" ? RESERVED_SLUG_MESSAGE : DUPLICATE_SLUG_MESSAGE);
+  }
+}
+
+// The slug column is unique across deleted tenants too, so the lookup does
+// not filter on `deletedAt`.
+async function assertSlugAvailable(slug: string, ownTenantId?: string): Promise<void> {
+  if (isReservedSlug(slug)) throw new TenantSlugError("reserved");
+  const holder = await prisma.tenant.findUnique({ where: { slug }, select: { id: true } });
+  if (holder && holder.id !== ownTenantId) throw new TenantSlugError("taken");
+}
+
 export async function generateUniqueSlug(name: string): Promise<string> {
   const base = slugify(name);
-  let candidate = RESERVED_SLUGS.has(base) ? `${base}-1` : base;
+  let candidate = isReservedSlug(base) ? `${base}-1` : base;
   let suffix = 2;
   while (await prisma.tenant.findUnique({ where: { slug: candidate }, select: { id: true } })) {
     candidate = `${base}-${suffix++}`;
@@ -190,6 +190,7 @@ export async function listTenantsPaginatedWithCounts(options: PaginatedQueryOpti
 
 export async function createTenant(input: CreateTenantInput, ctx: ServiceContext): Promise<Tenant> {
   const slug = input.slug ?? (await generateUniqueSlug(input.name));
+  if (input.slug) await assertSlugAvailable(input.slug);
 
   const tenant = await prisma.tenant.create({
     data: {
@@ -249,16 +250,7 @@ export async function updateTenant(
   if (!existing) throw new Error("Tenant not found");
 
   if (input.slug && input.slug !== existing.slug) {
-    if (RESERVED_SLUGS.has(input.slug)) {
-      throw new Error(`Slug "${input.slug}" is reserved`);
-    }
-    const conflict = await prisma.tenant.findUnique({
-      where: { slug: input.slug },
-      select: { id: true },
-    });
-    if (conflict && conflict.id !== id) {
-      throw new Error(`Slug "${input.slug}" is already taken`);
-    }
+    await assertSlugAvailable(input.slug, id);
   }
 
   const tenant = await prisma.tenant.update({
