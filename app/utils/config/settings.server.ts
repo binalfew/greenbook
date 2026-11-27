@@ -166,8 +166,7 @@ export async function setSetting(
     },
   });
 
-  // Only emit when scoped to a tenant — global/user scopes don't carry a
-  // tenant for webhook routing.
+  // Only emit when scoped to a tenant — domain events are tenant-scoped.
   if (input.scope === "tenant" && input.scopeId) {
     emitDomainEvent(input.scopeId, "settings.changed", {
       key: input.key,

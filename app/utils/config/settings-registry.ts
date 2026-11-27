@@ -143,23 +143,7 @@ export const SETTINGS_REGISTRY: SettingDefinition[] = [
     defaultValue: "en,fr",
   },
 
-  // ─── Webhooks & notifications ───────────────────
-  {
-    key: "webhooks.max_subscriptions_per_tenant",
-    label: "Max webhook subscriptions per tenant",
-    description: "Hard cap on concurrent webhook subscriptions per tenant.",
-    category: "integrations",
-    type: "number",
-    defaultValue: "10",
-  },
-  {
-    key: "webhooks.default_max_retries",
-    label: "Default webhook delivery retries",
-    description: "How many times a delivery is retried before entering DEAD_LETTER.",
-    category: "integrations",
-    type: "number",
-    defaultValue: "5",
-  },
+  // ─── Notifications ──────────────────────────────
   {
     key: "notifications.retention_days",
     label: "Notification retention (days)",

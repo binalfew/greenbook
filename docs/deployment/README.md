@@ -252,7 +252,7 @@ The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse
 6. **Express** (`server.js` + `server/app.ts`, with `app.set("trust proxy", 2)` so Express knows there are two trusted upstream proxies and `req.ip` resolves to the real client) runs middleware in order: correlation ID → request logger (pino JSON) → CORS → session extraction → rate limiter (general / mutation / auth tier by route) → React Router handler (`@react-router/express` + `createRequestHandler`).
 7. Route loaders/actions that need data call `prisma.*` through `@prisma/adapter-pg`, which opens a pooled TCP connection to `10.111.11.50:5432`. PostgreSQL authenticates the `appuser` role via SCRAM-SHA-256 and returns rows.
 8. Rendered HTML (for initial load) streams back through the same path — DMZ → App VM nginx → DMZ → client. React Router 7 is streaming-first, which is why `proxy_buffering off` is critical at _both_ nginx tiers. Subsequent navigations return serialised loader data; SSE routes (notifications, real-time updates) keep the connection open all the way through.
-9. Side effects — audit log rows, webhook fan-outs, `send-email` jobs, domain events — are enqueued into the in-process job queue and picked up by the 5-second tick. On `SIGTERM` the job processor drains, the rate-limit audit buffer flushes, and Sentry flushes pending events.
+9. Side effects — audit log rows, `send-email` jobs, domain events — are enqueued into the in-process job queue and picked up by the 5-second tick. On `SIGTERM` the job processor drains, the rate-limit audit buffer flushes, and Sentry flushes pending events.
 
 ---
 

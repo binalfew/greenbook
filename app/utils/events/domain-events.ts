@@ -1,10 +1,8 @@
-// ─── Webhook Event Type Catalog ──────────────────────────
+// ─── Domain Event Type Catalog ───────────────────────────
 //
-// Template-scoped catalog. Apps built on this template extend by merging
-// their own event map into this one (or by maintaining a parallel catalog
-// and concatenating the helpers' outputs in their admin UI).
+// Every event type passed to `emitDomainEvent`, with a one-line description.
 
-export const WEBHOOK_EVENTS = {
+export const DOMAIN_EVENTS = {
   "user.created": "A new user has been created",
   "user.updated": "A user has been updated",
   "user.deleted": "A user has been deleted",
@@ -36,42 +34,4 @@ export const WEBHOOK_EVENTS = {
   "change.withdrawn": "A directory change request has been withdrawn by its submitter",
 } as const;
 
-export type WebhookEventType = keyof typeof WEBHOOK_EVENTS;
-
-export const WEBHOOK_EVENT_TYPES = Object.keys(WEBHOOK_EVENTS) as WebhookEventType[];
-
-export function validateEventTypes(events: string[]): {
-  valid: boolean;
-  invalid: string[];
-} {
-  if (!Array.isArray(events) || events.length === 0) {
-    return { valid: false, invalid: [] };
-  }
-
-  const invalid: string[] = [];
-  for (const event of events) {
-    if (event === "*") continue;
-    if (!WEBHOOK_EVENT_TYPES.includes(event as WebhookEventType)) {
-      invalid.push(event);
-    }
-  }
-
-  return { valid: invalid.length === 0, invalid };
-}
-
-export function getEventsByDomain(): Record<
-  string,
-  { type: WebhookEventType; description: string }[]
-> {
-  const grouped: Record<string, { type: WebhookEventType; description: string }[]> = {};
-
-  for (const [type, description] of Object.entries(WEBHOOK_EVENTS)) {
-    const domain = type.split(".")[0];
-    if (!grouped[domain]) {
-      grouped[domain] = [];
-    }
-    grouped[domain].push({ type: type as WebhookEventType, description });
-  }
-
-  return grouped;
-}
+export type DomainEventType = keyof typeof DOMAIN_EVENTS;
