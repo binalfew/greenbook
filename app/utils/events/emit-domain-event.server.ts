@@ -1,4 +1,4 @@
-import { logger } from "~/utils/monitoring/logger.server";
+import { getRequestLogger } from "~/middleware/correlation.server";
 
 /**
  * Announce a domain event (catalog: `~/utils/events/domain-events`). Events are
@@ -12,5 +12,5 @@ export function emitDomainEvent(
   eventType: string,
   data: Record<string, unknown>,
 ) {
-  logger.debug({ tenantId, eventType, data }, "domain event");
+  getRequestLogger().debug({ tenantId, eventType, data }, "domain event");
 }
