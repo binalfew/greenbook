@@ -94,7 +94,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         slug: tenant.slug,
         logoUrl: tenant.logoUrl,
         brandTheme: tenant.brandTheme,
-        subscriptionPlan: tenant.subscriptionPlan,
       },
       user: {
         id: user.id,
@@ -147,7 +146,6 @@ export default function TenantLayout({ loaderData }: Route.ComponentProps) {
       tenant={{
         name: tenant.name,
         slug: tenant.slug,
-        plan: tenant.subscriptionPlan ?? "free",
         logoUrl: tenant.logoUrl,
       }}
       user={{

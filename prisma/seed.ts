@@ -523,7 +523,6 @@ async function wipeDirectoryData(tenantId: string) {
   await prisma.memberState.deleteMany({ where: { tenantId } });
   await prisma.regionalGroup.deleteMany({ where: { tenantId } });
   await prisma.title.deleteMany({ where: { tenantId } });
-  await prisma.language.deleteMany({ where: { tenantId } });
 }
 
 /**
@@ -543,23 +542,6 @@ async function seedReferenceData(tenantId: string) {
       where: { tenantId_code: { tenantId, code: t.code } },
       update: {},
       create: { tenantId, sortOrder: i, ...t },
-    });
-  }
-
-  const languages = [
-    { code: "en", name: "English", nativeName: "English" },
-    { code: "fr", name: "French", nativeName: "Français" },
-    { code: "de", name: "German", nativeName: "Deutsch" },
-    { code: "es", name: "Spanish", nativeName: "Español" },
-    { code: "ar", name: "Arabic", nativeName: "العربية" },
-    { code: "am", name: "Amharic", nativeName: "አማርኛ" },
-    { code: "zh", name: "Chinese", nativeName: "中文" },
-  ];
-  for (const [i, l] of languages.entries()) {
-    await prisma.language.upsert({
-      where: { tenantId_code: { tenantId, code: l.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...l },
     });
   }
 }

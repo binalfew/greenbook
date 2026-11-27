@@ -2,7 +2,7 @@ import { parseWithZod } from "@conform-to/zod/v4";
 import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { BrandingColorSection } from "~/components/branding-color-picker";
-import { SelectField, getFormProps, getInputProps, useForm } from "~/components/form";
+import { getFormProps, getInputProps, useForm } from "~/components/form";
 import { LogoUpload } from "~/components/logo-upload";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -13,7 +13,7 @@ import { getTenantById, updateTenant } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import { PLAN_OPTIONS, updateTenantSchema } from "~/utils/schemas/tenant";
+import { updateTenantSchema } from "~/utils/schemas/tenant";
 import type { Route } from "./+types/edit";
 
 export const handle = { breadcrumb: "Edit" };
@@ -63,7 +63,6 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
       address: tenant.address ?? "",
       city: tenant.city ?? "",
       state: tenant.state ?? "",
-      subscriptionPlan: tenant.subscriptionPlan,
       logoUrl: tenant.logoUrl ?? "",
       brandTheme: tenant.brandTheme ?? "",
     },
@@ -74,7 +73,7 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
       <div>
         <h2 className="text-foreground text-2xl font-bold">Edit tenant</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Update {tenant.name}&apos;s profile, subscription, and branding.
+          Update {tenant.name}&apos;s profile and branding.
         </p>
       </div>
 
@@ -150,25 +149,6 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
                 {fields.state.errors && <FieldError>{fields.state.errors}</FieldError>}
               </Field>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Subscription</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Field>
-              <FieldLabel htmlFor={fields.subscriptionPlan.id}>Plan</FieldLabel>
-              <SelectField
-                meta={fields.subscriptionPlan}
-                options={PLAN_OPTIONS}
-                placeholder="Select plan"
-              />
-              {fields.subscriptionPlan.errors && (
-                <FieldError>{fields.subscriptionPlan.errors}</FieldError>
-              )}
-            </Field>
           </CardContent>
         </Card>
 

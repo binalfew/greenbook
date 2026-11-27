@@ -43,7 +43,6 @@ export type CreateTenantInput = {
   address: string;
   logoUrl?: string | null;
   brandTheme?: string;
-  subscriptionPlan?: string;
   /**
    * Existing user to attach as the new tenant's first admin. When omitted,
    * the tenant is created with its standard roles but no admin assigned —
@@ -202,7 +201,6 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
       address: input.address,
       logoUrl: input.logoUrl ?? null,
       brandTheme: input.brandTheme ?? "",
-      subscriptionPlan: input.subscriptionPlan ?? "free",
     },
   });
 
@@ -273,9 +271,6 @@ export async function updateTenant(
       ...(input.address !== undefined && { address: input.address }),
       ...(input.logoUrl !== undefined && { logoUrl: input.logoUrl }),
       ...(input.brandTheme !== undefined && { brandTheme: input.brandTheme }),
-      ...(input.subscriptionPlan !== undefined && {
-        subscriptionPlan: input.subscriptionPlan,
-      }),
     },
   });
 
