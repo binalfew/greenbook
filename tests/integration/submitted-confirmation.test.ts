@@ -5,8 +5,8 @@ import { prisma } from "../setup/integration-setup";
 
 import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
-import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
+import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions/index";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { createSessionCookie } from "./helpers/session";
@@ -169,7 +169,7 @@ type Confirmation = { count: number; submissionsHref: string } | null;
 async function submitDrafts(a: Seeded, cookie: string, ids: string[]) {
   const result = await run(() =>
     submitDraftsAction({
-      request: post(a, cookie, "approvals/submit-drafts", { "ids[]": ids }),
+      request: post(a, cookie, "submissions/submit-drafts", { "ids[]": ids }),
       params: { tenant: a.slug },
       context: {},
     }),

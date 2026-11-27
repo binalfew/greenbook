@@ -96,7 +96,7 @@
       "memberState": "Nationality",
       "memberStatePlaceholder": "Select a member state",
       "languages": "Languages",
-      "languagesHelp": "Comma-separated ISO codes (en, fr, am).",
+      "languagesHelp": "The working languages this person uses.",
       "showEmail": "Show email publicly",
       "showPhone": "Show phone publicly"
     },
@@ -117,11 +117,11 @@
       "basics": "Basics",
       "contact": "Contact",
       "officeContact": "Official contact",
-      "officeContactHelp": "Optional official contact for heads of unit and above — shown publicly in addition to the personal AU email.",
+      "officeContactHelp": "Official contact, shown publicly in addition to the personal AU email.",
       "assignments": "Positions held",
       "metadata": "Metadata",
-      "initialAssignment": "Initial position (optional)",
-      "initialAssignmentHelp": "Optionally associate a position. The assignment is created together with the person — no separate approval cycle."
+      "initialAssignment": "Initial position",
+      "initialAssignmentHelp": "The position this person holds. The assignment is created together with the person — no separate approval cycle."
     },
     "currentPosition": "Current position",
     "noCurrentAssignments": "Not currently holding a position.",
@@ -195,7 +195,7 @@
   "changes": {
     "title": "Approvals queue",
     "subtitle": "Review and publish directory changes submitted by focal persons.",
-    "mineTitle": "My submissions",
+    "mineTitle": "Submissions",
     "mineSubtitle": "Your drafts and your pending, approved, rejected, and withdrawn change requests. Select drafts to submit them together.",
     "historyTitle": "History",
     "historySubtitle": "Every approved, rejected, and withdrawn change request in this tenant.",
@@ -212,7 +212,11 @@
     "detailSubtitle": "Review the proposed change before approving or rejecting.",
     "beforeAfter": {
       "title": "What will change",
-      "empty": "No field differences to show."
+      "empty": "No field differences to show.",
+      "createTitle": "Proposed record",
+      "field": "Field",
+      "before": "Current",
+      "after": "Proposed"
     },
     "columns": {
       "entity": "Entity",

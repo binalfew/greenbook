@@ -471,6 +471,8 @@ async function seedTitles() {
     { code: "MS", name: "Ms." },
     { code: "DR", name: "Dr." },
     { code: "PROF", name: "Prof." },
+    { code: "HE", name: "H.E." },
+    { code: "AMB", name: "Amb." },
   ];
   for (const [i, t] of titles.entries()) {
     if (await isNewCode(prisma.title.findFirst({ where: { code: t.code }, select: { id: true } }))) {

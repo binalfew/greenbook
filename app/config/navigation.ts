@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Network,
+  Search,
   Settings,
   Users,
 } from "lucide-react";
@@ -83,6 +84,15 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           url: basePrefix,
           icon: LayoutDashboard,
           end: true,
+        },
+        // The cross-tenant people search every signed-in user has; readers
+        // get it at `/`, people with a workspace get it here.
+        {
+          title: "Directory",
+          tKey: "directory",
+          description: "Find anyone in the directory, across every organization.",
+          url: `${basePrefix}/directory`,
+          icon: Search,
         },
         // The directory's sections sit at the top level, matching their URLs
         // (`/<tenant>/people`, not `/<tenant>/directory/people`). Each is

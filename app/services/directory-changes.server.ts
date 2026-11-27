@@ -1270,13 +1270,15 @@ export async function computeDiff(change: ChangeRequest): Promise<FieldDiff[]> {
     // No "before" — every field in the payload is a new value.
     const payload = change.payload as Record<string, unknown> | null;
     if (!payload) return [];
-    return Object.entries(payload)
+    const created: FieldDiff[] = Object.entries(flattenInitialAssignment(payload))
       .filter(([field]) => !NON_DIFF_FIELDS.has(field))
       .map(([field, after]) => ({
         field,
         before: null,
         after,
       }));
+    await hydrateReferenceIds(change.entityType as DirectoryEntityKey, created, change.tenantId);
+    return created;
   }
 
   if (change.operation === "DELETE") {
@@ -1321,11 +1323,65 @@ export async function computeDiff(change: ChangeRequest): Promise<FieldDiff[]> {
   return diffs;
 }
 
+/**
+ * A new person's first position travels as a nested `initialAssignment`
+ * block. Spread it into `initial*` fields so it reads as ordinary rows.
+ */
+function flattenInitialAssignment(payload: Record<string, unknown>): Record<string, unknown> {
+  const { initialAssignment, ...rest } = payload;
+  if (!initialAssignment || typeof initialAssignment !== "object") return rest;
+  const initial = initialAssignment as Record<string, unknown>;
+  return {
+    ...rest,
+    initialPositionId: initial.positionId ?? null,
+    initialStartDate: initial.startDate ?? null,
+    initialNotes: initial.notes ?? null,
+  };
+}
+
+/**
+ * The name of the record a change is about, for headings: the proposed name
+ * on a CREATE, otherwise the published record's. Null when it cannot be told
+ * (the record has since been deleted, say).
+ */
+export async function describeChangeSubject(change: ChangeRequest): Promise<string | null> {
+  const entityType = change.entityType as DirectoryEntityKey;
+  const payload = (change.payload as Record<string, unknown> | null) ?? {};
+  const live =
+    change.operation !== "CREATE" && change.entityId
+      ? await fetchLiveEntity(entityType, change.entityId, change.tenantId)
+      : null;
+  const source: Record<string, unknown> =
+    change.operation === "CREATE" ? payload : ((live as Record<string, unknown> | null) ?? {});
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+  switch (entityType) {
+    case "ORGANIZATION":
+      return text(source.name) || null;
+    case "POSITION":
+      return text(source.title) || null;
+    case "PERSON":
+      return (
+        [source.honorific, source.firstName, source.lastName].map(text).filter(Boolean).join(" ") ||
+        null
+      );
+    case "POSITION_ASSIGNMENT": {
+      const personId = text(source.personId);
+      const positionId = text(source.positionId);
+      const [people, positions] = await Promise.all([
+        resolveNames("person", personId ? [personId] : [], change.tenantId),
+        resolveNames("position", positionId ? [positionId] : [], change.tenantId),
+      ]);
+      return [people[personId], positions[positionId]].filter(Boolean).join(" — ") || null;
+    }
+  }
+}
+
 // Fields whose values are cuid references to another entity we can resolve
 // to a display name. Keyed by entityType so we only run the lookups we need.
 const REFERENCE_FIELDS: Partial<Record<DirectoryEntityKey, string[]>> = {
   ORGANIZATION: ["parentId", "typeId"],
-  PERSON: ["memberStateId"],
+  PERSON: ["memberStateId", "initialPositionId"],
   POSITION: ["organizationId", "typeId", "reportsToId"],
   POSITION_ASSIGNMENT: ["personId", "positionId"],
 };
@@ -1376,6 +1432,7 @@ function resolverFor(entityType: DirectoryEntityKey, field: string): string | nu
   if (entityType === "ORGANIZATION" && field === "parentId") return "organization";
   if (entityType === "ORGANIZATION" && field === "typeId") return "organizationType";
   if (entityType === "PERSON" && field === "memberStateId") return "memberState";
+  if (entityType === "PERSON" && field === "initialPositionId") return "position";
   if (entityType === "POSITION" && field === "organizationId") return "organization";
   if (entityType === "POSITION" && field === "typeId") return "positionType";
   if (entityType === "POSITION" && field === "reportsToId") return "position";
@@ -1426,9 +1483,15 @@ async function resolveNames(
     case "position": {
       const rows = await prisma.position.findMany({
         where: { id: { in: ids }, tenantId },
-        select: { id: true, title: true },
+        select: {
+          id: true,
+          title: true,
+          organization: { select: { name: true, acronym: true } },
+        },
       });
-      return Object.fromEntries(rows.map((r) => [r.id, r.title]));
+      return Object.fromEntries(
+        rows.map((r) => [r.id, `${r.title} — ${r.organization.acronym || r.organization.name}`]),
+      );
     }
     case "person": {
       const rows = await prisma.person.findMany({

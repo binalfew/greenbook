@@ -40,5 +40,13 @@
   "email": "Email",
   "password": "Password",
   "profile": "Profile",
-  "pickDate": "Pick a date"
+  "pickDate": "Pick a date",
+  "languageNames": {
+    "ar": "Arabic",
+    "en": "English",
+    "fr": "French",
+    "pt": "Portuguese",
+    "es": "Spanish",
+    "sw": "Kiswahili"
+  }
 }

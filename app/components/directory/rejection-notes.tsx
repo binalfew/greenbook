@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import type { DraftRejection } from "~/services/directory-changes.server";
-import { changePath } from "~/utils/directory-routes";
+import { changePath, submissionPath } from "~/utils/directory-routes";
 
 // Why an earlier request was rejected. Shown above an editor resuming a
 // reopened draft (so the author fixes what was asked) and on the change
@@ -10,9 +10,12 @@ import { changePath } from "~/utils/directory-routes";
 export function RejectionNotes({
   rejection,
   tenant,
+  view = "author",
 }: {
   rejection?: DraftRejection | null;
   tenant: string;
+  /** Whose page the link opens: the author's submission or the reviewer's copy. */
+  view?: "author" | "reviewer";
 }) {
   const { t } = useTranslation("directory");
   if (!rejection) return null;
@@ -25,7 +28,7 @@ export function RejectionNotes({
       </p>
       {rejection.notes ? <p className="mt-1 whitespace-pre-wrap">{rejection.notes}</p> : null}
       <Link
-        to={changePath(tenant, rejection.changeId)}
+        to={(view === "reviewer" ? changePath : submissionPath)(tenant, rejection.changeId)}
         className="mt-2 inline-block underline underline-offset-2"
       >
         {t("changes.reopened.viewRejected")}

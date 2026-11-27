@@ -18,7 +18,8 @@ import { PERSON_PHOTO_MAX_BYTES } from "~/utils/constants/person-photo";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
 import { DRAFT_PARAM, draftsPath } from "~/utils/directory-routes";
 import { directoryMessages, dispatchDirectoryChange } from "~/utils/directory-submit.server";
-import { personFormSchema } from "~/utils/schemas/directory";
+import { prisma } from "~/utils/db/db.server";
+import { personCreateFormSchema, personFormSchema } from "~/utils/schemas/directory";
 
 /** What the editor gets back when a save does not go through. */
 export type PersonEditorResult = SubmissionResult<string[]> & {
@@ -41,8 +42,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  // Same rule as the editor: a new person needs a first position whenever the
+  // tenant has one to offer.
+  const needsPosition =
+    !formData.get("id") &&
+    (await prisma.position.count({ where: { tenantId, deletedAt: null, isActive: true } })) > 0;
   const submission = parseWithZod(formData, {
-    schema: personFormSchema,
+    schema: needsPosition ? personCreateFormSchema : personFormSchema,
   });
   if (submission.status !== "success") {
     return data(submission.reply(), {

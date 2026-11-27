@@ -5,8 +5,8 @@ import { prisma } from "../setup/integration-setup";
 
 import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
-import { action as withdrawAction } from "~/routes/$tenant/_directory/approvals/$changeId.withdraw";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as withdrawAction } from "~/routes/$tenant/_directory/submissions/$changeId.withdraw";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -150,7 +150,7 @@ async function submitAsFocal(a: Arranged): Promise<string> {
   });
   await run(() =>
     submitDraftsAction({
-      request: post(`/${a.slug}/approvals/submit-drafts`, a.focalSession, {
+      request: post(`/${a.slug}/submissions/submit-drafts`, a.focalSession, {
         "ids[]": change.id,
       }),
       params: { tenant: a.slug },
@@ -193,7 +193,7 @@ describe("directory workflow notifications and audit trail", () => {
 
     const response = await run(() =>
       withdrawAction({
-        request: post(`/${a.slug}/approvals/${changeId}/withdraw`, a.focalSession, {}),
+        request: post(`/${a.slug}/submissions/${changeId}/withdraw`, a.focalSession, {}),
         params: { tenant: a.slug, changeId },
         context: {},
       } as Parameters<typeof withdrawAction>[0]),

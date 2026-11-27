@@ -1,4 +1,7 @@
+import { data } from "react-router";
+import { publicGetPerson, publicListPeople } from "~/services/people.server";
 import { getPublicTenantIds } from "~/services/public-directory.server";
+import { AUTOCOMPLETE_MIN_LENGTH, SEARCH_PAGE_SIZE } from "~/utils/autocomplete";
 
 // Helpers for the public (unauthenticated, cross-tenant) directory tier.
 //
@@ -49,3 +52,48 @@ export function publicOrgToTreeNode(row: {
     _count: { children: row.childCount },
   };
 }
+
+/** Search and profile responses are per-session: never shared by a cache. */
+export const DIRECTORY_CACHE_HEADER = "private, no-store";
+
+/**
+ * The people search behind `/` and `/<tenant>/directory`, read from the
+ * request's `q` and `page`. The caller checks the login first. An empty or
+ * too-short query runs no search.
+ */
+export async function loadDirectorySearch(request: Request) {
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q")?.trim() ?? "";
+  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+  const none: PublicPersonListRow[] = [];
+
+  const { publicTenantIds, isEmpty } = await getPublicContext();
+  if (isEmpty) {
+    return { isEmpty: true, tooShort: false, people: none, q, page, totalPages: 1 };
+  }
+  if (q.length < AUTOCOMPLETE_MIN_LENGTH) {
+    return { isEmpty: false, tooShort: q.length > 0, people: none, q, page: 1, totalPages: 1 };
+  }
+  const result = await publicListPeople(publicTenantIds, {
+    search: q,
+    page,
+    pageSize: SEARCH_PAGE_SIZE,
+  });
+  const totalPages = Math.max(1, Math.ceil(result.total / SEARCH_PAGE_SIZE));
+  return { isEmpty: false, tooShort: false, people: result.data, q, page, totalPages };
+}
+
+export type DirectorySearchResults = Awaited<ReturnType<typeof loadDirectorySearch>>;
+type PublicPersonListRow = Awaited<ReturnType<typeof publicListPeople>>["data"][number];
+
+/** One profile from the directory; a 404 response when it is not published. */
+export async function loadDirectoryProfile(personId: string) {
+  const { publicTenantIds, isEmpty } = await getPublicContext();
+  const person = isEmpty ? null : await publicGetPerson(personId, publicTenantIds);
+  if (!person) {
+    throw data(null, { status: 404, headers: { "Cache-Control": DIRECTORY_CACHE_HEADER } });
+  }
+  return person;
+}
+
+export type DirectoryProfile = Awaited<ReturnType<typeof loadDirectoryProfile>>;

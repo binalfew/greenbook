@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../setup/integration-setup";
 
 import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
-import { action as discardAction } from "~/routes/$tenant/_directory/approvals/$changeId.discard";
+import { action as discardAction } from "~/routes/$tenant/_directory/submissions/$changeId.discard";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
-import { action as withdrawAction } from "~/routes/$tenant/_directory/approvals/$changeId.withdraw";
+import { action as withdrawAction } from "~/routes/$tenant/_directory/submissions/$changeId.withdraw";
 import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
 import { action as batchRejectAction } from "~/routes/$tenant/_directory/approvals/batch-reject";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { seedDirectoryActors, type DirectoryActors } from "./helpers/directory-actors";
@@ -67,7 +67,7 @@ async function draftOrg(a: DirectoryActors, name: string) {
 
 async function pendingOrg(a: DirectoryActors, name: string) {
   const draft = await draftOrg(a, name);
-  await act(a, submitDraftsAction as Action, "approvals/submit-drafts", a.focal.cookie, {
+  await act(a, submitDraftsAction as Action, "submissions/submit-drafts", a.focal.cookie, {
     "ids[]": [draft.id],
   });
   return draft;
@@ -270,7 +270,7 @@ describe("batch actions", () => {
     const result = await act(
       a,
       submitDraftsAction as Action,
-      "approvals/submit-drafts",
+      "submissions/submit-drafts",
       french(a.focal.cookie),
       { "ids[]": [draft.id] },
     );

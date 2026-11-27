@@ -50,11 +50,7 @@ export function useChangeColumns(base: string, keys: ColumnKey[]): ColumnDef<Cha
             >
               {name ?? t(`changes.entityLabel.${row.entityType}`)}
             </Link>
-            {name ? (
-              <div className="text-muted-foreground truncate text-xs">
-                {t(`changes.entityLabel.${row.entityType}`)}
-              </div>
-            ) : row.entityId ? (
+            {!name && row.entityId ? (
               <div className="text-muted-foreground truncate text-[10px]">{row.entityId}</div>
             ) : null}
           </div>

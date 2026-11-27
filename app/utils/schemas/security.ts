@@ -1,7 +1,17 @@
 import { z } from "zod/v4";
 
-const emailField = z.email("Valid email is required");
-const nameField = z.string().min(1, "Required").max(100);
+const emailField = z.email({
+  error: (issue) =>
+    issue.input === undefined ? "Email is required" : "Enter a valid email address",
+});
+const firstNameField = z
+  .string({ error: "First name is required" })
+  .min(1, "First name is required")
+  .max(100);
+const lastNameField = z
+  .string({ error: "Last name is required" })
+  .min(1, "Last name is required")
+  .max(100);
 
 // Empty string from the form means "no tenant" (regular user). Convert to null
 // so the service layer sees the explicit-null contract instead of "".
@@ -11,11 +21,11 @@ const tenantIdField = z
   .transform((v) => (v && v.length > 0 ? v : null));
 
 export const createUserSchema = z.object({
-  firstName: nameField,
-  lastName: nameField,
+  firstName: firstNameField,
+  lastName: lastNameField,
   email: emailField,
   password: z
-    .string()
+    .string({ error: "Password is required" })
     .min(8, "Password must be at least 8 characters")
     .regex(/[A-Z]/, "Must contain an uppercase letter")
     .regex(/[a-z]/, "Must contain a lowercase letter")
@@ -28,8 +38,8 @@ export const createUserSchema = z.object({
 });
 
 export const updateUserSchema = z.object({
-  firstName: nameField,
-  lastName: nameField,
+  firstName: firstNameField,
+  lastName: lastNameField,
   email: emailField,
   userStatusId: z.string().optional(),
   // Optional override: only honoured when the actor is a global admin.
@@ -42,7 +52,7 @@ export const assignRolesSchema = z.object({
 });
 
 export const createRoleSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
+  name: z.string({ error: "Name is required" }).min(1, "Name is required").max(100),
   description: z.string().max(500).optional(),
   scope: z.enum(["GLOBAL", "TENANT", "EVENT"]).default("TENANT"),
 });
@@ -54,8 +64,8 @@ export const rolePermissionsSchema = z.object({
 });
 
 export const createPermissionSchema = z.object({
-  resource: z.string().min(1, "Resource is required").max(100),
-  action: z.string().min(1, "Action is required").max(100),
+  resource: z.string({ error: "Resource is required" }).min(1, "Resource is required").max(100),
+  action: z.string({ error: "Action is required" }).min(1, "Action is required").max(100),
   module: z.string().min(1, "Module is required").max(50).default("system"),
   description: z.string().max(500).optional(),
 });

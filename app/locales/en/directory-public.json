@@ -72,6 +72,7 @@
     "currentPositions": "Current position",
     "pastPositions": "Previously",
     "reportingLine": "Reporting line",
+    "since": "Since {{date}}",
     "reportingLineVacant": "Vacant",
     "contact": "Contact",
     "contactPrivate": "Contact information is not public.",

@@ -21,7 +21,10 @@ const tenantFieldsSchema = z.object({
     .min(1, "Name is required")
     .max(200, "Name must be at most 200 characters"),
   slug: slugField,
-  email: z.email("Valid email is required"),
+  email: z.email({
+    error: (issue) =>
+      issue.input === undefined ? "Email is required" : "Enter a valid email address",
+  }),
   phone: z.string({ error: "Phone is required" }).min(1, "Phone is required"),
   // Optional: an existing user who belongs to no tenant, moved into the new
   // tenant as its first focal person or manager. An empty string from the

@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, data, redirect, useNavigate } from "react-router";
 import { FormError } from "~/components/directory/form-error";
@@ -11,13 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { discardDraft } from "~/services/directory-changes.server";
+import { withdrawChange } from "~/services/directory-changes.server";
 import { requireSubmitContext } from "~/utils/directory-access.server";
-import { changePath, draftsPath } from "~/utils/directory-routes";
 import { directoryDialogConflict } from "~/utils/directory-submit.server";
-import type { Route } from "./+types/$changeId.discard";
+import { submissionPath, submissionsPath } from "~/utils/directory-routes";
+import type { Route } from "./+types/$changeId.withdraw";
 
-export const handle = { breadcrumb: "Discard" };
+export const handle = { breadcrumb: "Withdraw" };
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireSubmitContext(request);
@@ -27,18 +27,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request, params }: Route.ActionArgs) {
   const { ctx } = await requireSubmitContext(request);
   try {
-    await discardDraft(params.changeId, ctx);
+    await withdrawChange(params.changeId, ctx);
   } catch (err) {
     return data({ error: directoryDialogConflict(request, err).message }, { status: 409 });
   }
-  return redirect(draftsPath(params.tenant));
+  return redirect(submissionsPath(params.tenant));
 }
 
-export default function DiscardDraftDialog({ params, actionData }: Route.ComponentProps) {
+export default function WithdrawChangeDialog({ params, actionData }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
-  const base = changePath(params.tenant, params.changeId);
+  const base = submissionPath(params.tenant, params.changeId);
   const handleClose = () => navigate(base, { replace: true });
 
   return (
@@ -46,10 +46,10 @@ export default function DiscardDraftDialog({ params, actionData }: Route.Compone
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Trash2 className="text-destructive size-5" />
-            {t("changes.discardDialog.title")}
+            <Undo2 className="size-5" />
+            {t("changes.withdrawDialog.title")}
           </DialogTitle>
-          <DialogDescription>{t("changes.discardDialog.description")}</DialogDescription>
+          <DialogDescription>{t("changes.withdrawDialog.description")}</DialogDescription>
         </DialogHeader>
 
         <Form method="post" className="space-y-4">
@@ -58,9 +58,7 @@ export default function DiscardDraftDialog({ params, actionData }: Route.Compone
             <Button variant="outline" onClick={handleClose} type="button">
               {tc("cancel")}
             </Button>
-            <Button type="submit" variant="destructive">
-              {t("changes.discardDialog.confirm")}
-            </Button>
+            <Button type="submit">{t("changes.withdrawDialog.confirm")}</Button>
           </DialogFooter>
         </Form>
       </DialogContent>

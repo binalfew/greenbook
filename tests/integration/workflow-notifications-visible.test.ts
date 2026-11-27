@@ -4,9 +4,10 @@ import { prisma } from "../setup/integration-setup";
 
 import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
 import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { loader as openNotificationLoader } from "~/routes/$tenant/notifications/$notificationId.open";
 import { loader as inboxLoader } from "~/routes/$tenant/notifications/index";
@@ -143,11 +144,12 @@ async function open(cookie: string, notificationId: string) {
   return (result as Response).headers.get("Location")!;
 }
 
-/** Load the change detail page a notification led to. */
+/** Load the page a notification led to: the author's submission or the reviewer's copy. */
 async function changePage(cookie: string, path: string) {
   const changeId = path.split("/").pop()!;
+  const loader = path.includes("/submissions/") ? submissionDetailLoader : changeDetailLoader;
   const result = await run(() =>
-    changeDetailLoader({
+    loader({
       request: get(path, cookie),
       params: { tenant: SLUG, changeId },
       context: {},
@@ -182,7 +184,7 @@ async function submitAsFocal(a: Arranged, names = ["Proposed Org"]): Promise<str
   const body = new URLSearchParams(drafts.map((d) => ["ids[]", d.id]));
   await run(() =>
     submitDraftsAction({
-      request: new Request(`http://localhost/${SLUG}/approvals/submit-drafts`, {
+      request: new Request(`http://localhost/${SLUG}/submissions/submit-drafts`, {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -258,6 +260,7 @@ describe("in a tenant created through the UI", () => {
     expect(listed[0]).toMatchObject({ type: "directory.change.approved", read: false });
 
     const destination = await open(a.focal.cookie, listed[0].id);
+    expect(destination).toBe(`/${SLUG}/submissions/${changeId}`);
     expect(await changePage(a.focal.cookie, destination)).toMatchObject({
       status: 200,
       change: { id: changeId, status: "APPROVED" },
@@ -275,6 +278,7 @@ describe("in a tenant created through the UI", () => {
     expect(shown.recent[0]).toMatchObject({ type: "directory.change.rejected" });
 
     const destination = await open(a.focal.cookie, shown.recent[0].id);
+    expect(destination).toBe(`/${SLUG}/submissions/${changeId}`);
     expect(await changePage(a.focal.cookie, destination)).toMatchObject({
       status: 200,
       change: { id: changeId, status: "REJECTED" },

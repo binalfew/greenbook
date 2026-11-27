@@ -8,6 +8,7 @@ import {
   approveChanges,
   ChangeRequestError,
   computeDiff,
+  describeChangeSubject,
   rejectChange,
   saveDraft,
   submitAndApply,
@@ -427,6 +428,48 @@ describe("directory-changes: optimistic concurrency + delete guards", () => {
     // Only the field the focal person actually changed should reach reviewers.
     const diff = await computeDiff(change);
     expect(diff.map((d) => d.field)).toEqual(["name"]);
+  });
+
+  it("shows a new person's nationality and first position by name", async () => {
+    const a = await arrange();
+    const org = await prisma.organization.create({
+      data: { tenantId: a.tenant.id, name: "Peace Fund", acronym: "PF", typeId: a.orgType.id },
+    });
+    const position = await prisma.position.create({
+      data: {
+        tenantId: a.tenant.id,
+        title: "Director",
+        organizationId: org.id,
+        typeId: a.positionType.id,
+      },
+    });
+    const state = await prisma.memberState.create({
+      data: { fullName: "Ethiopia", abbreviation: "ETH", dateJoined: new Date("1963-05-25") },
+    });
+
+    const draft = await saveDraft(
+      {
+        entityType: "PERSON",
+        operation: "CREATE",
+        payload: {
+          honorific: "Dr.",
+          firstName: "Selam",
+          lastName: "Tesfaye",
+          memberStateId: state.id,
+          initialAssignment: { positionId: position.id, startDate: "2012-03-12" },
+        },
+      },
+      focalCtx(a),
+    );
+
+    const values = Object.fromEntries((await computeDiff(draft)).map((d) => [d.field, d.after]));
+    expect(values).toMatchObject({
+      memberStateId: "Ethiopia (ETH)",
+      initialPositionId: "Director — PF",
+      initialStartDate: "2012-03-12",
+    });
+    expect(values).not.toHaveProperty("initialAssignment");
+    expect(await describeChangeSubject(draft)).toBe("Dr. Selam Tesfaye");
   });
 
   it("blocks deleting an organization that still has positions", async () => {

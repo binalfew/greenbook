@@ -10,6 +10,7 @@ import type { AppLoadContext, EntryContext } from "react-router";
 import { ServerRouter } from "react-router";
 import { getEnv, init } from "./utils/config/env.server";
 import { NonceProvider } from "./utils/nonce-provider";
+import "./utils/validation-messages";
 import { makeTimings } from "./utils/monitoring/timing.server";
 
 export const streamTimeout = 5_000;

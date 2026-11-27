@@ -7,12 +7,13 @@ import { action as organizationEditorAction } from "~/routes/$tenant/_directory/
 import { loader as editOrganizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId_/edit";
 import { loader as newOrganizationLoader } from "~/routes/$tenant/_directory/organogram/new";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
-import { action as reopenAction } from "~/routes/$tenant/_directory/approvals/$changeId.reopen";
+import { action as reopenAction } from "~/routes/$tenant/_directory/submissions/$changeId.reopen";
 import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
 import { loader as historyLoader } from "~/routes/$tenant/_directory/approvals/history";
 import { loader as approvalQueueLoader } from "~/routes/$tenant/_directory/approvals/index";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -193,7 +194,7 @@ async function saveRename(
 async function submitDrafts(a: Seeded, cookie: string, ids: string[]) {
   const result = await run(() =>
     submitDraftsAction({
-      request: post(a, cookie, "approvals/submit-drafts", { "ids[]": ids }),
+      request: post(a, cookie, "submissions/submit-drafts", { "ids[]": ids }),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -260,7 +261,7 @@ async function rejectedRename(a: Seeded, org: { id: string; version: number }, n
 function reopen(a: Seeded, cookie: string, id: string) {
   return run(() =>
     reopenAction({
-      request: post(a, cookie, `approvals/${id}/reopen`),
+      request: post(a, cookie, `submissions/${id}/reopen`),
       params: { tenant: a.slug, changeId: id },
       context: {},
     } as never),
@@ -273,9 +274,11 @@ type DetailData = {
   reopenedFrom: { changeId: string; notes: string | null; reviewerName: string | null } | null;
 };
 
+// The focal person opens their own submission; the manager opens the review page.
 async function detail(a: Seeded, cookie: string, id: string) {
-  const result = await changeDetailLoader({
-    request: get(a, cookie, `approvals/${id}`),
+  const mine = cookie === a.focal.cookie;
+  const result = await (mine ? submissionDetailLoader : changeDetailLoader)({
+    request: get(a, cookie, `${mine ? "submissions" : "approvals"}/${id}`),
     params: { tenant: a.slug, changeId: id },
     context: {},
   } as never);

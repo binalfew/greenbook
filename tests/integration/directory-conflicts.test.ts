@@ -9,6 +9,7 @@ import { action as personDeleteAction } from "~/routes/$tenant/_directory/people
 import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
+import { personContactFields } from "./helpers/person-form";
 
 // Ordinary directory conflicts must come back as a form-level message on the
 // editor or dialog that was submitted, never as a thrown error (a 500 page).
@@ -151,6 +152,7 @@ function conformFormErrors(result: DataResult): string[] {
 
 function personForm(person: { id: string; firstName: string; version: number }) {
   return {
+    ...personContactFields(),
     id: person.id,
     baseVersion: String(person.version),
     firstName: person.firstName,

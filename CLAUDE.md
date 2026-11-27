@@ -209,7 +209,7 @@ Naming note: "public" in this section — the `public*` service helpers, `app/ro
 - Directory loaders (`/`, `/people/$personId`) call `requireUserId` but **never** `resolveTenant` — they stay cross-tenant. Because responses are per-session, each loader and its `headers()` export return `Cache-Control: private, no-store`; `/api/search-people` uses `private, max-age=15`. `PUBLIC_CACHE_HEADER` is no longer used by any wired route — do not put it back on an auth-gated response, or a shared cache could serve one user's results to another.
 - `public/robots.txt` disallows everything (`Disallow: /`) — every page is either login-gated or an auth form, so nothing is indexable.
 - Detail-page 404s throw a `Response(status: 404)` with the same `private, no-store` header; each detail route's `ErrorBoundary` renders the shared `~/components/public/not-found.tsx#PublicDetailNotFound` with `kind` in `"org" | "person" | "position"`.
-- Public routes actually shipped live under `app/routes/_public/*` (a pathless layout, so children sit at the domain root — **not** `app/routes/directory/*`): `_layout.tsx` (AU chrome + language switcher, auth-aware header), `index.tsx` (the `/` people search + pagination; also the operator shortcut that bounces admins/managers/focals to their tenant dashboard), and `people/$personId.tsx` (profile with `AssignmentTimeline`). The type-ahead API is `app/routes/api.search-people.tsx`. The org-tree and position public detail routes are **not currently wired** — `publicGetOrganization` / `publicListOrganizationTreeRoots` / `publicListOrganizationChildren` / `publicGetPosition` exist in the services but are referenced only from tests; re-wiring them will resurface the dormant `isActive` gaps noted in their code. Static-segment precedence means `/` and `/people/*` win over `/:tenant/*` at the auto-routes level.
+- Public routes actually shipped live under `app/routes/_public/*` (a pathless layout, so children sit at the domain root — **not** `app/routes/directory/*`): `_layout.tsx` (AU chrome + language switcher, auth-aware header), `index.tsx` (the `/` people search + pagination; also the operator shortcut that bounces admins/managers/focals to their tenant dashboard; they search from `app/routes/$tenant/directory/`, which renders the same `~/components/public/directory-search.tsx` and `person-profile.tsx` inside the workspace chrome), and `people/$personId.tsx` (profile with `AssignmentTimeline`). The type-ahead API is `app/routes/api.search-people.tsx`. The org-tree and position public detail routes are **not currently wired** — `publicGetOrganization` / `publicListOrganizationTreeRoots` / `publicListOrganizationChildren` / `publicGetPosition` exist in the services but are referenced only from tests; re-wiring them will resurface the dormant `isActive` gaps noted in their code. Static-segment precedence means `/` and `/people/*` win over `/:tenant/*` at the auto-routes level.
 
 ### Phase E additions
 
@@ -228,8 +228,13 @@ _layout.tsx                                       — access gate only. The fold
                                                     at `/<tenant>/people` etc., with no `/directory` segment, and the
                                                     sidebar (`app/config/navigation.ts`) links to each one. The KPI
                                                     overview is the tenant dashboard, `app/routes/$tenant/index.tsx`
-submissions.tsx                                   — the author's own change requests, every status;
-                                                    `?status=DRAFT` is the drafts list (select + submit for review)
+submissions/                                      — the author's own change requests, every status
+  index.tsx (the list; `?status=DRAFT` is the drafts list, select + submit for review)
+  $changeId._layout.tsx (one submission, as its author sees it)
+  $changeId.withdraw.tsx, .discard.tsx, .reopen.tsx (dialogs)
+  submit-drafts.tsx (resource route)
++shared/change-detail.{tsx,server.ts}             — the change page both `submissions/$changeId` and
+                                                    `approvals/$changeId` render; `view` is `author` or `reviewer`
 photos.$photoId.tsx                               — serves a person photo to a member of the tenant
 organogram/                                        — the `Organization` records; called "Organogram" (section) and
                                                     "organizational unit" (record) in the UI and URL only
@@ -251,9 +256,9 @@ approvals/
   _layout.tsx (permission gate)
   index.tsx (pending queue; selectable + batch dialog for reject notes)
   history.tsx (reviewed requests)
-  $changeId._layout.tsx (diff + metadata + action buttons)
-  $changeId.approve.tsx, .reject.tsx, .withdraw.tsx, .discard.tsx, .reopen.tsx (dialogs)
-  batch-approve.tsx, batch-reject.tsx, submit-drafts.tsx (resource routes)
+  $changeId._layout.tsx (one change, as a reviewer sees it; sends its author to `submissions/$changeId`)
+  $changeId.approve.tsx, .reject.tsx (dialogs)
+  batch-approve.tsx, batch-reject.tsx (resource routes)
 api/
   organizations.children.tsx, organizations.move.tsx (tree lazy-load + drag-and-drop move)
 ```
@@ -269,6 +274,7 @@ api/
 | `dispatchDirectoryDelete(request, resource, entityType, id, reason?)`                 | same                                               | Convenience wrapper for DELETE dialogs                                                                                                                   |
 | `directoryEntitySegment(entity)`                                                      | `app/utils/directory-routes.ts`                    | Maps `DirectoryEntity` enum to admin URL segment (for deep-links from the change-detail page)                                                            |
 | `submissionsPath` / `draftsPath` / `draftEditPath` / `personPhotoPath`                | same                                               | URL builders for the author's submissions list, its drafts view, the editor that resumes a draft, and a tenant photo                                     |
+| `submissionPath` / `changePath`                                                       | same                                               | One change request on the author's page (`/submissions/<id>`) and on the reviewer's (`/approvals/<id>`)                                                  |
 | `requireApproveContext(request)` / `requireRejectContext(request)`                    | `app/utils/directory-access.server.ts`             | Review context gated on the specific `directory-change:approve` / `:reject` permission                                                                   |
 | `loadEditorDraft(...)` / `directoryConflictFrom(request, err)`                        | `app/utils/directory-submit.server.ts`             | Editor loaders resume a draft from `?draft=<id>`; editor actions turn a stale-edit or open-change conflict into a form message                           |
 | `requireActingTenant(request)` / `requireTenantPermission(request, resource, action)` | `app/utils/acting-tenant.server.ts`                | Resolves the tenant in the URL and checks the user may act on it (own tenant, or global admin)                                                           |

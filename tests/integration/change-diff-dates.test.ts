@@ -3,7 +3,7 @@ import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -115,7 +115,7 @@ async function diffAfterEdit(a: Arranged, overrides: Record<string, string>) {
     where: { tenantId: a.tenantId, entityId: a.org.id, status: "DRAFT" },
   });
   await submitDraftsAction({
-    request: new Request(`http://localhost/${a.slug}/approvals/submit-drafts`, {
+    request: new Request(`http://localhost/${a.slug}/submissions/submit-drafts`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie: a.focalCookie },
       body: new URLSearchParams({ "ids[]": change.id }).toString(),

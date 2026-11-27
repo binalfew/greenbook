@@ -4,10 +4,11 @@ import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
+import { personContactFields } from "./helpers/person-form";
 
 beforeEach(() => {
   clearFlagCache();
@@ -149,11 +150,11 @@ function saveNewPerson(
   w: Workspace,
   cookie: string,
   person: PersonFields,
-  extra: Record<string, string> = {},
+  extra: Record<string, string | string[]> = {},
 ) {
   return run(() =>
     personEditorAction({
-      request: post(w, cookie, "people/new", { ...person, ...extra }),
+      request: post(w, cookie, "people/new", { ...personContactFields(), ...person, ...extra }),
       params: { tenant: w.slug },
       context: {},
     }),
@@ -175,7 +176,7 @@ async function submitAllDrafts(w: Workspace, author: Actor) {
     where: { tenantId: w.tenantId, status: "DRAFT", submittedById: author.id },
   });
   await submitDraftsAction({
-    request: post(w, author.cookie, "approvals/submit-drafts", {
+    request: post(w, author.cookie, "submissions/submit-drafts", {
       "ids[]": drafts.map((d) => d.id),
     }),
     params: { tenant: w.slug },
@@ -342,6 +343,7 @@ describe("possible duplicate people — saving", () => {
     const result = await run(() =>
       personEditorAction({
         request: post(home, home.focal.cookie, `people/${existing.id}/edit`, {
+          ...personContactFields(),
           id: existing.id,
           baseVersion: String(existing.version),
           firstName: "Amina",
@@ -367,6 +369,7 @@ describe("possible duplicate people — saving", () => {
     const result = await run(() =>
       personEditorAction({
         request: post(home, home.focal.cookie, `people/new?draft=${draft.id}`, {
+          ...personContactFields(),
           ...person,
           phone: "+251 11 000 0000",
         }),
@@ -415,5 +418,38 @@ describe("possible duplicate people — change detail page", () => {
     const [submitted] = await submitAllDrafts(home, home.focal);
 
     expect(await loadDetail(home, home.manager.cookie, submitted.id)).toEqual([]);
+  });
+});
+
+describe("person languages", () => {
+  it("saves the languages ticked on the form to the person", async () => {
+    const { home } = await arrange();
+
+    const result = await saveNewPerson(
+      home,
+      home.manager.cookie,
+      { firstName: "Kofi", lastName: "Mensah" },
+      { languages: ["en", "fr", "en"] },
+    );
+
+    expect(statusOf(result)).toBe(302);
+    const person = await prisma.person.findFirstOrThrow({
+      where: { tenantId: home.tenantId, lastName: "Mensah" },
+    });
+    expect(person.languages).toEqual(["en", "fr"]);
+  });
+
+  it("refuses a language the form does not offer", async () => {
+    const { home } = await arrange();
+
+    const result = await saveNewPerson(
+      home,
+      home.focal.cookie,
+      { firstName: "Kofi", lastName: "Mensah" },
+      { languages: ["xx"] },
+    );
+
+    expect(statusOf(result)).toBe(400);
+    expect(await openPersonChanges(home)).toHaveLength(0);
   });
 });

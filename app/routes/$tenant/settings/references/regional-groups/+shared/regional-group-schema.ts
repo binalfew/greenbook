@@ -7,7 +7,7 @@ export const regionalGroupFormSchema = z.object({
     .min(1, "Code is required")
     .max(20)
     .regex(/^[A-Z0-9_]+$/, "Use uppercase letters, digits, and underscores only"),
-  name: z.string({ error: "Name is required" }).min(1).max(100),
+  name: z.string({ error: "Name is required" }).min(1, "Name is required").max(100),
   description: z.string().max(2000).optional(),
 });
 

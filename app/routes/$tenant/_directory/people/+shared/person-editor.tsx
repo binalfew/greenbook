@@ -20,8 +20,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import { PERSON_LANGUAGES } from "~/utils/constants/person-languages";
 import { personPhotoPath } from "~/utils/directory-routes";
-import { personFormSchema } from "~/utils/schemas/directory";
+import { personCreateFormSchema, personFormSchema } from "~/utils/schemas/directory";
 import type { PersonEditorResult } from "./person-editor.server";
 
 type PersonLike = {
@@ -105,7 +106,18 @@ export function PersonEditor({
   const { t: tc } = useTranslation("common");
   const isCreate = !person;
 
-  const { form, fields } = useForm(personFormSchema, {
+  // The honorific is stored as text, so a person can carry one that is not
+  // (or no longer) an active title. Keep it selectable, or the field would
+  // open blank and look as though the person had no title.
+  const savedHonorific =
+    typeof draftValues?.honorific === "string" ? draftValues.honorific : person?.honorific;
+  const titleNames = titles.map((ti) => ti.name);
+  if (savedHonorific && !titleNames.includes(savedHonorific)) titleNames.unshift(savedHonorific);
+
+  // A new person is recorded with their first position whenever the tenant
+  // has positions to choose from.
+  const needsPosition = isCreate && Boolean(positions?.length);
+  const { form, fields } = useForm(needsPosition ? personCreateFormSchema : personFormSchema, {
     lastResult: actionData,
     defaultValue: {
       id: person?.id ?? "",
@@ -132,6 +144,9 @@ export function PersonEditor({
   // A draft carries its own photo; an empty one on a person who has a
   // published photo means the draft removes it.
   const { tenant = "" } = useParams();
+  // The boxes ticked when the form opens: the draft's choice, else the record's.
+  const chosenLanguages = [fields.languages.initialValue ?? []].flat().map(String);
+
   const draftPhotoId =
     draftValues && "photoId" in draftValues ? String(draftValues.photoId ?? "") : undefined;
   const photoId = draftPhotoId || person?.photoId || null;
@@ -172,7 +187,7 @@ export function PersonEditor({
             >
               <SelectField
                 meta={fields.honorific}
-                options={titles.map((ti) => ({ value: ti.name, label: ti.name }))}
+                options={titleNames.map((name) => ({ value: name, label: name }))}
                 placeholder={t("people.fields.honorificPlaceholder")}
               />
             </FieldRow>
@@ -237,6 +252,33 @@ export function PersonEditor({
             </FieldRow>
           </div>
 
+          <fieldset className="space-y-2">
+            <legend className="text-sm leading-none font-medium">
+              {t("people.fields.languages")}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {PERSON_LANGUAGES.map((code) => (
+                <label
+                  key={code}
+                  className="has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:focus-visible]:ring-ring/50 flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors has-[:focus-visible]:ring-[3px]"
+                >
+                  <input
+                    type="checkbox"
+                    name={fields.languages.name}
+                    value={code}
+                    defaultChecked={chosenLanguages.includes(code)}
+                    className="accent-primary size-4"
+                  />
+                  {tc(`languageNames.${code}`)}
+                </label>
+              ))}
+            </div>
+            <p className="text-muted-foreground text-xs">{t("people.fields.languagesHelp")}</p>
+            {fields.languages.errors?.length ? (
+              <p className="text-destructive text-sm">{fields.languages.errors[0]}</p>
+            ) : null}
+          </fieldset>
+
           <FieldRow id={fields.bio.id} label={t("people.fields.bio")} errors={fields.bio.errors}>
             <Textarea {...getTextareaProps(fields.bio)} key={fields.bio.key} rows={4} />
           </FieldRow>
@@ -253,6 +295,7 @@ export function PersonEditor({
               id={fields.email.id}
               label={t("people.fields.email")}
               errors={fields.email.errors}
+              required
             >
               <Input {...getInputProps(fields.email, { type: "email" })} key={fields.email.key} />
             </FieldRow>
@@ -260,6 +303,7 @@ export function PersonEditor({
               id={fields.phone.id}
               label={t("people.fields.phone")}
               errors={fields.phone.errors}
+              required
             >
               <Input {...getInputProps(fields.phone, { type: "tel" })} key={fields.phone.key} />
             </FieldRow>
@@ -285,6 +329,7 @@ export function PersonEditor({
                 id={fields.officeEmail.id}
                 label={t("people.fields.officeEmail")}
                 errors={fields.officeEmail.errors}
+                required
               >
                 <Input
                   {...getInputProps(fields.officeEmail, { type: "email" })}
@@ -295,6 +340,7 @@ export function PersonEditor({
                 id={fields.officePhone.id}
                 label={t("people.fields.officePhone")}
                 errors={fields.officePhone.errors}
+                required
               >
                 <Input
                   {...getInputProps(fields.officePhone, { type: "tel" })}
@@ -306,7 +352,7 @@ export function PersonEditor({
         </CardContent>
       </Card>
 
-      {isCreate && positions && positions.length > 0 ? (
+      {needsPosition && positions ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold">
@@ -321,6 +367,7 @@ export function PersonEditor({
               id={fields.initialPositionId.id}
               label={t("assignments.fields.position")}
               errors={fields.initialPositionId.errors}
+              required
             >
               <SelectField
                 meta={fields.initialPositionId}
@@ -336,6 +383,7 @@ export function PersonEditor({
                 id={fields.initialStartDate.id}
                 label={t("assignments.fields.startDate")}
                 errors={fields.initialStartDate.errors}
+                required
               >
                 <DatePickerField meta={fields.initialStartDate} />
               </FieldRow>

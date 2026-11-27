@@ -10,9 +10,9 @@ import type { FilterDef, PaginationMeta } from "~/components/data-table/data-tab
 import { Button } from "~/components/ui/button";
 import { listMyChanges } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
-import { approvalsPath } from "~/utils/directory-routes";
-import type { Route } from "./+types/submissions";
-import type { action as submitDraftsAction } from "./approvals/submit-drafts";
+import { submissionsPath, submitDraftsPath } from "~/utils/directory-routes";
+import type { Route } from "./+types/index";
+import type { action as submitDraftsAction } from "./submit-drafts";
 
 export const handle = { breadcrumb: "Submissions" };
 
@@ -51,7 +51,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function MyChanges({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { changes, pagination } = loaderData;
-  const base = approvalsPath(params.tenant);
+  const base = submissionsPath(params.tenant);
 
   const [searchParams] = useSearchParams();
   const filtered = Boolean(searchParams.get("status") || searchParams.get("q"));
@@ -109,7 +109,7 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
         filters={filters}
         toolbarExtra={
           draftIds.length > 0 ? (
-            <submitFetcher.Form method="post" action={`${base}/submit-drafts`}>
+            <submitFetcher.Form method="post" action={submitDraftsPath(params.tenant)}>
               {draftIds.map((id) => (
                 <input key={id} type="hidden" name="ids[]" value={id} />
               ))}

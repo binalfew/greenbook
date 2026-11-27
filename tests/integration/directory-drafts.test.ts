@@ -8,11 +8,12 @@ import { loader as editOrganizationLoader } from "~/routes/$tenant/_directory/or
 import { loader as newOrganizationLoader } from "~/routes/$tenant/_directory/organogram/new";
 import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
-import { action as discardAction } from "~/routes/$tenant/_directory/approvals/$changeId.discard";
+import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
+import { action as discardAction } from "~/routes/$tenant/_directory/submissions/$changeId.discard";
 import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
 import { loader as approvalQueueLoader } from "~/routes/$tenant/_directory/approvals/index";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
-import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
+import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions/index";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { createSessionCookie } from "./helpers/session";
@@ -207,7 +208,7 @@ type SubmitResponse = {
 async function submitDrafts(a: Seeded, cookie: string, ids: string[]) {
   const result = await run(() =>
     submitDraftsAction({
-      request: post(a, cookie, "approvals/submit-drafts", { "ids[]": ids }),
+      request: post(a, cookie, "submissions/submit-drafts", { "ids[]": ids }),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -269,8 +270,8 @@ describe("drafts: saving", () => {
       draft.id,
     ]);
 
-    const detail = await changeDetailLoader({
-      request: get(a, a.focal.cookie, `approvals/${draft.id}`),
+    const detail = await submissionDetailLoader({
+      request: get(a, a.focal.cookie, `submissions/${draft.id}`),
       params: { tenant: a.slug, changeId: draft.id },
       context: {},
     } as never);
@@ -282,14 +283,20 @@ describe("drafts: saving", () => {
     const draft = await saveOrgDraft(a, a.focal.cookie, "Private");
 
     for (const cookie of [a.manager.cookie, a.otherFocal.cookie]) {
-      const detail = await run(() =>
-        changeDetailLoader({
-          request: get(a, cookie, `approvals/${draft.id}`),
-          params: { tenant: a.slug, changeId: draft.id },
-          context: {},
-        } as never),
-      );
-      expect(statusOf(detail)).toBe(404);
+      for (const [loader, section] of [
+        [changeDetailLoader, "approvals"],
+        [submissionDetailLoader, "submissions"],
+      ] as const) {
+        const detail = await run(() =>
+          loader({
+            request: get(a, cookie, `${section}/${draft.id}`),
+            params: { tenant: a.slug, changeId: draft.id },
+            context: {},
+          } as never),
+        );
+        // A manager without submit rights has no submissions pages at all.
+        expect([403, 404]).toContain(statusOf(detail));
+      }
     }
 
     const otherList = await submissionsLoader({
@@ -400,7 +407,7 @@ describe("drafts: editing and discarding", () => {
 
     const denied = await run(() =>
       discardAction({
-        request: post(a, a.otherFocal.cookie, `approvals/${draft.id}/discard`),
+        request: post(a, a.otherFocal.cookie, `submissions/${draft.id}/discard`),
         params: { tenant: a.slug, changeId: draft.id },
         context: {},
       } as never),
@@ -410,7 +417,7 @@ describe("drafts: editing and discarding", () => {
 
     const ok = await run(() =>
       discardAction({
-        request: post(a, a.focal.cookie, `approvals/${draft.id}/discard`),
+        request: post(a, a.focal.cookie, `submissions/${draft.id}/discard`),
         params: { tenant: a.slug, changeId: draft.id },
         context: {},
       } as never),
@@ -426,7 +433,7 @@ describe("drafts: editing and discarding", () => {
 
     const response = await run(() =>
       discardAction({
-        request: post(a, a.focal.cookie, `approvals/${draft.id}/discard`),
+        request: post(a, a.focal.cookie, `submissions/${draft.id}/discard`),
         params: { tenant: a.slug, changeId: draft.id },
         context: {},
       } as never),
@@ -502,7 +509,7 @@ describe("drafts: submitting", () => {
 
     const empty = await run(() =>
       submitDraftsAction({
-        request: post(a, a.focal.cookie, "approvals/submit-drafts"),
+        request: post(a, a.focal.cookie, "submissions/submit-drafts"),
         params: { tenant: a.slug },
         context: {},
       }),
@@ -511,7 +518,7 @@ describe("drafts: submitting", () => {
 
     const tooMany = await run(() =>
       submitDraftsAction({
-        request: post(a, a.focal.cookie, "approvals/submit-drafts", {
+        request: post(a, a.focal.cookie, "submissions/submit-drafts", {
           "ids[]": Array.from({ length: 101 }, (_, i) => `id-${i}`),
         }),
         params: { tenant: a.slug },
@@ -527,7 +534,7 @@ describe("drafts: submitting", () => {
 
     const response = await run(() =>
       submitDraftsAction({
-        request: post(a, a.manager.cookie, "approvals/submit-drafts", { "ids[]": [draft.id] }),
+        request: post(a, a.manager.cookie, "submissions/submit-drafts", { "ids[]": [draft.id] }),
         params: { tenant: a.slug },
         context: {},
       }),

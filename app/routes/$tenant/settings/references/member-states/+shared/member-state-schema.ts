@@ -2,10 +2,10 @@ import { z } from "zod/v4";
 
 export const memberStateFormSchema = z.object({
   id: z.string().optional(),
-  fullName: z.string({ error: "Full name is required" }).min(1).max(255),
+  fullName: z.string({ error: "Full name is required" }).min(1, "Full name is required").max(255),
   abbreviation: z
     .string({ error: "Abbreviation is required" })
-    .min(2)
+    .min(2, "Abbreviation must be at least 2 characters")
     .max(20)
     .regex(/^[A-Z0-9]+$/, "Use uppercase letters and digits only"),
   dateJoined: z

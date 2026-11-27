@@ -96,7 +96,7 @@
       "memberState": "Nationalité",
       "memberStatePlaceholder": "Sélectionner un État membre",
       "languages": "Langues",
-      "languagesHelp": "Codes ISO séparés par des virgules (en, fr, am).",
+      "languagesHelp": "Les langues de travail de cette personne.",
       "showEmail": "Afficher l'e-mail publiquement",
       "showPhone": "Afficher le téléphone publiquement"
     },
@@ -117,11 +117,11 @@
       "basics": "Informations",
       "contact": "Contact",
       "officeContact": "Contact officiel",
-      "officeContactHelp": "Contact officiel optionnel pour les chefs d'unité et au-dessus — affiché publiquement en plus de l'e-mail personnel de l'UA.",
+      "officeContactHelp": "Contact officiel, affiché publiquement en plus de l'e-mail personnel de l'UA.",
       "assignments": "Postes occupés",
       "metadata": "Métadonnées",
-      "initialAssignment": "Poste initial (optionnel)",
-      "initialAssignmentHelp": "Associer un poste (optionnel). L'affectation est créée en même temps que la personne — un seul cycle d'approbation."
+      "initialAssignment": "Poste initial",
+      "initialAssignmentHelp": "Le poste occupé par cette personne. L'affectation est créée en même temps que la personne — un seul cycle d'approbation."
     },
     "currentPosition": "Poste actuel",
     "noCurrentAssignments": "Aucun poste actuel.",
@@ -195,7 +195,7 @@
   "changes": {
     "title": "File d'approbation",
     "subtitle": "Examinez et publiez les modifications soumises par les points focaux.",
-    "mineTitle": "Mes soumissions",
+    "mineTitle": "Soumissions",
     "mineSubtitle": "Vos brouillons et vos demandes en attente, approuvées, rejetées et retirées. Sélectionnez des brouillons pour les soumettre ensemble.",
     "historyTitle": "Historique",
     "historySubtitle": "Toutes les demandes approuvées, rejetées ou retirées dans ce tenant.",
@@ -212,7 +212,11 @@
     "detailSubtitle": "Examinez la modification proposée avant d'approuver ou de rejeter.",
     "beforeAfter": {
       "title": "Ce qui va changer",
-      "empty": "Aucune différence à afficher."
+      "empty": "Aucune différence à afficher.",
+      "createTitle": "Fiche proposée",
+      "field": "Champ",
+      "before": "Actuel",
+      "after": "Proposé"
     },
     "columns": {
       "entity": "Entité",

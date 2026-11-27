@@ -4,7 +4,8 @@ import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -96,7 +97,7 @@ async function arrange() {
     where: { tenantId: tenant.id, status: "DRAFT" },
   });
   await submitDraftsAction({
-    request: new Request(`http://localhost/${tenant.slug}/approvals/submit-drafts`, {
+    request: new Request(`http://localhost/${tenant.slug}/submissions/submit-drafts`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie: focalSession },
       body: new URLSearchParams({ "ids[]": change.id }).toString(),
@@ -108,31 +109,58 @@ async function arrange() {
   return { slug: tenant.slug, changeId: change.id, focalSession, managerSession };
 }
 
-async function loadChangeDetail(slug: string, changeId: string, cookie: string) {
-  const result = await changeDetailLoader({
-    request: new Request(`http://localhost/${slug}/approvals/${changeId}`, {
+type Section = "approvals" | "submissions";
+
+/** Open a change on the reviewer's page or the author's; a redirect comes back as its target. */
+async function openChange(section: Section, slug: string, changeId: string, cookie: string) {
+  const loader = section === "approvals" ? changeDetailLoader : submissionDetailLoader;
+  const result = await loader({
+    request: new Request(`http://localhost/${slug}/${section}/${changeId}`, {
       headers: { cookie },
     }),
     params: { tenant: slug, changeId },
     context: {},
-  } as never);
+  } as never).catch((thrown) => thrown);
+  if (result instanceof Response) return { redirectedTo: result.headers.get("Location") };
   return (result as unknown as { data: { backHref: string } }).data;
 }
 
 describe("change detail page Back link", () => {
-  it("returns a focal person to their submissions list", async () => {
+  it("returns a focal person from their submission to their submissions list", async () => {
     const a = await arrange();
 
-    const detail = await loadChangeDetail(a.slug, a.changeId, a.focalSession);
+    const detail = await openChange("submissions", a.slug, a.changeId, a.focalSession);
 
-    expect(detail.backHref).toBe(`/${a.slug}/submissions`);
+    expect(detail).toMatchObject({ backHref: `/${a.slug}/submissions` });
   });
 
-  it("returns a manager to the approvals queue", async () => {
+  it("returns a manager from the review page to the approvals queue", async () => {
     const a = await arrange();
 
-    const detail = await loadChangeDetail(a.slug, a.changeId, a.managerSession);
+    const detail = await openChange("approvals", a.slug, a.changeId, a.managerSession);
 
-    expect(detail.backHref).toBe(`/${a.slug}/approvals`);
+    expect(detail).toMatchObject({ backHref: `/${a.slug}/approvals` });
+  });
+
+  it("sends a focal person who opens the review page to their own submission", async () => {
+    const a = await arrange();
+
+    const detail = await openChange("approvals", a.slug, a.changeId, a.focalSession);
+
+    expect(detail).toEqual({ redirectedTo: `/${a.slug}/submissions/${a.changeId}` });
+  });
+
+  it("does not show a manager someone else's submission on the author's page", async () => {
+    const a = await arrange();
+
+    const result = await submissionDetailLoader({
+      request: new Request(`http://localhost/${a.slug}/submissions/${a.changeId}`, {
+        headers: { cookie: a.managerSession },
+      }),
+      params: { tenant: a.slug, changeId: a.changeId },
+      context: {},
+    } as never).catch((thrown) => thrown);
+
+    expect((result as Response).status).toBe(404);
   });
 });

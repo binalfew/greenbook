@@ -29,6 +29,7 @@ import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { mergeDuplicateReferenceData } from "../../prisma/seed-shared-reference-data";
 import { runSeed } from "../../prisma/seed";
 import { createSessionCookie } from "./helpers/session";
+import { personContactFields } from "./helpers/person-form";
 
 // Reference data — member states, regional groups, organization types,
 // position types, titles — is one set shared by every tenant. These tests
@@ -174,15 +175,18 @@ describe("a tenant created through the UI", () => {
       ),
     );
     expect(positionSaved.status).toBe(302);
-    expect(
-      await prisma.position.count({ where: { tenantId: tenant.id, title: "Executive Secretary" } }),
-    ).toBe(1);
+    const position = await prisma.position.findFirstOrThrow({
+      where: { tenantId: tenant.id, title: "Executive Secretary" },
+    });
 
     const ethiopia = personForm.data.memberStates.find((m) => m.abbreviation === "ETH")!;
     const personSaved = await outcomeOf(async () =>
       personAction(
         args(
           await post(cookie, "/peacefund/people/new", {
+            ...personContactFields(),
+            initialPositionId: position.id,
+            initialStartDate: "2026-01-15",
             firstName: "Selam",
             lastName: "Tesfaye",
             honorific: personForm.data.titles[0].name,

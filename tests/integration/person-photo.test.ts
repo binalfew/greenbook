@@ -6,17 +6,18 @@ import { prisma } from "../setup/integration-setup";
 
 import { loader as publicPhotoLoader } from "~/routes/_public/people/$personId_.photo";
 import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
-import { action as discardAction } from "~/routes/$tenant/_directory/approvals/$changeId.discard";
+import { action as discardAction } from "~/routes/$tenant/_directory/submissions/$changeId.discard";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
-import { action as reopenAction } from "~/routes/$tenant/_directory/approvals/$changeId.reopen";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as reopenAction } from "~/routes/$tenant/_directory/submissions/$changeId.reopen";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { loader as editPersonLoader } from "~/routes/$tenant/_directory/people/$personId_/edit";
 import { loader as tenantPhotoLoader } from "~/routes/$tenant/_directory/photos.$photoId";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
+import { personContactFields } from "./helpers/person-form";
 
 beforeEach(() => {
   clearFlagCache();
@@ -144,7 +145,7 @@ function payloadOf<T>(result: unknown): T {
 }
 
 function personForm(name: string, extra: Record<string, string | File> = {}) {
-  return { firstName: name, lastName: "Photo", ...extra };
+  return { ...personContactFields(), firstName: name, lastName: "Photo", ...extra };
 }
 
 async function savePerson(
@@ -194,7 +195,7 @@ async function submit(a: Seeded, cookie: string, changeId: string) {
   const form = new URLSearchParams({ "ids[]": changeId });
   await run(() =>
     submitDraftsAction({
-      request: new Request(`http://localhost/${a.slug}/approvals/submit-drafts`, {
+      request: new Request(`http://localhost/${a.slug}/submissions/submit-drafts`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded", cookie },
         body: form.toString(),

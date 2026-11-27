@@ -159,7 +159,7 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
               ) : null}
               {person.languages.length > 0 ? (
                 <InfoRow label={t("people.fields.languages")}>
-                  {person.languages.join(", ").toUpperCase()}
+                  {person.languages.map((code) => tc(`languageNames.${code}`, code)).join(", ")}
                 </InfoRow>
               ) : null}
               <InfoRow label={tc("updated")}>{formatDate(person.updatedAt)}</InfoRow>

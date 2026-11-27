@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, data, redirect, useNavigate } from "react-router";
 import { FormError } from "~/components/directory/form-error";
@@ -11,13 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { reopenRejectedChange } from "~/services/directory-changes.server";
+import { discardDraft } from "~/services/directory-changes.server";
 import { requireSubmitContext } from "~/utils/directory-access.server";
-import { changePath, draftEditPath } from "~/utils/directory-routes";
+import { submissionPath, draftsPath } from "~/utils/directory-routes";
 import { directoryDialogConflict } from "~/utils/directory-submit.server";
-import type { Route } from "./+types/$changeId.reopen";
+import type { Route } from "./+types/$changeId.discard";
 
-export const handle = { breadcrumb: "Reopen" };
+export const handle = { breadcrumb: "Discard" };
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireSubmitContext(request);
@@ -27,20 +27,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request, params }: Route.ActionArgs) {
   const { ctx } = await requireSubmitContext(request);
   try {
-    const draft = await reopenRejectedChange(params.changeId, ctx);
-    // Straight into the editor, where the rejection notes are shown. Requests
-    // without an editor (delete, move, assignments) land on the draft itself.
-    return redirect(draftEditPath(params.tenant, draft) ?? changePath(params.tenant, draft.id));
+    await discardDraft(params.changeId, ctx);
   } catch (err) {
     return data({ error: directoryDialogConflict(request, err).message }, { status: 409 });
   }
+  return redirect(draftsPath(params.tenant));
 }
 
-export default function ReopenChangeDialog({ params, actionData }: Route.ComponentProps) {
+export default function DiscardDraftDialog({ params, actionData }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
-  const base = changePath(params.tenant, params.changeId);
+  const base = submissionPath(params.tenant, params.changeId);
   const handleClose = () => navigate(base, { replace: true });
 
   return (
@@ -48,10 +46,10 @@ export default function ReopenChangeDialog({ params, actionData }: Route.Compone
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <RotateCcw className="size-5" />
-            {t("changes.reopenDialog.title")}
+            <Trash2 className="text-destructive size-5" />
+            {t("changes.discardDialog.title")}
           </DialogTitle>
-          <DialogDescription>{t("changes.reopenDialog.description")}</DialogDescription>
+          <DialogDescription>{t("changes.discardDialog.description")}</DialogDescription>
         </DialogHeader>
 
         <Form method="post" className="space-y-4">
@@ -60,7 +58,9 @@ export default function ReopenChangeDialog({ params, actionData }: Route.Compone
             <Button variant="outline" onClick={handleClose} type="button">
               {tc("cancel")}
             </Button>
-            <Button type="submit">{t("changes.reopenDialog.confirm")}</Button>
+            <Button type="submit" variant="destructive">
+              {t("changes.discardDialog.confirm")}
+            </Button>
           </DialogFooter>
         </Form>
       </DialogContent>

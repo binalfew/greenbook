@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { PERSON_LANGUAGES } from "~/utils/constants/person-languages";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Entity payload schemas
@@ -11,6 +12,12 @@ import { z } from "zod/v4";
 // The submission envelope (submitChangeSchema) carries these as `payload`
 // and the service dispatches on entityType at validate-time.
 // ─────────────────────────────────────────────────────────────────────────
+
+const sortOrderField = z.coerce
+  .number({ error: "Sort order must be a number" })
+  .int("Sort order must be a whole number")
+  .min(0, "Sort order must be 0 or greater")
+  .default(0);
 
 const nullableString = (max: number) =>
   z
@@ -64,7 +71,7 @@ export const organizationPayloadSchema = z.object({
   email: nullableString(255),
   phone: nullableString(50),
   address: nullableString(1000),
-  sortOrder: z.coerce.number().int().min(0).default(0),
+  sortOrder: sortOrderField,
   baseVersion: optionalVersion(),
 });
 export type OrganizationPayload = z.infer<typeof organizationPayloadSchema>;
@@ -83,9 +90,24 @@ const initialAssignmentSchema = z.object({
   notes: nullableString(2000),
 });
 
+// Chosen from a fixed list, so a code the picker does not offer is refused
+// and a repeated one is dropped.
+const personLanguages = z
+  .array(z.enum(PERSON_LANGUAGES))
+  .default([])
+  .transform((codes) => [...new Set(codes)]);
+
 export const personPayloadSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required").max(100),
-  lastName: z.string().trim().min(1, "Last name is required").max(100),
+  firstName: z
+    .string({ error: "First name is required" })
+    .trim()
+    .min(1, "First name is required")
+    .max(100),
+  lastName: z
+    .string({ error: "Last name is required" })
+    .trim()
+    .min(1, "Last name is required")
+    .max(100),
   honorific: nullableString(50),
   email: nullableString(255),
   phone: nullableString(50),
@@ -94,7 +116,7 @@ export const personPayloadSchema = z.object({
   bio: nullableString(10_000),
   photoId: nullableCuid(),
   memberStateId: nullableCuid(),
-  languages: z.array(z.string().length(2).max(10)).default([]),
+  languages: personLanguages,
   showEmail: z.coerce.boolean().default(false),
   showPhone: z.coerce.boolean().default(false),
   initialAssignment: initialAssignmentSchema.optional(),
@@ -107,11 +129,11 @@ export const positionPayloadSchema = z.object({
     .string({ error: "Organizational unit is required" })
     .min(1, "Organizational unit is required"),
   typeId: z.string({ error: "Type is required" }).min(1, "Type is required"),
-  title: z.string().trim().min(1, "Title is required").max(255),
+  title: z.string({ error: "Title is required" }).trim().min(1, "Title is required").max(255),
   reportsToId: nullableCuid(),
   description: nullableString(10_000),
   isActive: z.coerce.boolean().default(true),
-  sortOrder: z.coerce.number().int().min(0).default(0),
+  sortOrder: sortOrderField,
   baseVersion: optionalVersion(),
 });
 export type PositionPayload = z.infer<typeof positionPayloadSchema>;
@@ -202,9 +224,19 @@ export type BatchChangeInput = z.infer<typeof batchChangeSchema>;
 
 const formText = (max: number) => z.string().trim().max(max).optional();
 
+const requiredText = (label: string, max: number) =>
+  z
+    .string({ error: `${label} is required` })
+    .trim()
+    .min(1, `${label} is required`)
+    .max(max);
+
+const requiredEmail = (label: string) =>
+  requiredText(label, 255).email("Enter a valid email address");
+
 export const organizationFormSchema = z.object({
   id: z.string().optional(),
-  name: z.string().trim().min(1, "Name is required").max(255),
+  name: z.string({ error: "Name is required" }).trim().min(1, "Name is required").max(255),
   acronym: formText(50),
   typeId: z.string({ error: "Type is required" }).min(1, "Type is required"),
   parentId: z.string().optional(),
@@ -216,20 +248,28 @@ export const organizationFormSchema = z.object({
   email: formText(255),
   phone: formText(50),
   address: formText(1000),
-  sortOrder: z.coerce.number().int().min(0).default(0),
+  sortOrder: sortOrderField,
   baseVersion: optionalVersion(),
 });
 export type OrganizationFormInput = z.infer<typeof organizationFormSchema>;
 
 export const personFormSchema = z.object({
   id: z.string().optional(),
-  firstName: z.string().trim().min(1, "First name is required").max(100),
-  lastName: z.string().trim().min(1, "Last name is required").max(100),
+  firstName: z
+    .string({ error: "First name is required" })
+    .trim()
+    .min(1, "First name is required")
+    .max(100),
+  lastName: z
+    .string({ error: "Last name is required" })
+    .trim()
+    .min(1, "Last name is required")
+    .max(100),
   honorific: formText(50),
-  email: formText(255),
-  phone: formText(50),
-  officeEmail: formText(255),
-  officePhone: formText(50),
+  email: requiredEmail("Email"),
+  phone: requiredText("Phone", 50),
+  officeEmail: requiredEmail("Official email"),
+  officePhone: requiredText("Official phone", 50),
   bio: formText(10_000),
   // `photo` is a newly chosen file, `photoId` the photo the form already
   // showed, `removePhoto` the request to drop it. The action folds the three
@@ -238,7 +278,7 @@ export const personFormSchema = z.object({
   photoId: z.string().optional(),
   removePhoto: z.string().optional(),
   memberStateId: z.string().optional(),
-  languages: z.array(z.string().length(2).max(10)).default([]),
+  languages: personLanguages,
   showEmail: z.coerce.boolean().default(false),
   showPhone: z.coerce.boolean().default(false),
   // Optional initial-assignment fields — only meaningful on CREATE. Kept
@@ -251,24 +291,33 @@ export const personFormSchema = z.object({
 });
 export type PersonFormInput = z.infer<typeof personFormSchema>;
 
+/**
+ * The form for a new person in a tenant that has positions to offer: the
+ * person's first position and its start date are part of the record.
+ */
+export const personCreateFormSchema = personFormSchema.extend({
+  initialPositionId: requiredText("Position", 100),
+  initialStartDate: requiredText("Start date", 50),
+});
+
 export const positionFormSchema = z.object({
   id: z.string().optional(),
   organizationId: z
     .string({ error: "Organizational unit is required" })
     .min(1, "Organizational unit is required"),
   typeId: z.string({ error: "Type is required" }).min(1, "Type is required"),
-  title: z.string().trim().min(1, "Title is required").max(255),
+  title: z.string({ error: "Title is required" }).trim().min(1, "Title is required").max(255),
   reportsToId: z.string().optional(),
   description: formText(10_000),
   isActive: z.coerce.boolean().default(true),
-  sortOrder: z.coerce.number().int().min(0).default(0),
+  sortOrder: sortOrderField,
   baseVersion: optionalVersion(),
 });
 export type PositionFormInput = z.infer<typeof positionFormSchema>;
 
 export const assignPersonFormSchema = z.object({
   positionId: z.string().min(1),
-  personId: z.string().min(1, "Pick a person"),
+  personId: z.string({ error: "Person is required" }).min(1, "Person is required"),
   startDate: z.string({ error: "Start date is required" }).min(1, "Start date is required"),
   notes: formText(2000),
 });

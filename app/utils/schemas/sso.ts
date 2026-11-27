@@ -1,8 +1,11 @@
 import { z } from "zod/v4";
 
 export const createSSOConfigSchema = z.object({
-  provider: z.enum(["OKTA", "AZURE_AD", "GOOGLE", "CUSTOM_OIDC", "CUSTOM_SAML"]),
-  protocol: z.enum(["OIDC", "SAML"]),
+  provider: z.enum(
+    ["OKTA", "AZURE_AD", "GOOGLE", "CUSTOM_OIDC", "CUSTOM_SAML"],
+    "Choose a provider",
+  ),
+  protocol: z.enum(["OIDC", "SAML"], "Choose a protocol"),
   displayName: z.string().optional(),
   issuerUrl: z.string().optional(),
   clientId: z.string().optional(),

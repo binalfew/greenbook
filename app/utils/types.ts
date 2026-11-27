@@ -23,7 +23,9 @@ export const VerificationTypeSchema = z.enum(["reset-password", "change-email"])
 export type VerificationTypes = z.infer<typeof VerificationTypeSchema>;
 
 export const VerifySchema = z.object({
-  [codeQueryParam]: z.string().min(6).max(6),
+  [codeQueryParam]: z
+    .string({ error: "Enter the code from your email" })
+    .length(6, "The code is 6 characters long"),
   [typeQueryParam]: VerificationTypeSchema,
   [targetQueryParam]: z.string(),
   [redirectToQueryParam]: z.string().optional(),
