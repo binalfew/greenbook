@@ -11,7 +11,11 @@ const slugField = z
   )
   .refine((val) => !isReservedSlug(val), RESERVED_SLUG_MESSAGE);
 
-export const createTenantSchema = z.object({
+/** Roles the initial user of a new tenant can be given. */
+export const INITIAL_USER_ROLES = ["focal", "manager"] as const;
+export type InitialUserRole = (typeof INITIAL_USER_ROLES)[number];
+
+const tenantFieldsSchema = z.object({
   name: z
     .string({ error: "Name is required" })
     .min(1, "Name is required")
@@ -24,13 +28,26 @@ export const createTenantSchema = z.object({
   state: z.string().optional(),
   logoUrl: z.string().optional(),
   brandTheme: z.string().optional(),
-  // Optional: existing user to bootstrap as the new tenant's admin. Empty
-  // string from the form means "create the tenant without an initial admin"
-  // (admins can be assigned later via the user-edit form).
-  initialAdminUserId: z
+  // Optional: an existing user who belongs to no tenant, moved into the new
+  // tenant as its first focal person or manager. An empty string from the
+  // form means "no initial user".
+  initialUserId: z
     .string()
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
+  initialUserRole: z.enum(INITIAL_USER_ROLES, "Choose focal person or manager").optional(),
 });
 
-export const updateTenantSchema = createTenantSchema.partial();
+export const createTenantSchema = tenantFieldsSchema.superRefine((value, ctx) => {
+  if (value.initialUserId && !value.initialUserRole) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["initialUserRole"],
+      message: "Choose a role for the initial user",
+    });
+  }
+});
+
+export const updateTenantSchema = tenantFieldsSchema
+  .omit({ initialUserId: true, initialUserRole: true })
+  .partial();
