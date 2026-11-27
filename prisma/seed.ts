@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
 import { PrismaClient } from "../app/generated/prisma/client";
+import { detachRolesFromTenants } from "./seed-role-tenancy";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter });
@@ -219,6 +220,12 @@ async function main() {
     "TENANT",
     "Approves focal submissions and manages users within the user's home tenant",
   );
+
+  // Data move (#18): roles created before roles became platform-wide were
+  // stored against a tenant. Runs after the canonical roles exist so those
+  // keep their names.
+  const detachedRoles = await detachRolesFromTenants(prisma);
+  if (detachedRoles > 0) console.log(`Moved ${detachedRoles} role(s) out of their tenant.`);
 
   // Assign permissions via RolePermission
   console.log("Assigning permissions to roles...");

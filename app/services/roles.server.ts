@@ -100,19 +100,18 @@ function isBuiltIn(role: { name: string; tenantId: string | null }): boolean {
   return role.tenantId === null && BUILT_IN_ROLE_NAMES.includes(role.name);
 }
 
-// `@@unique([tenantId, name])` does not stop two tenant-less roles sharing a
-// name (Postgres treats NULLs as distinct), and a second "admin" there would
-// be a second platform-admin role. Built-in names are refused everywhere so a
-// look-alike can't be created inside a tenant either.
-async function assertRoleNameAvailable(name: string, tenantId: string | null, exceptId?: string) {
+// Every role is a platform-wide definition stored with no tenant, whatever
+// its scope — the same way the built-in roles are. `@@unique([tenantId, name])`
+// does not stop two tenant-less roles sharing a name (Postgres treats NULLs as
+// distinct), and a second "admin" would be a second platform-admin role, so
+// names are checked here.
+async function assertRoleNameAvailable(name: string, exceptId?: string) {
   const wanted = name.trim().toLowerCase();
   if (BUILT_IN_ROLE_NAMES.includes(wanted)) {
     throw new RoleGuardError(`"${name}" is a built-in role name. Choose another name.`);
   }
-  if (tenantId !== null) return;
   const clash = await prisma.role.findFirst({
     where: {
-      tenantId: null,
       name: { equals: name.trim(), mode: "insensitive" },
       ...(exceptId && { id: { not: exceptId } }),
     },
@@ -122,13 +121,13 @@ async function assertRoleNameAvailable(name: string, tenantId: string | null, ex
 }
 
 export async function createRole(input: RoleInput, ctx: TenantServiceContext) {
-  await assertRoleNameAvailable(input.name, input.scope === "GLOBAL" ? null : ctx.tenantId);
+  await assertRoleNameAvailable(input.name);
   const role = await prisma.role.create({
     data: {
       name: input.name,
       description: input.description,
       scope: input.scope,
-      tenantId: input.scope === "GLOBAL" ? null : ctx.tenantId,
+      tenantId: null,
     },
   });
   await writeAudit({
@@ -156,9 +155,7 @@ export async function updateRole(roleId: string, input: RoleInput, ctx: TenantSe
       );
     }
   } else {
-    // A role made GLOBAL leaves its tenant, so its name must be free there.
-    const tenantId = input.scope === "GLOBAL" ? null : existing.tenantId;
-    await assertRoleNameAvailable(input.name, tenantId, roleId);
+    await assertRoleNameAvailable(input.name, roleId);
   }
 
   const role = await prisma.role.update({
@@ -167,7 +164,7 @@ export async function updateRole(roleId: string, input: RoleInput, ctx: TenantSe
       name: input.name,
       description: input.description,
       scope: input.scope,
-      ...(input.scope === "GLOBAL" && { tenantId: null }),
+      tenantId: null,
     },
   });
   await writeAudit({
