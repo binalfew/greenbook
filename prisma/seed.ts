@@ -50,9 +50,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "notification", action: "read", module: "events", description: "Read notifications" },
   { resource: "notification", action: "write", module: "events", description: "Manage notifications" },
   { resource: "notification", action: "delete", module: "events", description: "Delete notifications" },
-  { resource: "webhook", action: "read", module: "events", description: "Read webhook subscriptions" },
-  { resource: "webhook", action: "write", module: "events", description: "Manage webhook subscriptions" },
-  { resource: "webhook", action: "delete", module: "events", description: "Delete webhook subscriptions" },
   { resource: "saved-view", action: "read", module: "data", description: "Read saved views" },
   { resource: "saved-view", action: "write", module: "data", description: "Manage saved views" },
   { resource: "saved-view", action: "delete", module: "data", description: "Delete saved views" },
@@ -152,6 +149,11 @@ export async function runSeed() {
         brandTheme: "auc",
       },
     }));
+
+  // Webhooks were removed from the product: drop their permissions (role
+  // grants cascade) and any stored settings left behind in older databases.
+  await prisma.permission.deleteMany({ where: { resource: "webhook" } });
+  await prisma.systemSetting.deleteMany({ where: { key: { startsWith: "webhooks." } } });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -385,12 +387,6 @@ export async function runSeed() {
       scope: "global",
       enabled: true,
       description: "Allow global admins to impersonate tenant users",
-    },
-    {
-      key: "FF_WEBHOOKS",
-      scope: "tenant",
-      enabled: false,
-      description: "Allow tenant to register webhook subscriptions",
     },
     {
       key: "FF_NOTIFICATIONS",

@@ -206,21 +206,6 @@ enum JobStatus {
   FAILED
 }
 
-enum WebhookStatus {
-  ACTIVE
-  PAUSED
-  DISABLED
-  SUSPENDED
-}
-
-enum DeliveryStatus {
-  PENDING
-  DELIVERED
-  FAILED
-  RETRYING
-  DEAD_LETTER
-}
-
 model Tenant {
   id         String  @id @default(cuid())
   name       String  @unique @db.VarChar(255)
@@ -239,22 +224,21 @@ model Tenant {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users                User[]
-  roles                Role[]
-  invitations          Invitation[]
-  systemSettings       SystemSetting[]
-  notifications        Notification[]
-  webhookSubscriptions WebhookSubscription[]
-  titles               Title[]
-  organizations        Organization[]
-  organizationTypes    OrganizationType[]
-  people               Person[]
-  positions            Position[]
-  positionTypes        PositionType[]
-  positionAssignments  PositionAssignment[]
-  memberStates         MemberState[]
-  regionalGroups       RegionalGroup[]
-  changeRequests       ChangeRequest[]
+  users               User[]
+  roles               Role[]
+  invitations         Invitation[]
+  systemSettings      SystemSetting[]
+  notifications       Notification[]
+  titles              Title[]
+  organizations       Organization[]
+  organizationTypes   OrganizationType[]
+  people              Person[]
+  positions           Position[]
+  positionTypes       PositionType[]
+  positionAssignments PositionAssignment[]
+  memberStates        MemberState[]
+  regionalGroups      RegionalGroup[]
+  changeRequests      ChangeRequest[]
 
   @@index([name])
   @@index([slug])
@@ -413,63 +397,6 @@ model Notification {
   @@index([userId, createdAt])
   @@index([tenantId])
   @@index([tenantId, createdAt])
-}
-
-model WebhookSubscription {
-  id                    String        @id @default(cuid())
-  tenantId              String
-  url                   String        @db.VarChar(500)
-  description           String?       @db.Text
-  events                String[]
-  secret                String        @db.VarChar(255)
-  status                WebhookStatus @default(ACTIVE)
-  version               String        @default("v1") @db.VarChar(10)
-  maxRetries            Int           @default(5)
-  retryBackoffMs        Int[]         @default([1000, 5000, 30000, 300000, 1800000])
-  timeoutMs             Int           @default(10000)
-  consecutiveFailures   Int           @default(0)
-  circuitBreakerOpen    Boolean       @default(false)
-  circuitBreakerResetAt DateTime?
-  headers               Json?
-  metadata              Json?
-  createdBy             String
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-
-  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deliveries WebhookDelivery[]
-
-  @@index([tenantId, status])
-}
-
-model WebhookDelivery {
-  id              String         @id @default(cuid())
-  tenantId        String
-  subscriptionId  String
-  eventType       String         @db.VarChar(100)
-  eventId         String         @db.VarChar(255)
-  payload         Json
-  status          DeliveryStatus @default(PENDING)
-  attempts        Int            @default(0)
-  maxAttempts     Int            @default(5)
-  nextRetryAt     DateTime?
-  responseCode    Int?
-  responseBody    String?        @db.Text
-  responseHeaders Json?
-  latencyMs       Int?
-  errorMessage    String?        @db.Text
-  errorType       String?        @db.VarChar(100)
-  deliveredAt     DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  @@index([subscriptionId, status])
-  @@index([tenantId, eventType, createdAt])
-  @@index([status, nextRetryAt])
-  @@index([eventId])
-  @@index([createdAt])
 }
 
 // ─── Reference Data ────────────────────────────────────
