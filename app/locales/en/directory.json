@@ -250,6 +250,7 @@
       "batchReject": "Reject selected",
       "editDraft": "Edit draft",
       "discard": "Discard draft",
+      "reopen": "Reopen as draft",
       "submitDraft": "Submit for review",
       "submitSelected_one": "Submit {{count}} draft",
       "submitSelected_other": "Submit {{count}} drafts"
@@ -258,6 +259,17 @@
       "title": "Discard this draft?",
       "description": "The draft will be permanently deleted. The published record is not changed.",
       "confirm": "Discard draft"
+    },
+    "reopenDialog": {
+      "title": "Reopen this request?",
+      "description": "A new draft is created with the values you submitted, so you can correct it and submit it again. The rejected request stays in your history.",
+      "confirm": "Reopen as draft"
+    },
+    "reopened": {
+      "rejectedBy": "Rejected by {{name}}",
+      "rejected": "Rejected",
+      "viewRejected": "View the rejected request",
+      "followsRejection": "Follows a rejection"
     },
     "approveDialog": {
       "title": "Approve this change?",
@@ -321,6 +333,9 @@
     "HAS_ACTIVE_ASSIGNMENTS": "This record still has a current assignment. End the assignment first, then delete.",
     "REFERENCED_RECORD_NOT_PUBLISHED": "This change refers to a record that has since been deleted. Reject it or ask for a correction.",
     "NOT_PENDING": "This change is no longer waiting for review. Reload the page to see its current status.",
+    "RECORD_CHANGED": "This record has changed since the request was made, so the request cannot be reopened. Open the record and make the change again.",
+    "ALREADY_REOPENED": "This request has already been reopened. Continue with the draft or submission that followed it.",
+    "NOT_REJECTED": "Only a rejected request can be reopened. Reload the page to see its current status.",
     "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review."
   },
   "status": {

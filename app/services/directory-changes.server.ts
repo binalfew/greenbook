@@ -182,6 +182,28 @@ async function lockEntityAndAssertNoPending(
   }
 }
 
+// The published record's version, or null when it does not exist (never
+// created, or soft-deleted).
+async function liveVersion(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  entityType: DirectoryEntityKey,
+  entityId: string,
+): Promise<{ version: number } | null> {
+  const where = { id: entityId, tenantId, deletedAt: null };
+  const select = { version: true } as const;
+  switch (entityType) {
+    case "ORGANIZATION":
+      return tx.organization.findFirst({ where, select });
+    case "PERSON":
+      return tx.person.findFirst({ where, select });
+    case "POSITION":
+      return tx.position.findFirst({ where, select });
+    case "POSITION_ASSIGNMENT":
+      return tx.positionAssignment.findFirst({ where, select });
+  }
+}
+
 function extractBaseVersion(payload: unknown): number | undefined {
   if (payload && typeof payload === "object" && "baseVersion" in payload) {
     const v = (payload as { baseVersion?: unknown }).baseVersion;
@@ -202,23 +224,7 @@ async function assertVersionMatches(
   baseVersion: number | undefined,
 ) {
   if (baseVersion === undefined) return;
-  const where = { id: entityId, tenantId, deletedAt: null };
-  const select = { version: true } as const;
-  let live: { version: number } | null = null;
-  switch (entityType) {
-    case "ORGANIZATION":
-      live = await tx.organization.findFirst({ where, select });
-      break;
-    case "PERSON":
-      live = await tx.person.findFirst({ where, select });
-      break;
-    case "POSITION":
-      live = await tx.position.findFirst({ where, select });
-      break;
-    case "POSITION_ASSIGNMENT":
-      live = await tx.positionAssignment.findFirst({ where, select });
-      break;
-  }
+  const live = await liveVersion(tx, tenantId, entityType, entityId);
   // `live === null` (not found / soft-deleted) is left to the applier's own
   // NOT_FOUND handling; only a genuine version mismatch is a conflict here.
   if (live && live.version !== baseVersion) {
@@ -452,6 +458,158 @@ export async function discardDraft(id: string, ctx: TenantServiceContext) {
     where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
   });
   if (deleted.count === 0) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
+}
+
+// ─── Reopen a rejected request ──────────────────────────────────────────
+
+// A follow-up in one of these states means the rejection has been acted on:
+// it is being reworked, is back in review, or was published.
+const LIVE_FOLLOW_UP = ["DRAFT", "PENDING", "APPROVED"] as const;
+
+/**
+ * Reopen the caller's own REJECTED request as a new draft carrying the
+ * rejected payload and a link back (`clonedFromId`). The rejected request is
+ * never touched — it stays in history. From here the draft is an ordinary
+ * draft: edit, discard, or `submitDrafts`.
+ *
+ * Refused when the request is someone else's (`NOT_SUBMITTER`), is not
+ * rejected (`NOT_REJECTED`), already has a live follow-up
+ * (`ALREADY_REOPENED`), the record has moved on or is gone
+ * (`RECORD_CHANGED`), the record has a change in review
+ * (`PENDING_REQUEST_EXISTS`), or the author already holds a draft for it
+ * (`DRAFT_EXISTS`).
+ */
+export async function reopenRejectedChange(id: string, ctx: TenantServiceContext) {
+  const rejected = await prisma.changeRequest.findFirst({
+    where: { id, tenantId: ctx.tenantId },
+  });
+  // Someone else's draft is private, so it reads as missing.
+  if (!rejected || (rejected.status === "DRAFT" && rejected.submittedById !== ctx.userId)) {
+    throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  }
+  if (rejected.submittedById !== ctx.userId) {
+    throw new ChangeRequestError(
+      "Only the submitter can reopen a rejected request",
+      403,
+      "NOT_SUBMITTER",
+    );
+  }
+  if (rejected.status !== "REJECTED") {
+    throw new ChangeRequestError(
+      `Cannot reopen: current status is ${rejected.status}`,
+      409,
+      "NOT_REJECTED",
+    );
+  }
+  const entityType = rejected.entityType as DirectoryEntityKey;
+  const entityId = rejected.entityId;
+
+  return prisma.$transaction(async (tx) => {
+    // Serialize a double click on Reopen and, for an existing record, the
+    // author's concurrent draft saves, so the checks below cannot be raced.
+    const reopenKey = `dirreopen:${id}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${reopenKey}))`;
+    if (entityId) {
+      const draftKey = `dirdraft:${ctx.tenantId}:${ctx.userId}:${entityType}:${entityId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${draftKey}))`;
+    }
+
+    const followUp = await tx.changeRequest.findFirst({
+      where: { tenantId: ctx.tenantId, clonedFromId: id, status: { in: [...LIVE_FOLLOW_UP] } },
+      select: { id: true },
+    });
+    if (followUp) {
+      throw new ChangeRequestError(
+        "This request has already been reopened.",
+        409,
+        "ALREADY_REOPENED",
+      );
+    }
+
+    if (entityId) {
+      const live = await liveVersion(tx, ctx.tenantId, entityType, entityId);
+      const baseVersion = extractBaseVersion(rejected.payload);
+      if (!live || (baseVersion !== undefined && live.version !== baseVersion)) {
+        throw new ChangeRequestError(
+          "This record has changed since the request was made.",
+          409,
+          "RECORD_CHANGED",
+        );
+      }
+      const scope = { tenantId: ctx.tenantId, entityType, entityId };
+      const pending = await tx.changeRequest.findFirst({
+        where: { ...scope, status: "PENDING" },
+        select: { id: true },
+      });
+      if (pending) {
+        throw new ChangeRequestError(
+          "A pending change already exists for this record. Withdraw it or wait for review.",
+          409,
+          "PENDING_REQUEST_EXISTS",
+        );
+      }
+      const ownDraft = await tx.changeRequest.findFirst({
+        where: { ...scope, status: "DRAFT", submittedById: ctx.userId },
+        select: { id: true },
+      });
+      if (ownDraft) {
+        throw new ChangeRequestError(
+          "You already have a draft for this record. Edit or discard that draft first.",
+          409,
+          "DRAFT_EXISTS",
+        );
+      }
+    }
+
+    return tx.changeRequest.create({
+      data: {
+        tenantId: ctx.tenantId,
+        entityType,
+        entityId,
+        operation: rejected.operation,
+        payload: rejected.payload as Prisma.InputJsonValue,
+        submittedById: ctx.userId,
+        status: "DRAFT",
+        approvalMode: "REVIEWED",
+        clonedFromId: rejected.id,
+      },
+      include: changeListInclude,
+    });
+  });
+}
+
+/**
+ * The rejected request a change was reopened from — who rejected it and why —
+ * or null when the change is not a reopen.
+ */
+export async function getReopenedFrom(change: { tenantId: string; clonedFromId: string | null }) {
+  if (!change.clonedFromId) return null;
+  return prisma.changeRequest.findFirst({
+    where: { id: change.clonedFromId, tenantId: change.tenantId, status: "REJECTED" },
+    select: {
+      id: true,
+      reviewerNotes: true,
+      reviewedAt: true,
+      reviewedBy: { select: { firstName: true, lastName: true, email: true } },
+    },
+  });
+}
+
+/** Whether `viewerId` may reopen this change: their own, rejected, no live follow-up. */
+export async function canReopenChange(
+  change: { id: string; tenantId: string; status: string; submittedById: string },
+  viewerId: string,
+) {
+  if (change.status !== "REJECTED" || change.submittedById !== viewerId) return false;
+  const followUp = await prisma.changeRequest.findFirst({
+    where: {
+      tenantId: change.tenantId,
+      clonedFromId: change.id,
+      status: { in: [...LIVE_FOLLOW_UP] },
+    },
+    select: { id: true },
+  });
+  return !followUp;
 }
 
 async function submitDraft(id: string, ctx: TenantServiceContext): Promise<ChangeListRow> {

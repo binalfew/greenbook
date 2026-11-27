@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { data } from "react-router";
+import { RejectionNotes } from "~/components/directory/rejection-notes";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
 import { loadEditorDraft } from "~/utils/directory-submit.server";
@@ -51,6 +52,7 @@ export default function NewPerson({ loaderData, params, actionData }: Route.Comp
         <h1 className="text-2xl font-semibold">{t("people.new")}</h1>
         <p className="text-muted-foreground text-sm">{t("people.newSubtitle")}</p>
       </header>
+      <RejectionNotes rejection={loaderData.draft?.rejection} tenant={params.tenant} />
       <PersonEditor
         draftValues={loaderData.draft?.values}
         memberStates={loaderData.memberStates}

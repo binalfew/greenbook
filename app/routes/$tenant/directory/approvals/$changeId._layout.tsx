@@ -1,16 +1,29 @@
-import { ArrowLeft, Check, ExternalLink, Pencil, Send, Trash2, Undo2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ExternalLink,
+  Pencil,
+  RotateCcw,
+  Send,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, data, useFetcher } from "react-router";
 import { ChangeDiff } from "~/components/directory/change-diff";
 import { ChangeStatusPill } from "~/components/directory/change-status-pill";
+import { RejectionNotes } from "~/components/directory/rejection-notes";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
 import {
   ChangeRequestError,
+  canReopenChange,
   computeDiff,
   getChange,
+  getReopenedFrom,
   type BatchResult,
 } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
@@ -45,12 +58,36 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const backHref = canReview
     ? `/${params.tenant}/directory/approvals`
     : `/${params.tenant}/directory/submissions`;
-  return data({ change, diffs, currentUserId: user.id, canReview, backHref });
+  // A reopened request shows the rejection it follows; the author of a
+  // rejected request may reopen it as a draft.
+  const [rejected, canReopen] = await Promise.all([
+    getReopenedFrom(change),
+    canSubmit ? canReopenChange(change, user.id) : false,
+  ]);
+  const reopenedFrom = rejected
+    ? {
+        changeId: rejected.id,
+        notes: rejected.reviewerNotes,
+        reviewerName: rejected.reviewedBy
+          ? `${rejected.reviewedBy.firstName} ${rejected.reviewedBy.lastName}`.trim() ||
+            rejected.reviewedBy.email
+          : null,
+      }
+    : null;
+  return data({
+    change,
+    diffs,
+    currentUserId: user.id,
+    canReview,
+    backHref,
+    canReopen,
+    reopenedFrom,
+  });
 }
 
 export default function ChangeDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
-  const { change, diffs, currentUserId, canReview, backHref } = loaderData;
+  const { change, diffs, currentUserId, canReview, backHref, canReopen, reopenedFrom } = loaderData;
   const base = `/${params.tenant}/directory/approvals`;
   const entitySegment = directoryEntitySegment(change.entityType);
   const entityHref = change.entityId
@@ -117,6 +154,14 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
               </Link>
             </Button>
           ) : null}
+          {canReopen ? (
+            <Button asChild size="sm">
+              <Link to={`${base}/${change.id}/reopen`}>
+                <RotateCcw className="mr-1 size-4" />
+                {t("changes.actions.reopen")}
+              </Link>
+            </Button>
+          ) : null}
           {isDraft ? (
             <>
               {draftEditHref ? (
@@ -160,9 +205,14 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
           {change.approvalMode === "SELF_APPROVED" ? (
             <Badge variant="outline">{t("changes.selfApprovedTag")}</Badge>
           ) : null}
+          {reopenedFrom ? (
+            <Badge variant="outline">{t("changes.reopened.followsRejection")}</Badge>
+          ) : null}
         </div>
         <p className="text-muted-foreground text-sm">{t("changes.detailSubtitle")}</p>
       </header>
+
+      <RejectionNotes rejection={reopenedFrom} tenant={params.tenant} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
