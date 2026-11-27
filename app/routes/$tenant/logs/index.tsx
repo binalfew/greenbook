@@ -11,7 +11,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { DatePicker } from "~/components/ui/date-picker";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireTenantPermission } from "~/utils/acting-tenant.server";
 import { prisma } from "~/utils/db/db.server";
 import type { Route } from "./+types/index";
 
@@ -35,8 +35,7 @@ const ACTION_TYPES = [
 ] as const;
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "audit-log", "read");
-  const tenantId = user.tenantId;
+  const { tenantId } = await requireTenantPermission(request, "audit-log", "read");
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);

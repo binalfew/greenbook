@@ -19,9 +19,4 @@ registerJobHandler("send-email", async (payload) => {
   await sendEmail(options);
 });
 
-// webhook-delivery handler is registered from within webhook-delivery.server.ts
-// itself (which imports registerJobHandler directly) to avoid a forward-reference
-// problem: this file runs early (on app boot) and the service module may not be
-// loadable at that point.
-
 logger.info("[jobs] send-email handler registered");

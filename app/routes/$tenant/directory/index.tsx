@@ -3,13 +3,13 @@ import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { prisma } from "~/utils/db/db.server";
-import { hasPermission, requireFeature } from "~/utils/auth/require-auth.server";
+import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Overview" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { user, tenantId } = await requireFeature(request, "FF_DIRECTORY");
+  const { user, tenantId, canReview, canSubmit } = await requireDirectoryAccess(request);
 
   const [orgCount, personCount, positionCount, pendingCount, myPendingCount] = await Promise.all([
     prisma.organization.count({ where: { tenantId, deletedAt: null } }),
@@ -23,8 +23,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   return data({
     counts: { orgCount, personCount, positionCount, pendingCount, myPendingCount },
-    canReview: hasPermission(user, "directory-change", "read-all"),
-    canSubmit: hasPermission(user, "directory-change", "submit"),
+    canReview,
+    canSubmit,
   });
 }
 

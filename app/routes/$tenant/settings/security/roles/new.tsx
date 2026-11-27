@@ -55,7 +55,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 const SCOPE_OPTIONS = [
-  { value: "TENANT", label: "Tenant — scoped to this organization" },
+  { value: "TENANT", label: "Tenant — applies within each holder's own tenant" },
   { value: "GLOBAL", label: "Global — applies across all tenants" },
   { value: "EVENT", label: "Event — scoped to a specific event" },
 ];

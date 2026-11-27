@@ -20,14 +20,12 @@ import { type Permission, hasPermission } from "~/config/navigation";
 type TenantInfo = {
   name: string;
   slug: string;
-  plan: string;
   logoUrl?: string | null;
 };
 
 const fallbackTenant: TenantInfo = {
   name: "Platform",
   slug: "admin",
-  plan: "enterprise",
 };
 
 type TenantSwitcherProps = {

@@ -1,6 +1,9 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
+import { pathToFileURL } from "node:url";
 import { PrismaClient } from "../app/generated/prisma/client";
+import { addTenantToFlag } from "../app/utils/config/tenant-flag-membership.server";
+import { detachRolesFromTenants } from "./seed-role-tenancy";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter });
@@ -47,9 +50,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "notification", action: "read", module: "events", description: "Read notifications" },
   { resource: "notification", action: "write", module: "events", description: "Manage notifications" },
   { resource: "notification", action: "delete", module: "events", description: "Delete notifications" },
-  { resource: "webhook", action: "read", module: "events", description: "Read webhook subscriptions" },
-  { resource: "webhook", action: "write", module: "events", description: "Manage webhook subscriptions" },
-  { resource: "webhook", action: "delete", module: "events", description: "Delete webhook subscriptions" },
   { resource: "saved-view", action: "read", module: "data", description: "Read saved views" },
   { resource: "saved-view", action: "write", module: "data", description: "Manage saved views" },
   { resource: "saved-view", action: "delete", module: "data", description: "Delete saved views" },
@@ -83,8 +83,11 @@ const UNIQUE_PERMISSIONS = [
   { resource: "directory-change", action: "reject", module: "directory", description: "Reject directory change requests" },
 ];
 
-async function main() {
+/** The whole seed. Safe to run again on a database that already holds data. */
+export async function runSeed() {
   console.log("🌱 Starting seeding...");
+
+  await releaseDeletedUserEmails();
 
   // Create default user statuses
   console.log("Creating default user statuses...");
@@ -146,6 +149,11 @@ async function main() {
         brandTheme: "auc",
       },
     }));
+
+  // Webhooks were removed from the product: drop their permissions (role
+  // grants cascade) and any stored settings left behind in older databases.
+  await prisma.permission.deleteMany({ where: { resource: "webhook" } });
+  await prisma.systemSetting.deleteMany({ where: { key: { startsWith: "webhooks." } } });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -219,6 +227,12 @@ async function main() {
     "TENANT",
     "Approves focal submissions and manages users within the user's home tenant",
   );
+
+  // Data move (#18): roles created before roles became platform-wide were
+  // stored against a tenant. Runs after the canonical roles exist so those
+  // keep their names.
+  const detachedRoles = await detachRolesFromTenants(prisma);
+  if (detachedRoles > 0) console.log(`Moved ${detachedRoles} role(s) out of their tenant.`);
 
   // Assign permissions via RolePermission
   console.log("Assigning permissions to roles...");
@@ -375,12 +389,6 @@ async function main() {
       description: "Allow global admins to impersonate tenant users",
     },
     {
-      key: "FF_WEBHOOKS",
-      scope: "tenant",
-      enabled: false,
-      description: "Allow tenant to register webhook subscriptions",
-    },
-    {
       key: "FF_NOTIFICATIONS",
       scope: "tenant",
       enabled: true,
@@ -431,30 +439,15 @@ async function main() {
 
   // Tenant-scoped flags with `enabled: true` are off by default until a
   // tenant is explicitly added to `enabledForTenants` (see evaluateFlag in
-  // feature-flags.server.ts). Opt the system tenant in so the demo users
-  // can actually reach the admin directory + public directory out of the
-  // box.
-  // Opt the system tenant + the working tenant (misd, if provisioned) into
-  // FF_DIRECTORY / FF_PUBLIC_DIRECTORY. Membership in `enabledForTenants` is
-  // the actual gate for tenant-scoped flags; the `enabled` boolean is
-  // ignored. Dedupe ids so we don't double-add when working tenant fell
-  // back to system.
-  const directoryTenantIds = Array.from(new Set([tenant.id, workingTenant.id]));
-  await prisma.featureFlag.update({
-    where: { key: "FF_DIRECTORY" },
-    data: { enabledForTenants: { set: directoryTenantIds } },
-  });
-  await prisma.featureFlag.update({
-    where: { key: "FF_PUBLIC_DIRECTORY" },
-    data: { enabledForTenants: { set: directoryTenantIds } },
-  });
-
-  // Wipe directory + reference data for the tenant before reseeding so the
-  // DB is deterministic. User-created records, stale change requests, and
-  // old org-tree nodes are all cleared — the rebuild that follows is the
-  // single source of truth for the demo state.
-  console.log("Wiping directory + reference data for tenant...");
-  await wipeDirectoryData(tenant.id);
+  // feature-flags.server.ts); the `enabled` boolean is ignored. Opt the
+  // system tenant + the working tenant (misd, if provisioned) into
+  // FF_DIRECTORY / FF_PUBLIC_DIRECTORY so the demo users can reach the admin
+  // directory + public directory out of the box. This only ever adds: tenants
+  // opted in by hand stay on the list.
+  for (const tenantId of new Set([tenant.id, workingTenant.id])) {
+    await addTenantToFlag(prisma, "FF_DIRECTORY", tenantId);
+    await addTenantToFlag(prisma, "FF_PUBLIC_DIRECTORY", tenantId);
+  }
 
   // Seed default reference data for the system tenant.
   console.log("Seeding default reference data...");
@@ -498,35 +491,6 @@ async function main() {
 }
 
 /**
- * Wipe directory + reference data for a tenant. Order respects every FK
- * so Postgres never complains mid-flight:
- *   - ChangeRequest first (it references User rows with no cascade).
- *   - PositionAssignment before Person (personId is onDelete: Restrict).
- *   - Position before Organization (self-ref SetNull is tolerant, but
- *     organizations own positions so we delete children first).
- *   - Organization tree: null every parentId before deleteMany so the
- *     self-referential Restrict FK doesn't block.
- *   - Then types + reference data — MemberState deletions cascade the
- *     join rows in MemberStateRegion.
- * Tenant, users, roles, permissions, feature flags, settings are all
- * preserved; the demo auth surface is unaffected.
- */
-async function wipeDirectoryData(tenantId: string) {
-  await prisma.changeRequest.deleteMany({ where: { tenantId } });
-  await prisma.positionAssignment.deleteMany({ where: { tenantId } });
-  await prisma.position.deleteMany({ where: { tenantId } });
-  await prisma.person.deleteMany({ where: { tenantId } });
-  await prisma.organization.updateMany({ where: { tenantId }, data: { parentId: null } });
-  await prisma.organization.deleteMany({ where: { tenantId } });
-  await prisma.organizationType.deleteMany({ where: { tenantId } });
-  await prisma.positionType.deleteMany({ where: { tenantId } });
-  await prisma.memberState.deleteMany({ where: { tenantId } });
-  await prisma.regionalGroup.deleteMany({ where: { tenantId } });
-  await prisma.title.deleteMany({ where: { tenantId } });
-  await prisma.language.deleteMany({ where: { tenantId } });
-}
-
-/**
  * Populate reference data for a newly-created tenant. Safe to re-run — each
  * row upserts on `(tenantId, code)`.
  */
@@ -543,23 +507,6 @@ async function seedReferenceData(tenantId: string) {
       where: { tenantId_code: { tenantId, code: t.code } },
       update: {},
       create: { tenantId, sortOrder: i, ...t },
-    });
-  }
-
-  const languages = [
-    { code: "en", name: "English", nativeName: "English" },
-    { code: "fr", name: "French", nativeName: "Français" },
-    { code: "de", name: "German", nativeName: "Deutsch" },
-    { code: "es", name: "Spanish", nativeName: "Español" },
-    { code: "ar", name: "Arabic", nativeName: "العربية" },
-    { code: "am", name: "Amharic", nativeName: "አማርኛ" },
-    { code: "zh", name: "Chinese", nativeName: "中文" },
-  ];
-  for (const [i, l] of languages.entries()) {
-    await prisma.language.upsert({
-      where: { tenantId_code: { tenantId, code: l.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...l },
     });
   }
 }
@@ -666,20 +613,21 @@ const MEMBER_STATES: Array<{
 // Directory reference data — organization types, position types, regional
 // groups, and member states. Conceptually this catalogue belongs to *every*
 // tenant that runs the directory (not just the system tenant), so the seed
-// calls this for each tenant. Idempotent: every write is an upsert keyed on
-// (tenantId, code/abbreviation).
+// calls this for each tenant. Idempotent and create-only: a row is keyed on
+// (tenantId, code/abbreviation) and an existing row is left as it is, so
+// edits made in the app survive a re-run.
 async function seedDirectoryReference(tenantId: string) {
   for (const [i, t] of ORGANIZATION_TYPES.entries()) {
     await prisma.organizationType.upsert({
       where: { tenantId_code: { tenantId, code: t.code } },
-      update: { name: t.name, level: t.level, description: t.description ?? null, sortOrder: i },
+      update: {},
       create: { tenantId, sortOrder: i, ...t, description: t.description ?? null },
     });
   }
   for (const t of POSITION_TYPES) {
     await prisma.positionType.upsert({
       where: { tenantId_code: { tenantId, code: t.code } },
-      update: { name: t.name, hierarchyLevel: t.hierarchyLevel },
+      update: {},
       create: { tenantId, ...t },
     });
   }
@@ -689,43 +637,28 @@ async function seedDirectoryReference(tenantId: string) {
   for (const r of REGIONAL_GROUPS) {
     const row = await prisma.regionalGroup.upsert({
       where: { tenantId_code: { tenantId, code: r.code } },
-      update: { name: r.name },
+      update: {},
       create: { tenantId, code: r.code, name: r.name },
     });
     regionByCode[r.code] = row.id;
   }
   for (const m of MEMBER_STATES) {
-    const state = await prisma.memberState.upsert({
+    const existing = await prisma.memberState.findUnique({
       where: { tenantId_abbreviation: { tenantId, abbreviation: m.abbr } },
-      update: {
-        fullName: m.name,
-        dateJoined: new Date(m.dateJoined),
-        isActive: m.active ?? true,
-      },
-      create: {
+      select: { id: true },
+    });
+    if (existing) continue;
+    const regionId = regionByCode[m.regionCode];
+    await prisma.memberState.create({
+      data: {
         tenantId,
         fullName: m.name,
         abbreviation: m.abbr,
         dateJoined: new Date(m.dateJoined),
         isActive: m.active ?? true,
+        ...(regionId && { regions: { create: { regionalGroupId: regionId } } }),
       },
     });
-    const regionId = regionByCode[m.regionCode];
-    if (regionId) {
-      const existing = await prisma.memberStateRegion.findUnique({
-        where: {
-          memberStateId_regionalGroupId: {
-            memberStateId: state.id,
-            regionalGroupId: regionId,
-          },
-        },
-      });
-      if (!existing) {
-        await prisma.memberStateRegion.create({
-          data: { memberStateId: state.id, regionalGroupId: regionId },
-        });
-      }
-    }
   }
 }
 
@@ -747,8 +680,62 @@ async function seedDirectory(
   // stays self-contained for the system tenant.
   await seedDirectoryReference(tenantId);
 
+  // Starter directory: only for a tenant that holds no directory records at
+  // all. Once a tenant has records the seed leaves every one of them alone —
+  // edited, moved, deleted or added by hand.
+  if (await hasNoDirectoryRecords(tenantId)) {
+    await seedStarterOrganizations(tenantId);
+    // Realistic AUC positions + people + current assignments so the demo has
+    // a browsable directory out of the box.
+    await seedPositionsPeopleAssignments(tenantId);
+  }
+
+  // Demo users: focal person + manager. Idempotent on email.
+  // These accounts belong to the *working* tenant (where focal/manager
+  // exercise the directory workflow), not the directory data tenant.
+  const focalPassword = await hash("focal123", 10);
+  await prisma.user.upsert({
+    where: { email: "focal@africanunion.org" },
+    update: { tenantId: demoUserTenantId },
+    create: {
+      email: "focal@africanunion.org",
+      firstName: "Fola",
+      lastName: "Adeyemi",
+      tenantId: demoUserTenantId,
+      userStatusId: activeStatusId,
+      userRoles: { create: { roleId: focalRoleId } },
+      password: { create: { hash: focalPassword } },
+    },
+  });
+  const managerPassword = await hash("manager123", 10);
+  await prisma.user.upsert({
+    where: { email: "manager@africanunion.org" },
+    update: { tenantId: demoUserTenantId },
+    create: {
+      email: "manager@africanunion.org",
+      firstName: "Marta",
+      lastName: "Okonkwo",
+      tenantId: demoUserTenantId,
+      userStatusId: activeStatusId,
+      userRoles: { create: { roleId: managerRoleId } },
+      password: { create: { hash: managerPassword } },
+    },
+  });
+}
+
+/** True when the tenant has no organizations, positions or people, deleted ones included. */
+async function hasNoDirectoryRecords(tenantId: string) {
+  const [organizations, positions, people] = await Promise.all([
+    prisma.organization.count({ where: { tenantId } }),
+    prisma.position.count({ where: { tenantId } }),
+    prisma.person.count({ where: { tenantId } }),
+  ]);
+  return organizations + positions + people === 0;
+}
+
+async function seedStarterOrganizations(tenantId: string) {
   // Starter org tree: AU (root) → Commission (main organ) → 3 sample
-  // departments / offices. Safe to re-run; keyed on (tenantId, name).
+  // departments / offices.
   const rootType = await prisma.organizationType.findUniqueOrThrow({
     where: { tenantId_code: { tenantId, code: "ROOT" } },
   });
@@ -804,42 +791,6 @@ async function seedDirectory(
     parentId: commission.id,
     sortOrder: 3,
   });
-
-  // Demo users: focal person + manager. Idempotent on email.
-  // These accounts belong to the *working* tenant (where focal/manager
-  // exercise the directory workflow), not the directory data tenant.
-  const focalPassword = await hash("focal123", 10);
-  await prisma.user.upsert({
-    where: { email: "focal@africanunion.org" },
-    update: { tenantId: demoUserTenantId },
-    create: {
-      email: "focal@africanunion.org",
-      firstName: "Fola",
-      lastName: "Adeyemi",
-      tenantId: demoUserTenantId,
-      userStatusId: activeStatusId,
-      userRoles: { create: { roleId: focalRoleId } },
-      password: { create: { hash: focalPassword } },
-    },
-  });
-  const managerPassword = await hash("manager123", 10);
-  await prisma.user.upsert({
-    where: { email: "manager@africanunion.org" },
-    update: { tenantId: demoUserTenantId },
-    create: {
-      email: "manager@africanunion.org",
-      firstName: "Marta",
-      lastName: "Okonkwo",
-      tenantId: demoUserTenantId,
-      userStatusId: activeStatusId,
-      userRoles: { create: { roleId: managerRoleId } },
-      password: { create: { hash: managerPassword } },
-    },
-  });
-
-  // Seed realistic AUC positions + people + current assignments so the
-  // demo has a browsable directory out of the box.
-  await seedPositionsPeopleAssignments(tenantId);
 }
 
 // ─── Positions + People + Assignments ────────────────────────────────────
@@ -847,8 +798,8 @@ async function seedDirectory(
 // Fictional but plausible AUC leadership so the demo directory feels alive.
 // Positions are created first with reporting chains resolved from the title
 // map; people are created with member-state + language links; a current
-// assignment ties each person to their post. All three pass are idempotent:
-// re-seeding simply no-ops or updates in place.
+// assignment ties each person to their post. Runs only for a tenant with no
+// directory records (see seedDirectory).
 
 type SeedPosition = {
   orgAcronym: string;
@@ -1263,13 +1214,28 @@ async function upsertOrg(
   });
 }
 
+// Data move (#14): users deleted before deletion started releasing the email
+// still hold their address. Give them the same placeholder `softDeleteUser`
+// writes (`releasedEmail` in app/services/users.server.ts). Idempotent.
+async function releaseDeletedUserEmails() {
+  const released = await prisma.$executeRaw`
+    UPDATE "User"
+    SET "email" = 'deleted-' || "id" || '@deleted.invalid'
+    WHERE "deletedAt" IS NOT NULL
+      AND "email" <> 'deleted-' || "id" || '@deleted.invalid'`;
+  if (released > 0) console.log(`Released the email of ${released} deleted user(s).`);
+}
+
 export { seedDirectory };
 
-main()
-  .catch((e) => {
-    console.error("❌ Error during seeding:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// Run only as a script (`npx tsx prisma/seed.ts`), not when a test imports `runSeed`.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runSeed()
+    .catch((e) => {
+      console.error("❌ Error during seeding:", e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

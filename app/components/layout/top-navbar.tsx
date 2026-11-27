@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Form, Link, NavLink, useLocation, useMatches, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { LogOut, Search, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { ShortcutHelp } from "~/components/layout/shortcut-help";
 import {
   useKeyboardShortcuts,
@@ -31,10 +31,6 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { NotificationBell } from "~/components/notification-bell";
 import { LanguageSwitcher } from "~/components/language-switcher";
-import {
-  CommandPalette,
-  buildTemplateCommandPaletteActions,
-} from "~/components/layout/command-palette";
 import { ThemeSwitch } from "~/routes/resources/theme-switch";
 import { cn } from "~/utils/misc";
 import type { NavChild, Permission } from "~/config/navigation";
@@ -63,7 +59,6 @@ type TopNavbarProps = {
   currentLanguage?: string;
   settingsChildren?: NavChild[];
   permissions?: Permission[];
-  enabledFeatures?: Record<string, boolean>;
   /** In navbar-only layout mode there is no sidebar to toggle. */
   hideSidebarTrigger?: boolean;
   /**
@@ -75,7 +70,6 @@ type TopNavbarProps = {
   brandTenant?: {
     name: string;
     slug: string;
-    plan: string;
     logoUrl?: string | null;
   } | null;
   brandIsSuperAdmin?: boolean;
@@ -141,7 +135,6 @@ export function TopNavbar({
   currentLanguage,
   settingsChildren = [],
   permissions = [],
-  enabledFeatures,
   hideSidebarTrigger = false,
   brandTenant,
   brandIsSuperAdmin = false,
@@ -151,21 +144,10 @@ export function TopNavbar({
   const location = useLocation();
   const { t } = useTranslation("common");
   const { t: tNav } = useTranslation("nav");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   const shortcuts = useMemo<ShortcutDefinition[]>(() => {
     const defs: ShortcutDefinition[] = [];
-
-    defs.push({
-      id: "search",
-      keys: "⌘ K",
-      description: "Open command palette",
-      group: "global",
-      key: "k",
-      mod: true,
-      handler: () => setSearchOpen((o) => !o),
-    });
 
     defs.push({
       id: "help",
@@ -197,11 +179,6 @@ export function TopNavbar({
 
     return defs;
   }, [navigate, basePrefix]);
-
-  const commandPaletteActions = useMemo(
-    () => buildTemplateCommandPaletteActions(basePrefix, permissions, enabledFeatures),
-    [basePrefix, permissions, enabledFeatures],
-  );
 
   useKeyboardShortcuts(shortcuts, {
     enabled: true,
@@ -274,29 +251,6 @@ export function TopNavbar({
         </div>
 
         <div className="[&_button]:text-primary-foreground [&_button:hover]:bg-primary-foreground/10 [&_button:hover]:text-primary-foreground flex items-center gap-1 px-2 sm:gap-2 sm:px-4">
-          {/* Command palette trigger — mobile icon button + desktop pill. */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground size-8 md:hidden"
-            onClick={() => setSearchOpen(true)}
-            aria-label={t("search")}
-          >
-            <Search className="size-4" />
-          </Button>
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            aria-label={t("search")}
-            className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/70 hover:bg-primary-foreground/20 hidden cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors md:flex"
-          >
-            <Search className="size-4" />
-            <span>{t("search")}</span>
-            <kbd className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/70 pointer-events-none ml-2 inline-flex h-5 items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium select-none">
-              <span className="text-xs">&#8984;</span>K
-            </kbd>
-          </button>
-
           {i18nEnabled && currentLanguage && (
             <div className="hidden sm:flex">
               <LanguageSwitcher
@@ -374,13 +328,6 @@ export function TopNavbar({
           open={shortcutHelpOpen}
           onOpenChange={setShortcutHelpOpen}
           shortcuts={shortcutInfoList}
-        />
-
-        <CommandPalette
-          open={searchOpen}
-          onOpenChange={setSearchOpen}
-          basePrefix={basePrefix}
-          quickActions={commandPaletteActions}
         />
       </header>
 

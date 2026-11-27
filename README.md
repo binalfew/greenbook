@@ -8,7 +8,7 @@ A production-ready template for building multi-tenant SaaS applications on React
 - **Auth + RBAC** — cookie sessions with DB backing, 2FA (TOTP + recovery codes), API keys, impersonation, `requirePermission` / `requireRole` / `requireAnyRole` / `requireFeature` helpers, password history.
 - **SSO** — OpenID Connect (Okta, Azure AD, Google, custom) + SAML 2.0, with a full admin UI and auto-provisioning.
 - **Privacy** — DSAR workflow (ACCESS / RECTIFICATION / ERASURE / etc.) + consent records + audit-log viewer with CSV export.
-- **Events + jobs** — in-process Postgres-backed job queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain event bus, SSE, webhook subscriptions with HMAC signatures and circuit breaker.
+- **Events + jobs** — in-process Postgres-backed job queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain events, SSE.
 - **Data patterns** — saved views, custom field definitions, cross-entity global search, typed data export (CSV/JSON), soft-delete via `deletedAt`.
 - **Reference data** — tenant-scoped `Country` / `Title` / `Language` / `Currency` with full admin CRUD.
 - **Notifications** — in-app bell, SSE listener, toast surface, persisted per-user read state.
@@ -91,7 +91,7 @@ react-router/
 │   │   ├── auth/                # Session + RBAC + API key + audit
 │   │   ├── config/              # env schema + feature flags + settings
 │   │   ├── db/                  # Prisma client
-│   │   ├── events/              # Job queue + domain events + webhooks
+│   │   ├── events/              # Job queue + domain events
 │   │   ├── monitoring/          # Logger + Sentry
 │   │   ├── offline/             # Service-worker registration + sync queue
 │   │   └── schemas/             # Cross-cutting Zod schemas (privacy, sso, notes)
@@ -154,7 +154,6 @@ Everything gateable is behind a flag. Inspect them in the UI at `/$tenant/settin
 | `FF_TWO_FACTOR`    | on      | global | TOTP setup + verify + recovery codes               |
 | `FF_IMPERSONATION` | off     | global | Admin-as-user session switching                    |
 | `FF_REST_API`      | off     | tenant | `/api/*` API-key authenticated routes              |
-| `FF_WEBHOOKS`      | off     | tenant | Tenant can register webhook subscriptions          |
 | `FF_SSE`           | on      | tenant | Server-sent events (notifications + domain events) |
 | `FF_NOTIFICATIONS` | on      | tenant | In-app notification bell + list                    |
 | `FF_PWA`           | off     | global | Service worker + manifest + install/update prompts |
@@ -171,6 +170,7 @@ Required:
 - `SESSION_SECRET`
 - `HONEYPOT_SECRET`
 - `RESEND_API_KEY` (can be a dev placeholder — MSW intercepts in tests)
+- `EMAIL_FROM` (sender of every outgoing email)
 
 Optional but recommended in production:
 

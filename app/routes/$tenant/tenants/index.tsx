@@ -14,13 +14,6 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Tenants" }];
 }
 
-const PLAN_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
-  free: "outline",
-  starter: "secondary",
-  professional: "default",
-  enterprise: "default",
-};
-
 // Tenant management is global-admin-only (policy).
 export async function loader({ request }: Route.LoaderArgs) {
   await requireGlobalAdmin(request);
@@ -90,15 +83,6 @@ export default function TenantsListPage({ loaderData }: Route.ComponentProps) {
       hideOnMobile: true,
     },
     {
-      id: "plan",
-      header: "Plan",
-      cell: (row) => (
-        <Badge variant={PLAN_VARIANT[row.subscriptionPlan] ?? "outline"} className="capitalize">
-          {row.subscriptionPlan}
-        </Badge>
-      ),
-    },
-    {
       id: "users",
       header: "Users",
       align: "center",
@@ -134,7 +118,7 @@ export default function TenantsListPage({ loaderData }: Route.ComponentProps) {
       <div>
         <h2 className="text-foreground text-2xl font-bold">Tenants</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Manage organizations and their subscription plans.
+          Manage the organizations that use Greenbook.
         </p>
       </div>
 

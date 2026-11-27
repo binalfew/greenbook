@@ -62,16 +62,19 @@ describe("built-in roles", () => {
   });
 });
 
-describe("global role names", () => {
+describe("role names", () => {
   it("are unique, whether the clash comes from creating or editing", async () => {
     const { ctx } = await arrange();
     await createRole({ name: "auditor", scope: "GLOBAL" }, ctx);
     await expect(createRole({ name: "Auditor", scope: "GLOBAL" }, ctx)).rejects.toThrow(
       RoleGuardError,
     );
+    await expect(createRole({ name: "auditor", scope: "TENANT" }, ctx)).rejects.toThrow(
+      RoleGuardError,
+    );
 
-    const local = await createRole({ name: "auditor", scope: "TENANT" }, ctx);
-    await expect(updateRole(local.id, { name: "auditor", scope: "GLOBAL" }, ctx)).rejects.toThrow(
+    const other = await createRole({ name: "reviewer", scope: "TENANT" }, ctx);
+    await expect(updateRole(other.id, { name: "auditor", scope: "TENANT" }, ctx)).rejects.toThrow(
       RoleGuardError,
     );
     expect(await prisma.role.count({ where: { name: "auditor", tenantId: null } })).toBe(1);
