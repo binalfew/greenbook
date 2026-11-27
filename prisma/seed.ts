@@ -60,8 +60,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "sso", action: "read", module: "auth", description: "Read SSO configurations" },
   { resource: "sso", action: "write", module: "auth", description: "Manage SSO configurations" },
   { resource: "sso", action: "delete", module: "auth", description: "Delete SSO configurations" },
-  { resource: "two-factor", action: "read", module: "auth", description: "Read 2FA enforcement policy" },
-  { resource: "two-factor", action: "update", module: "auth", description: "Update 2FA enforcement policy" },
   // Directory — focal authors submissions, manager reviews
   { resource: "organization", action: "read", module: "directory", description: "Read organizations" },
   { resource: "organization", action: "write", module: "directory", description: "Create or edit organizations (via approval)" },
@@ -164,6 +162,12 @@ export async function runSeed() {
       create: perm,
     });
   }
+
+  // 2FA was removed (#25): clear what it left behind in an existing database.
+  // Safe to re-run; each step is a no-op once the rows are gone.
+  await prisma.permission.deleteMany({ where: { resource: "two-factor" } });
+  await prisma.systemSetting.deleteMany({ where: { key: "security.require2fa" } });
+  await prisma.verification.deleteMany({ where: { type: { in: ["2fa", "2fa-verify"] } } });
 
   // Create roles
   //
@@ -376,12 +380,6 @@ export async function runSeed() {
   // Seed default feature flags
   console.log("Seeding default feature flags...");
   const DEFAULT_FLAGS = [
-    {
-      key: "FF_TWO_FACTOR",
-      scope: "global",
-      enabled: true,
-      description: "Enable 2FA enrolment and enforcement",
-    },
     {
       key: "FF_IMPERSONATION",
       scope: "global",

@@ -6,7 +6,7 @@ import type { Route } from "./+types/_layout";
 
 /**
  * Auth group layout — renders a branded left panel + form-hosting right panel
- * for every `_auth/*` route (login, signup, forgot-password, 2fa-*, etc.).
+ * for every `_auth/*` route (login, signup, forgot-password, etc.).
  * Reads the language cookie so the in-panel language switcher defaults to the
  * right locale before the user has a tenant session. Resolves the brand
  * theme from the last-visited tenant so auth pages inherit the tenant's

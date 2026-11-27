@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { createCookieSessionStorage, redirect } from "react-router";
 import { prisma } from "~/utils/db/db.server";
-import { sessionKey, unverifiedSessionIdKey, IMPERSONATION_TIMEOUT_MINUTES } from "./constants";
+import { sessionKey, IMPERSONATION_TIMEOUT_MINUTES } from "./constants";
 import { writeAudit } from "./audit.server";
 import { extractClientIp } from "./ip-utils.server";
 
@@ -255,73 +255,6 @@ export async function getImpersonationState(request: Request) {
     impersonatedUserId: impersonatingUserId as string | undefined,
     originalUserId: originalUserId as string | undefined,
   };
-}
-
-// ---------------------------------------------------------------------------
-// 2FA session-gating helpers (Task 7 builds the full flow on top of these)
-// ---------------------------------------------------------------------------
-
-/**
- * Cookie storage dedicated to the unverified (pre-2FA) session id.
- * Kept separate so it cannot be confused with a fully-authenticated session.
- */
-const unverifiedSessionStorage = createCookieSessionStorage({
-  cookie: {
-    name: "unverified_session",
-    sameSite: "lax",
-    path: "/",
-    httpOnly: true,
-    secrets: process.env.SESSION_SECRET.split(","),
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 10, // 10 minutes — enough time to complete 2FA
-  },
-});
-
-/**
- * Retrieve the unverified session ID stored during 2FA pending state.
- * Returns null if not present.
- */
-export async function getUnverifiedSessionId(request: Request): Promise<string | null> {
-  const unverifiedSession = await unverifiedSessionStorage.getSession(
-    request.headers.get("cookie"),
-  );
-  const id = unverifiedSession.get(unverifiedSessionIdKey);
-  return typeof id === "string" ? id : null;
-}
-
-/**
- * Store a session ID in the unverified-session cookie.
- * Returns the Set-Cookie header value — the caller must include it in the response.
- */
-export async function setUnverifiedSessionId(sessionId: string): Promise<string> {
-  const unverifiedSession = await unverifiedSessionStorage.getSession();
-  unverifiedSession.set(unverifiedSessionIdKey, sessionId);
-  return unverifiedSessionStorage.commitSession(unverifiedSession);
-}
-
-/**
- * Promote a session from "unverified" (pre-2FA) to "verified" (fully authenticated).
- * Clears the unverified cookie and sets the main session cookie.
- * Returns an array of Set-Cookie header values to merge into the response.
- */
-export async function promoteUnverifiedToVerified(request: Request): Promise<string[]> {
-  const unverifiedSession = await unverifiedSessionStorage.getSession(
-    request.headers.get("cookie"),
-  );
-  const sessionId = unverifiedSession.get(unverifiedSessionIdKey);
-  if (!sessionId || typeof sessionId !== "string") {
-    throw new Error("No unverified session id to promote");
-  }
-
-  // Destroy unverified cookie
-  const destroyUnverifiedCookie = await unverifiedSessionStorage.destroySession(unverifiedSession);
-
-  // Set verified session
-  const verifiedSession = await authSessionStorage.getSession();
-  verifiedSession.set(sessionKey, sessionId);
-  const setVerifiedCookie = await authSessionStorage.commitSession(verifiedSession);
-
-  return [destroyUnverifiedCookie, setVerifiedCookie];
 }
 
 // ---------------------------------------------------------------------------
