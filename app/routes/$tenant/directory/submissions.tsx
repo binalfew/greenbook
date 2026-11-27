@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { data, useFetcher } from "react-router";
 import { useChangeColumns } from "~/components/directory/change-row-columns";
+import { SubmittedNotice } from "~/components/directory/submitted-notice";
 import { DataTable } from "~/components/data-table/data-table";
 import type { FilterDef, PaginationMeta } from "~/components/data-table/data-table-types";
 import { Button } from "~/components/ui/button";
 import { listMyChanges } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
+import type { SubmittedConfirmation } from "~/utils/directory-routes";
 import type { Route } from "./+types/submissions";
 
 export const handle = { breadcrumb: "Submissions" };
@@ -50,7 +52,10 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
   const base = `/${params.tenant}/directory/approvals`;
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const submitFetcher = useFetcher<{ summary: string }>();
+  const submitFetcher = useFetcher<{
+    summary: string;
+    confirmation: SubmittedConfirmation | null;
+  }>();
 
   // Selection is page-local: clear it whenever the user paginates so a stale
   // id doesn't survive into the next submit.
@@ -89,6 +94,8 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
         <h1 className="text-2xl font-semibold">{t("changes.mineTitle")}</h1>
         <p className="text-muted-foreground text-sm">{t("changes.mineSubtitle")}</p>
       </header>
+
+      <SubmittedNotice confirmation={submitFetcher.data?.confirmation} />
 
       <DataTable
         data={changes}

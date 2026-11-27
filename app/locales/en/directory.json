@@ -255,6 +255,12 @@
       "submitSelected_one": "Submit {{count}} draft",
       "submitSelected_other": "Submit {{count}} drafts"
     },
+    "submitted": {
+      "title_one": "Submitted for review",
+      "title_other": "{{count}} changes submitted for review",
+      "description": "Nothing is published until a manager approves it.",
+      "link": "View my submissions"
+    },
     "discardDialog": {
       "title": "Discard this draft?",
       "description": "The draft will be permanently deleted. The published record is not changed.",
