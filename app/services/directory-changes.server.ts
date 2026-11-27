@@ -4,7 +4,6 @@ import { prisma } from "~/utils/db/db.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { logger } from "~/utils/monitoring/logger.server";
 import {
-  notifyManagersOfSubmission,
   notifyManagersOfSubmissions,
   notifySubmitterOfDecision,
 } from "~/services/directory-notifications.server";
@@ -142,11 +141,12 @@ export async function assertNoPendingConflict(
   tenantId: string,
   entityType: DirectoryEntityKey,
   entityId: string | null | undefined,
+  db: Prisma.TransactionClient = prisma,
 ) {
   if (!entityId) return; // CREATE — never collides (no entity yet).
-  const existing = await prisma.changeRequest.findFirst({
+  const existing = await db.changeRequest.findFirst({
     where: { tenantId, entityType, entityId, status: "PENDING" },
-    select: { id: true, submittedById: true },
+    select: { id: true },
   });
   if (existing) {
     throw new ChangeRequestError(
@@ -175,17 +175,7 @@ async function lockEntityAndAssertNoPending(
   // `$executeRaw` (not `$queryRaw`): pg_advisory_xact_lock returns void, which
   // $queryRaw can't deserialize. executeRaw just runs the statement.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
-  const existing = await tx.changeRequest.findFirst({
-    where: { tenantId, entityType, entityId, status: "PENDING" },
-    select: { id: true },
-  });
-  if (existing) {
-    throw new ChangeRequestError(
-      "A pending change already exists for this record. Withdraw it or wait for review.",
-      409,
-      "PENDING_REQUEST_EXISTS",
-    );
-  }
+  await assertNoPendingConflict(tenantId, entityType, entityId, tx);
 }
 
 // The published record's version, or null when it does not exist (never
@@ -242,6 +232,17 @@ async function assertVersionMatches(
   }
 }
 
+// UPDATE / DELETE / MOVE act on an existing record; CREATE has none yet.
+function assertOperationShape(input: SubmitInput) {
+  if (input.operation === "CREATE") {
+    if (input.entityId) {
+      throw new ChangeRequestError("CREATE must not include entityId", 400, "UNEXPECTED_ENTITY_ID");
+    }
+  } else if (!input.entityId) {
+    throw new ChangeRequestError(`${input.operation} requires entityId`, 400, "MISSING_ENTITY_ID");
+  }
+}
+
 function validatePayload(
   entityType: DirectoryEntityKey,
   operation: ChangeOperationKey,
@@ -263,71 +264,6 @@ function validatePayload(
 
 // ─── Submit ─────────────────────────────────────────────────────────────
 
-export async function submitChange(input: SubmitInput, ctx: TenantServiceContext) {
-  const validated = validatePayload(input.entityType, input.operation, input.payload);
-
-  if (
-    (input.operation === "UPDATE" || input.operation === "DELETE" || input.operation === "MOVE") &&
-    !input.entityId
-  ) {
-    throw new ChangeRequestError(`${input.operation} requires entityId`, 400, "MISSING_ENTITY_ID");
-  }
-  if (input.operation === "CREATE" && input.entityId) {
-    throw new ChangeRequestError("CREATE must not include entityId", 400, "UNEXPECTED_ENTITY_ID");
-  }
-
-  logger.info(
-    {
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      entityType: input.entityType,
-      operation: input.operation,
-      entityId: input.entityId,
-    },
-    "submitting change request",
-  );
-
-  // Lock + conflict-check + insert in one transaction so two concurrent
-  // submits for the same entity can't both create a PENDING row.
-  const change = await prisma.$transaction(async (tx) => {
-    await lockEntityAndAssertNoPending(tx, ctx.tenantId, input.entityType, input.entityId);
-    if (input.entityId && (input.operation === "UPDATE" || input.operation === "MOVE")) {
-      await assertVersionMatches(
-        tx,
-        ctx.tenantId,
-        input.entityType,
-        input.entityId,
-        extractBaseVersion(validated),
-      );
-    }
-    return tx.changeRequest.create({
-      data: {
-        tenantId: ctx.tenantId,
-        entityType: input.entityType,
-        entityId: input.entityId ?? null,
-        operation: input.operation,
-        payload: validated as Prisma.InputJsonValue,
-        submittedById: ctx.userId,
-        status: "PENDING",
-        approvalMode: "REVIEWED",
-      },
-      include: changeListInclude,
-    });
-  });
-
-  emitDomainEvent(ctx.tenantId, "change.submitted", {
-    id: change.id,
-    entityType: change.entityType,
-    entityId: change.entityId,
-    operation: change.operation,
-    submittedById: change.submittedById,
-  });
-
-  await notifyManagersOfSubmission(change, change.submittedBy);
-
-  return change;
-}
-
 // ─── Drafts ─────────────────────────────────────────────────────────────
 //
 // A focal person's save lands as a DRAFT: visible only to its author, never
@@ -347,16 +283,7 @@ export async function saveDraft(
   options: { draftId?: string } = {},
 ) {
   const validated = validatePayload(input.entityType, input.operation, input.payload);
-
-  if (
-    (input.operation === "UPDATE" || input.operation === "DELETE" || input.operation === "MOVE") &&
-    !input.entityId
-  ) {
-    throw new ChangeRequestError(`${input.operation} requires entityId`, 400, "MISSING_ENTITY_ID");
-  }
-  if (input.operation === "CREATE" && input.entityId) {
-    throw new ChangeRequestError("CREATE must not include entityId", 400, "UNEXPECTED_ENTITY_ID");
-  }
+  assertOperationShape(input);
   const entityId = input.entityId ?? null;
 
   // A record with a change in review is locked, so say so now instead of
@@ -368,12 +295,7 @@ export async function saveDraft(
   const saved = await prisma.$transaction(async (tx) => {
     if (options.draftId) {
       const existing = await tx.changeRequest.findFirst({
-        where: {
-          id: options.draftId,
-          tenantId: ctx.tenantId,
-          submittedById: ctx.userId,
-          status: "DRAFT",
-        },
+        where: ownDraftWhere(options.draftId, ctx),
         select: { id: true, entityType: true, operation: true, entityId: true, payload: true },
       });
       if (!existing) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
@@ -400,29 +322,7 @@ export async function saveDraft(
       });
     }
 
-    if (entityId) {
-      // Serialize the author's concurrent saves for this record (double
-      // click) so the check below cannot be raced into two drafts.
-      const key = `dirdraft:${ctx.tenantId}:${ctx.userId}:${input.entityType}:${entityId}`;
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
-      const own = await tx.changeRequest.findFirst({
-        where: {
-          tenantId: ctx.tenantId,
-          submittedById: ctx.userId,
-          entityType: input.entityType,
-          entityId,
-          status: "DRAFT",
-        },
-        select: { id: true },
-      });
-      if (own) {
-        throw new ChangeRequestError(
-          "You already have a draft for this record. Edit or discard that draft first.",
-          409,
-          "DRAFT_EXISTS",
-        );
-      }
-    }
+    await lockOwnDraftSlot(tx, input.entityType, entityId, ctx);
 
     return tx.changeRequest.create({
       data: {
@@ -442,11 +342,15 @@ export async function saveDraft(
   return saved;
 }
 
+// A draft belongs to its author alone: every lookup, update and delete of one
+// goes through this filter.
+function ownDraftWhere(id: string, ctx: TenantServiceContext) {
+  return { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" } as const;
+}
+
 /** The caller's own draft, or null. Other users' drafts are never returned. */
 export async function getOwnDraft(id: string, ctx: TenantServiceContext) {
-  return prisma.changeRequest.findFirst({
-    where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
-  });
+  return prisma.changeRequest.findFirst({ where: ownDraftWhere(id, ctx) });
 }
 
 /** The caller's own draft against a published record, or null. */
@@ -454,8 +358,9 @@ export async function findOwnDraftForEntity(
   entityType: DirectoryEntityKey,
   entityId: string,
   ctx: TenantServiceContext,
+  db: Prisma.TransactionClient = prisma,
 ) {
-  return prisma.changeRequest.findFirst({
+  return db.changeRequest.findFirst({
     where: {
       tenantId: ctx.tenantId,
       submittedById: ctx.userId,
@@ -466,13 +371,33 @@ export async function findOwnDraftForEntity(
   });
 }
 
+// An author holds at most one draft per published record. Takes the author's
+// lock for the record, so concurrent saves (a double click) or a save racing a
+// reopen cannot both get past the check, then refuses if a draft is there.
+// A CREATE has no record yet and is never limited.
+async function lockOwnDraftSlot(
+  tx: Prisma.TransactionClient,
+  entityType: DirectoryEntityKey,
+  entityId: string | null,
+  ctx: TenantServiceContext,
+) {
+  if (!entityId) return;
+  const key = `dirdraft:${ctx.tenantId}:${ctx.userId}:${entityType}:${entityId}`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+  if (await findOwnDraftForEntity(entityType, entityId, ctx, tx)) {
+    throw new ChangeRequestError(
+      "You already have a draft for this record. Edit or discard that draft first.",
+      409,
+      "DRAFT_EXISTS",
+    );
+  }
+}
+
 /** Delete the caller's own draft. Anything else is reported as not found. */
 export async function discardDraft(id: string, ctx: TenantServiceContext) {
   const draft = await getOwnDraft(id, ctx);
   const photos = draft ? await photosTouchedBy(draft) : [];
-  const deleted = await prisma.changeRequest.deleteMany({
-    where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
-  });
+  const deleted = await prisma.changeRequest.deleteMany({ where: ownDraftWhere(id, ctx) });
   if (deleted.count === 0) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
   // Discarding a reopened draft gives up its photo for good, even though the
   // rejected request it came from still names it.
@@ -484,6 +409,21 @@ export async function discardDraft(id: string, ctx: TenantServiceContext) {
 // A follow-up in one of these states means the rejection has been acted on:
 // it is being reworked, is back in review, or was published.
 const LIVE_FOLLOW_UP = ["DRAFT", "PENDING", "APPROVED"] as const;
+
+async function hasLiveFollowUp(
+  db: Prisma.TransactionClient,
+  rejected: { id: string; tenantId: string },
+) {
+  const followUp = await db.changeRequest.findFirst({
+    where: {
+      tenantId: rejected.tenantId,
+      clonedFromId: rejected.id,
+      status: { in: [...LIVE_FOLLOW_UP] },
+    },
+    select: { id: true },
+  });
+  return followUp !== null;
+}
 
 /**
  * Reopen the caller's own REJECTED request as a new draft carrying the
@@ -526,20 +466,11 @@ export async function reopenRejectedChange(id: string, ctx: TenantServiceContext
     entityType === "PERSON" ? await withoutMissingPhoto(rejected.payload) : rejected.payload;
 
   return prisma.$transaction(async (tx) => {
-    // Serialize a double click on Reopen and, for an existing record, the
-    // author's concurrent draft saves, so the checks below cannot be raced.
+    // Serialize a double click on Reopen so the check below cannot be raced.
     const reopenKey = `dirreopen:${id}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${reopenKey}))`;
-    if (entityId) {
-      const draftKey = `dirdraft:${ctx.tenantId}:${ctx.userId}:${entityType}:${entityId}`;
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${draftKey}))`;
-    }
 
-    const followUp = await tx.changeRequest.findFirst({
-      where: { tenantId: ctx.tenantId, clonedFromId: id, status: { in: [...LIVE_FOLLOW_UP] } },
-      select: { id: true },
-    });
-    if (followUp) {
+    if (await hasLiveFollowUp(tx, rejected)) {
       throw new ChangeRequestError(
         "This request has already been reopened.",
         409,
@@ -557,29 +488,8 @@ export async function reopenRejectedChange(id: string, ctx: TenantServiceContext
           "RECORD_CHANGED",
         );
       }
-      const scope = { tenantId: ctx.tenantId, entityType, entityId };
-      const pending = await tx.changeRequest.findFirst({
-        where: { ...scope, status: "PENDING" },
-        select: { id: true },
-      });
-      if (pending) {
-        throw new ChangeRequestError(
-          "A pending change already exists for this record. Withdraw it or wait for review.",
-          409,
-          "PENDING_REQUEST_EXISTS",
-        );
-      }
-      const ownDraft = await tx.changeRequest.findFirst({
-        where: { ...scope, status: "DRAFT", submittedById: ctx.userId },
-        select: { id: true },
-      });
-      if (ownDraft) {
-        throw new ChangeRequestError(
-          "You already have a draft for this record. Edit or discard that draft first.",
-          409,
-          "DRAFT_EXISTS",
-        );
-      }
+      await assertNoPendingConflict(ctx.tenantId, entityType, entityId, tx);
+      await lockOwnDraftSlot(tx, entityType, entityId, ctx);
     }
 
     return tx.changeRequest.create({
@@ -622,15 +532,7 @@ export async function canReopenChange(
   viewerId: string,
 ) {
   if (change.status !== "REJECTED" || change.submittedById !== viewerId) return false;
-  const followUp = await prisma.changeRequest.findFirst({
-    where: {
-      tenantId: change.tenantId,
-      clonedFromId: change.id,
-      status: { in: [...LIVE_FOLLOW_UP] },
-    },
-    select: { id: true },
-  });
-  return !followUp;
+  return !(await hasLiveFollowUp(prisma, change));
 }
 
 async function submitDraft(id: string, ctx: TenantServiceContext): Promise<ChangeListRow> {
@@ -661,7 +563,7 @@ async function submitDraft(id: string, ctx: TenantServiceContext): Promise<Chang
       );
     }
     const claim = await tx.changeRequest.updateMany({
-      where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
+      where: ownDraftWhere(id, ctx),
       data: { status: "PENDING", submittedAt: new Date() },
     });
     if (claim.count === 0) {
@@ -1072,13 +974,7 @@ export async function withdrawChange(id: string, ctx: TenantServiceContext) {
 
 export async function submitAndApply(input: SubmitInput, ctx: TenantServiceContext) {
   const validated = validatePayload(input.entityType, input.operation, input.payload);
-
-  if (
-    (input.operation === "UPDATE" || input.operation === "DELETE" || input.operation === "MOVE") &&
-    !input.entityId
-  ) {
-    throw new ChangeRequestError(`${input.operation} requires entityId`, 400, "MISSING_ENTITY_ID");
-  }
+  assertOperationShape(input);
 
   logger.info(
     {
@@ -1097,8 +993,8 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
     ...(await photosOfRejectionsClosedBy(target)),
   ];
   const result = await prisma.$transaction(async (tx) => {
-    // Same lock as submitChange — a manager's direct edit must not race with a
-    // focal submission (or another manager) for the same entity.
+    // Same lock as submitting a draft — a manager's direct edit must not race
+    // with a focal submission (or another manager) for the same entity.
     await lockEntityAndAssertNoPending(tx, ctx.tenantId, input.entityType, input.entityId);
     if (input.entityId && (input.operation === "UPDATE" || input.operation === "MOVE")) {
       await assertVersionMatches(

@@ -9,10 +9,13 @@ import {
   ChangeRequestError,
   computeDiff,
   rejectChange,
+  saveDraft,
   submitAndApply,
-  submitChange,
+  submitDrafts,
   withdrawChange,
+  type SubmitInput,
 } from "~/services/directory-changes.server";
+import type { TenantServiceContext } from "~/utils/types.server";
 import { clearPublicTenantIdsCache, getPublicTenantIds } from "~/services/public-directory.server";
 import { publicListOrganizationTreeRoots } from "~/services/organizations.server";
 
@@ -93,6 +96,17 @@ function focalCtx(a: Arranged) {
 }
 function managerCtx(a: Arranged) {
   return { tenantId: a.tenant.id, userId: a.managerUser.id };
+}
+
+/**
+ * The focal-person path: save a draft, then send it for review. Returns the
+ * pending change; a refusal at either step is thrown.
+ */
+async function submitChange(input: SubmitInput, ctx: TenantServiceContext) {
+  const draft = await saveDraft(input, ctx);
+  const { succeeded, failed } = await submitDrafts([draft.id], ctx);
+  if (failed[0]) throw new ChangeRequestError(failed[0].message, 409, failed[0].code);
+  return succeeded[0].change;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

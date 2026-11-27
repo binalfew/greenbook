@@ -30,18 +30,9 @@ function displayName(user: Actor | null | undefined, fallback: string): string {
 /**
  * Notify every user in the tenant who holds `directory-change:approve`
  * (excluding the submitter themselves — dual-role users shouldn't review
- * their own submissions from their own inbox).
- */
-export async function notifyManagersOfSubmission(
-  change: ChangeNotificationSeed,
-  submitter: Actor | null,
-): Promise<void> {
-  return notifyManagersOfSubmissions([change], submitter);
-}
-
-/**
- * One notification per approver for a whole submission, however many change
- * requests it carries. All changes must share a tenant and a submitter.
+ * their own submissions from their own inbox): one notification per approver
+ * for a whole submission, however many change requests it carries. All
+ * changes must share a tenant and a submitter.
  */
 export async function notifyManagersOfSubmissions(
   changes: ChangeNotificationSeed[],
