@@ -31,9 +31,9 @@ type Seeded = {
 
 async function arrange(): Promise<Seeded> {
   const status = await seedActiveUserStatus(prisma);
-  // The slug matches the `/system/...` URL the requests below are sent to:
+  // The slug matches the `/medical/...` URL the requests below are sent to:
   // directory routes act on the tenant named in the URL.
-  const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "system" }) });
+  const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "medical" }) });
   const passwordHash = await hash("test-password", 4);
 
   // Two distinct roles per tenant — mirrors the directory seed shape.
@@ -113,7 +113,7 @@ async function arrange(): Promise<Seeded> {
 function buildRequest(cookie: string, body: Record<string, string>): Request {
   const form = new URLSearchParams();
   for (const [k, v] of Object.entries(body)) form.set(k, v);
-  return new Request("http://localhost/system/directory/organizations/new", {
+  return new Request("http://localhost/medical/directory/organizations/new", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -136,7 +136,7 @@ describe("organization-editor action (route-level)", () => {
     // The action redirects on success.
     const response = await organizationEditorAction({
       request,
-      params: { tenant: "system" },
+      params: { tenant: "medical" },
       context: {},
     }).catch((err) => err);
     expect(response instanceof Response).toBe(true);
@@ -169,7 +169,7 @@ describe("organization-editor action (route-level)", () => {
     try {
       await organizationEditorAction({
         request,
-        params: { tenant: "system" },
+        params: { tenant: "medical" },
         context: {},
       });
     } catch (err) {
@@ -205,7 +205,7 @@ describe("organization-editor action (route-level)", () => {
 
     const result = await organizationEditorAction({
       request,
-      params: { tenant: "system" },
+      params: { tenant: "medical" },
       context: {},
     });
 

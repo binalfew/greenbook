@@ -1,5 +1,7 @@
+import { data } from "react-router";
 import { requireActingTenant } from "~/utils/acting-tenant.server";
-import { hasPermission, requireFeature, type AuthUser } from "~/utils/auth/require-auth.server";
+import { hasPermission, type AuthUser } from "~/utils/auth/require-auth.server";
+import { isFeatureEnabled } from "~/utils/config/feature-flags.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import type { TenantServiceContext } from "~/utils/types.server";
 
@@ -37,7 +39,12 @@ export async function requireDirectoryAccess(
   options: { write?: DirectoryResource } = {},
 ): Promise<DirectoryAccess> {
   const { user, tenantId } = await requireActingTenant(request);
-  await requireFeature(request, "FF_DIRECTORY");
+  // The directory is on or off per tenant, and the tenant that counts is the
+  // acting one, for the global admin too: a tenant that is not opted in
+  // (the system tenant never is) has no directory for anyone.
+  if (!(await isFeatureEnabled("FF_DIRECTORY", { tenantId }))) {
+    throw data({ error: "Not Found" }, { status: 404 });
+  }
   const canDirect = options.write ? hasPermission(user, options.write, "write") : false;
   const canSubmit = hasPermission(user, "directory-change", "submit");
   const canReview = hasPermission(user, "directory-change", "read-all");

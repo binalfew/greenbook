@@ -42,8 +42,10 @@ async function arrange() {
     data: { roleId: managerRole.id, permissionId: readOrgs.id, access: "any" },
   });
 
-  // The system tenant is already on both lists, as the seed leaves it.
-  await seedNewTenantFlags(prisma, [system.id]);
+  // A working tenant is already on both lists, as the seed leaves its demo
+  // tenant. The system tenant, the admin's home, is on neither.
+  const existing = await prisma.tenant.create({ data: buildTenant() });
+  await seedNewTenantFlags(prisma, [existing.id]);
   await prisma.featureFlag.create({
     data: { key: "FF_PWA", scope: "global", enabled: true },
   });
@@ -65,7 +67,7 @@ async function arrange() {
     return createSessionCookie(prisma, manager.id);
   };
 
-  return { system, adminCookie: await createSessionCookie(prisma, admin.id), addManager };
+  return { existing, adminCookie: await createSessionCookie(prisma, admin.id), addManager };
 }
 
 function get(cookie: string, path: string): Request {
@@ -161,12 +163,12 @@ describe("creating a tenant in the UI", () => {
   it("leaves the tenants already opted in where they were", async () => {
     const a = await arrange();
     // Warm the search gate so a stale answer would show up below.
-    expect(await getPublicTenantIds()).toEqual([a.system.id]);
+    expect(await getPublicTenantIds()).toEqual([a.existing.id]);
 
     const tenant = await createTenantInUi(a.adminCookie, "medical");
 
-    expect(await isFeatureEnabled("FF_DIRECTORY", { tenantId: a.system.id })).toBe(true);
-    expect((await getPublicTenantIds()).sort()).toEqual([a.system.id, tenant.id].sort());
+    expect(await isFeatureEnabled("FF_DIRECTORY", { tenantId: a.existing.id })).toBe(true);
+    expect((await getPublicTenantIds()).sort()).toEqual([a.existing.id, tenant.id].sort());
   });
 
   it("lets a manager of the new tenant see and open the Directory section", async () => {
@@ -199,7 +201,7 @@ describe("the global admin changes a tenant's features", () => {
     expect(fresh).toMatchObject({ FF_DIRECTORY: false, FF_PUBLIC_DIRECTORY: false });
     // A global flag has no per-tenant enabled list, so it is not offered.
     expect(fresh).not.toHaveProperty("FF_PWA");
-    expect(await listedFlags(a.adminCookie, a.system.id)).toMatchObject({
+    expect(await listedFlags(a.adminCookie, a.existing.id)).toMatchObject({
       FF_DIRECTORY: true,
       FF_PUBLIC_DIRECTORY: true,
     });
@@ -229,7 +231,7 @@ describe("the global admin changes a tenant's features", () => {
 
     expect(await setTenantFlag(a.adminCookie, tenant.id, "FF_PUBLIC_DIRECTORY", false)).toBe(200);
 
-    expect(await getPublicTenantIds()).toEqual([a.system.id]);
+    expect(await getPublicTenantIds()).toEqual([a.existing.id]);
     // The directory itself is a separate switch and stays on.
     expect(await isFeatureEnabled("FF_DIRECTORY", { tenantId: tenant.id })).toBe(true);
 

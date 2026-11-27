@@ -39,6 +39,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   flagKeys.forEach((key, i) => {
     enabledFeatures[key] = flagValues[i];
   });
+  // The Directory section belongs to the tenant being viewed, for the global
+  // admin too: it is hidden in a tenant that is not opted in, which the
+  // system tenant never is.
+  enabledFeatures[FEATURE_FLAG_KEYS.DIRECTORY] = await isFeatureEnabled(
+    FEATURE_FLAG_KEYS.DIRECTORY,
+    { tenantId: tenant.id },
+  );
 
   const currentLanguage = getLangFromRequest(request) ?? "en";
 

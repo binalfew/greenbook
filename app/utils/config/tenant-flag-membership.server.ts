@@ -55,3 +55,9 @@ export async function addTenantToNewTenantFlags(db: FlagDb, tenantId: string) {
     await addTenantToFlag(db, flagKey, tenantId);
   }
 }
+
+/**
+ * The flags that make a tenant a working directory tenant. The system tenant
+ * is the global admin's home only and is never put on either list.
+ */
+export const DIRECTORY_FLAGS: readonly string[] = ["FF_DIRECTORY", "FF_PUBLIC_DIRECTORY"];

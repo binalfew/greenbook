@@ -213,7 +213,7 @@ Post-MVP polish that landed alongside the cross-tenant directory tier:
 - **Reference-id hydration in diffs** (`computeDiff` in `directory-changes.server.ts`). Per-field cuid references — `parentId`, `typeId`, `organizationId`, `reportsToId`, `memberStateId`, `personId`, `positionId` — resolve to human-readable names in the approval UI. Uses `REFERENCE_FIELDS` + `resolverFor` tables per `DirectoryEntityKey`; each resolver runs a single `findMany` across all referenced ids.
 - **`AssignmentTimeline` on public pages.** `publicGetPerson` now returns `history: PublicPersonTimelineEntry[]` (capped at 50, same ceiling as `publicGetOrganization.positions`). The public person + position detail pages drop the hand-rolled list renderer and render `AssignmentTimeline` with `mode="byPerson"` / `"byPosition"`.
 - **i18n'd tree toolbar.** `HierarchyTree` accepts a `labels` prop with `expandAll / collapseAll / moving / placeholder / resultCount`. `OrganizationHierarchyTree` threads it through; both the admin (`directory` namespace) and public (`directory-public` namespace) routes pass locale-bound values.
-- **Seed fix.** `FF_DIRECTORY` is now opted into the system tenant in the same post-DEFAULT_FLAGS block as `FF_PUBLIC_DIRECTORY`. Tenant-scoped flags ignore the `enabled` boolean — membership in `enabledForTenants` is the actual gate.
+- **Seed fix.** The seed opts its demo tenant into `FF_DIRECTORY` and `FF_PUBLIC_DIRECTORY` in the post-DEFAULT_FLAGS block. Tenant-scoped flags ignore the `enabled` boolean — membership in `enabledForTenants` is the actual gate.
 
 ### Routes (admin, `app/routes/$tenant/directory/`)
 
@@ -280,12 +280,14 @@ Seeded roles per tenant (in `prisma/seed.ts`):
 - `manager` — everything `focal` has + entity writes + `directory-change:{read-all, approve, reject}`
 - `admin` (existing) — picks up every permission via the seed's "all permissions" assignment
 
-Demo users: `admin@africanunion.org / admin123`, `manager@africanunion.org / manager123`, `focal@africanunion.org / focal123`, and `user@africanunion.org / user123` (plain directory reader — lands on `/`, not a tenant workspace). The focal and manager accounts are created in the `misd` tenant when it has been provisioned, otherwise in `system`.
+Demo users: `admin@africanunion.org / admin123`, `manager@africanunion.org / manager123`, `focal@africanunion.org / focal123`, and `user@africanunion.org / user123` (plain directory reader — lands on `/`, not a tenant workspace). The admin's home is the `system` tenant. The focal, manager and reader accounts belong to the demo tenant, which also carries the starter organizations: `misd` when that tenant exists, otherwise a `demo` tenant the seed creates.
+
+The `system` tenant is admin-only: it holds no directory records, is on neither directory flag's enabled list, and no user in it can hold a tenant-scope role (`SystemTenantRoleError` in `app/services/users.server.ts`, `SystemTenantDirectoryError` in `app/services/tenant-features.server.ts`). The seed step `emptySystemTenantDirectory` (`prisma/seed-system-tenant.ts`) moves anything an older database kept there into the demo tenant.
 
 ### Feature flags
 
-- `FF_DIRECTORY` — gates the `/$tenant/directory/*` admin surface (default on for system tenant).
-- `FF_PUBLIC_DIRECTORY` — **opts the tenant into the unified public directory** (default on for system tenant). Public helpers aggregate across opted-in tenants via `getPublicTenantIds()`.
+- `FF_DIRECTORY` — gates the `/$tenant/directory/*` admin surface, evaluated against the tenant in the URL for every user, the global admin included (on for new tenants and the seed's demo tenant; never for the system tenant).
+- `FF_PUBLIC_DIRECTORY` — **opts the tenant into the unified public directory** (on for new tenants and the seed's demo tenant; never for the system tenant). Public helpers aggregate across opted-in tenants via `getPublicTenantIds()`.
 
 ### Deviations + open issues
 
