@@ -23,6 +23,13 @@ async function arrange() {
       { name: "user", scope: "GLOBAL" },
     ],
   });
+  // ...and opts the tenant into the directory flags, so those must exist too.
+  await prisma.featureFlag.createMany({
+    data: [
+      { key: "FF_DIRECTORY", scope: "tenant", enabled: true },
+      { key: "FF_PUBLIC_DIRECTORY", scope: "tenant", enabled: true },
+    ],
+  });
   const admin = await prisma.user.create({
     data: {
       ...buildUser({ tenantId: system.id, userStatusId: status.id }),

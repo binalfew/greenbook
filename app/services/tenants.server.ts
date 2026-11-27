@@ -2,6 +2,8 @@ import type { Prisma, Tenant } from "~/generated/prisma/client";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { bootstrapNewTenant } from "~/services/tenant-setup.server";
 import { writeAudit } from "~/utils/auth/audit.server";
+import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { addTenantToNewTenantFlags } from "~/utils/config/tenant-flag-membership.server";
 import { prisma } from "~/utils/db/db.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import {
@@ -192,20 +194,29 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
   const slug = input.slug ?? (await generateUniqueSlug(input.name));
   if (input.slug) await assertSlugAvailable(input.slug);
 
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: input.name,
-      slug,
-      email: input.email,
-      phone: input.phone,
-      city: input.city,
-      state: input.state,
-      address: input.address,
-      logoUrl: input.logoUrl ?? null,
-      brandTheme: input.brandTheme ?? "",
-      subscriptionPlan: input.subscriptionPlan ?? "free",
-    },
+  // The tenant and its place on the directory flags' enabled lists are written
+  // together, so a tenant that exists is one whose managers and focal persons
+  // can open the directory and whose approved people are searchable.
+  const tenant = await prisma.$transaction(async (tx) => {
+    const created = await tx.tenant.create({
+      data: {
+        name: input.name,
+        slug,
+        email: input.email,
+        phone: input.phone,
+        city: input.city,
+        state: input.state,
+        address: input.address,
+        logoUrl: input.logoUrl ?? null,
+        brandTheme: input.brandTheme ?? "",
+        subscriptionPlan: input.subscriptionPlan ?? "free",
+      },
+    });
+    await addTenantToNewTenantFlags(tx, created.id);
+    return created;
   });
+  clearFlagCache();
+  clearPublicTenantIdsCache();
 
   // Every new tenant gets its standard `admin` and `user` roles wired up the
   // moment it's created. The optional initialAdminUserId, when provided,
