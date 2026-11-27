@@ -139,3 +139,19 @@ export async function notifySubmitterOfDecision(
     logger.error({ err, changeId: change.id, outcome }, "failed to notify submitter of decision");
   }
 }
+
+/**
+ * The page, relative to the tenant, that a workflow notification is about:
+ * the change itself, or the approval queue when one notification covers a
+ * whole submission. Null for a notification this module did not send.
+ */
+export function directoryNotificationPath(notification: {
+  type: string;
+  data: unknown;
+}): string | null {
+  if (!notification.type.startsWith("directory.change.")) return null;
+  const data = (notification.data ?? {}) as { changeId?: unknown; changeIds?: unknown };
+  if (typeof data.changeId === "string") return `/directory/approvals/${data.changeId}`;
+  if (Array.isArray(data.changeIds)) return "/directory/approvals";
+  return null;
+}

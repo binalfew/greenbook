@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { data } from "react-router";
+import { RejectionNotes } from "~/components/directory/rejection-notes";
 import { getPosition } from "~/services/positions.server";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
@@ -51,6 +52,7 @@ export default function EditPosition({ loaderData, params, actionData }: Route.C
         <h1 className="text-2xl font-semibold">{t("positions.edit")}</h1>
         <p className="text-muted-foreground text-sm">{t("positions.editSubtitle")}</p>
       </header>
+      <RejectionNotes rejection={loaderData.draft?.rejection} tenant={params.tenant} />
       <PositionEditor
         position={position}
         draftValues={loaderData.draft?.values}
