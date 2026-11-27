@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
+import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as referencesLoader } from "~/routes/$tenant/settings/references/index";
@@ -21,6 +21,7 @@ async function arrange() {
       { name: "user", scope: "GLOBAL" },
     ],
   });
+  await seedNewTenantFlags(prisma);
   const perm = await prisma.permission.create({
     data: { resource: "reference-data", action: "read", module: "system" },
   });

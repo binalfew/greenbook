@@ -1,4 +1,16 @@
-import { Building2, Clock, Mail, MapPin, Pencil, Phone, Shield, Trash2, Users } from "lucide-react";
+import {
+  Building2,
+  Clock,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Shield,
+  ToggleLeft,
+  Trash2,
+  Users,
+} from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -29,6 +41,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function TenantDetailPage({ loaderData }: Route.ComponentProps) {
   const { tenant } = loaderData;
   const basePrefix = useBasePrefix();
+  const { t } = useTranslation("settings");
 
   const brandLabel =
     BRAND_THEMES.find((t) => t.value === (tenant.brandTheme ?? ""))?.label ?? "Default";
@@ -60,6 +73,12 @@ export default function TenantDetailPage({ loaderData }: Route.ComponentProps) {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link to={`${basePrefix}/tenants`}>Back</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`${basePrefix}/tenants/${tenant.id}/features`}>
+              <ToggleLeft className="mr-1.5 size-3.5" />
+              {t("tenantFeaturesLink")}
+            </Link>
           </Button>
           <Button size="sm" asChild>
             <Link to={`${basePrefix}/tenants/${tenant.id}/edit`}>
