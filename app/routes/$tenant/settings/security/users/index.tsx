@@ -2,11 +2,9 @@ import { Mail, Pencil, Plus, Shield, Trash2, User, Users } from "lucide-react";
 import { Link, data } from "react-router";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef, PaginationMeta } from "~/components/data-table/data-table-types";
-import { RoleScope } from "~/generated/prisma/client";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { listUsersPaginated } from "~/services/users.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
-import { invariantResponse } from "~/utils/invariant";
+import { requireTenantPermission } from "~/utils/acting-tenant.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Users" };
@@ -23,10 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "user", "read");
-  const tenantId = user.tenantId;
-  invariantResponse(tenantId, "Missing tenant context", { status: 403 });
-  const isGlobalAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+  const { tenantId, isGlobalAdmin } = await requireTenantPermission(request, "user", "read");
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -44,7 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     : {};
 
   // Global admins see every user (including tenantless "regular" users).
-  // Tenant admins see only their own tenant's users.
+  // Everyone else sees the users of the tenant in the URL, which is their own.
   const { items, totalCount } = await listUsersPaginated(isGlobalAdmin ? undefined : tenantId, {
     where: searchWhere,
     page,

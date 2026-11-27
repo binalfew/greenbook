@@ -119,7 +119,9 @@ describe("a tenant-scope role created by an admin", () => {
     const a = await arrange();
     await createRoleAs(a.adminCookie, "editor", "TENANT");
 
-    const newUser = await newUserLoader(args(get(a.managerCookie)));
+    const newUser = await newUserLoader(
+      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
+    );
     expect(names(newUser.data.roles)).toEqual(["editor", "focal", "manager"]);
 
     const invite = await inviteLoader(
@@ -177,7 +179,9 @@ describe("roles stored against a tenant the old way", () => {
       _count: { rolePermissions: 1, userRoles: 1 },
     });
 
-    const newUser = await newUserLoader(args(get(a.managerCookie)));
+    const newUser = await newUserLoader(
+      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
+    );
     expect(names(newUser.data.roles)).toEqual(["editor", "focal", "manager"]);
   });
 

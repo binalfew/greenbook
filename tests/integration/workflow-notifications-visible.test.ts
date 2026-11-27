@@ -10,6 +10,7 @@ import { action as submitDraftsAction } from "~/routes/$tenant/directory/approva
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { loader as openNotificationLoader } from "~/routes/$tenant/notifications/$notificationId.open";
 import { loader as inboxLoader } from "~/routes/$tenant/notifications/index";
+import { action as markAllReadAction } from "~/routes/$tenant/notifications/mark-all-read";
 import { action as newTenantAction } from "~/routes/$tenant/tenants/new";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { csrf } from "~/utils/auth/csrf.server";
@@ -321,6 +322,30 @@ describe("in a tenant created through the UI", () => {
       status: 200,
       change: { id: changeId, status: "REJECTED" },
     });
+  });
+
+  it("keeps the inbox to the user's own tenant", async () => {
+    const a = await arrange();
+    const other = await prisma.tenant.create({ data: buildTenant() });
+    const path = `/${other.slug}/notifications`;
+
+    const page = await run(() =>
+      inboxLoader({
+        request: get(a.manager.cookie, path),
+        params: { tenant: other.slug },
+        context: {},
+      } as never),
+    );
+    expect(statusOf(page)).toBe(403);
+
+    const marked = await run(async () =>
+      markAllReadAction({
+        request: await post(`${path}/mark-all-read`, a.manager.cookie, {}),
+        params: { tenant: other.slug },
+        context: {},
+      } as never),
+    );
+    expect(statusOf(marked)).toBe(403);
   });
 
   it("does not let one user open another user's notification", async () => {

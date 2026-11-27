@@ -15,10 +15,9 @@ import {
   setUserTenantAssignment,
   SystemTenantRoleError,
 } from "~/services/users.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireTenantPermission } from "~/utils/acting-tenant.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
-import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
 import { createUserSchema } from "~/utils/schemas/security";
 import type { Route } from "./+types/new";
@@ -30,10 +29,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "user", "create");
-  const tenantId = user.tenantId;
-  invariantResponse(tenantId, "Missing tenant context", { status: 403 });
-  const isGlobalAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+  const { isGlobalAdmin } = await requireTenantPermission(request, "user", "create");
 
   const [statuses, roles, tenants] = await Promise.all([
     prisma.userStatus.findMany({
@@ -63,10 +59,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "user", "create");
-  const tenantId = user.tenantId;
-  invariantResponse(tenantId, "Missing tenant context", { status: 403 });
-  const isGlobalAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+  const { user, tenantId, isGlobalAdmin } = await requireTenantPermission(
+    request,
+    "user",
+    "create",
+  );
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
@@ -113,7 +110,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     // the tenant-assignment helper so the user actually gets the tenant's
     // admin role + permissions (and the tenant gets bootstrapped if needed).
     // For tenant admins (not global), `targetTenantId` was stripped above so
-    // the new user inherits ctx.tenantId from createUser; no role wiring here
+    // the new user joins the tenant in the URL, their own; no role wiring here
     // — that's what the existing role-assignment UI is for.
     if (isGlobalAdmin && targetTenantId !== undefined && targetTenantId !== null) {
       await setUserTenantAssignment(created.id, targetTenantId, ctx);

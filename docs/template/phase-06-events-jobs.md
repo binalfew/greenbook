@@ -37,7 +37,7 @@ UI:
 - `$tenant/notifications/index.tsx` — the full list.
 - `$tenant/notifications/mark-all-read.tsx`, `$notificationId.read.tsx`, `$notificationId.open.tsx`, `$notificationId.delete.tsx` — actions.
 
-The routes call `requireFeature(request, "FF_NOTIFICATIONS")`. There are no notification permissions: access follows ownership.
+The routes call `requireTenantFeature(request, "FF_NOTIFICATIONS")` from `~/utils/acting-tenant.server`, which evaluates the flag for the tenant in the URL. There are no notification permissions: access follows ownership.
 
 The directory workflow is the one producer: `~/services/directory-notifications.server.ts` notifies approvers when drafts are submitted and the submitter when a change is approved or rejected. Failures there are logged and never undo the change.
 
