@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { data } from "react-router";
+import { RejectionNotes } from "~/components/directory/rejection-notes";
 import { getPerson } from "~/services/people.server";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
@@ -19,12 +20,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const [person, memberStates, titles] = await Promise.all([
     getPerson(params.personId, tenantId),
     prisma.memberState.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
+      where: { deletedAt: null, isActive: true },
       orderBy: { fullName: "asc" },
       select: { id: true, fullName: true, abbreviation: true },
     }),
     prisma.title.findMany({
-      where: { tenantId, isActive: true },
+      where: { isActive: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, name: true },
     }),
@@ -44,6 +45,7 @@ export default function EditPerson({ loaderData, params, actionData }: Route.Com
         <h1 className="text-2xl font-semibold">{t("people.edit")}</h1>
         <p className="text-muted-foreground text-sm">{t("people.editSubtitle")}</p>
       </header>
+      <RejectionNotes rejection={loaderData.draft?.rejection} tenant={params.tenant} />
       <PersonEditor
         person={person}
         draftValues={loaderData.draft?.values}

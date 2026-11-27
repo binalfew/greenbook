@@ -1,8 +1,10 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
+import { CONFIRM_DUPLICATES_FIELD } from "~/components/directory/possible-duplicates";
 import enDirectory from "~/locales/en/directory.json";
 import frDirectory from "~/locales/fr/directory.json";
+import { findPossibleDuplicatePeople } from "~/services/person-duplicates.server";
 import {
   PhotoUploadError,
   keepablePhotoId,
@@ -11,7 +13,7 @@ import {
 } from "~/services/person-photos.server";
 import { PERSON_PHOTO_MAX_BYTES } from "~/utils/constants/person-photo";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
-import { draftsPath } from "~/utils/directory-routes";
+import { DRAFT_PARAM, draftsPath } from "~/utils/directory-routes";
 import { dispatchDirectoryChange } from "~/utils/directory-submit.server";
 import { getLangFromRequest } from "~/utils/i18n-cookie.server";
 import { personFormSchema } from "~/utils/schemas/directory";
@@ -32,7 +34,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const submission = parseWithZod(await request.formData(), {
+  const formData = await request.formData();
+  const submission = parseWithZod(formData, {
     schema: personFormSchema,
   });
   if (submission.status !== "success") {
@@ -52,6 +55,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
     ...rest
   } = submission.value;
   const hasId = typeof id === "string" && id.length > 0;
+
+  // Possible duplicates are a warning, not an error: the first save comes
+  // back with the matches, and the editor's "save anyway" button re-posts
+  // with the confirmation field to go through. Runs before the photo is
+  // stored: the re-post carries the file again.
+  if (!formData.has(CONFIRM_DUPLICATES_FIELD)) {
+    const duplicates = await findPossibleDuplicatePeople(tenantId, rest, {
+      personId: hasId ? id : undefined,
+      changeId: new URL(request.url).searchParams.get(DRAFT_PARAM),
+    });
+    if (duplicates.length > 0) return data({ ...submission.reply(), duplicates });
+  }
 
   // A new file wins, then an explicit removal; otherwise the photo stays.
   let photoId: string | null;

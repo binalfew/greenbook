@@ -175,7 +175,7 @@ export const searchLimiter = rateLimit({
 });
 
 // Tight limiter for credential and one-time-code submissions (login,
-// forgot-password, 2FA, ...). Mounted on `AUTH_LIMITED_PATHS` only, and counts
+// forgot-password, ...). Mounted on `AUTH_LIMITED_PATHS` only, and counts
 // submissions only — rendering the form does not spend the budget.
 export const authLimiter = rateLimit({
   windowMs: 60_000,
@@ -196,8 +196,6 @@ export const AUTH_LIMITED_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/verify",
-  "/2fa-verify",
-  "/2fa-recovery",
   "/change-expired-password",
   "/accept-invite",
   "/sso/callback",

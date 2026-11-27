@@ -12,7 +12,7 @@ The extraction plan that produced this template (`docs/superpowers/specs/2026-04
 
 | Phase | Subsystem                                                     | Look here                                                                                                                                                                                                                                                   | Deep dive                                                                                |
 | ----- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 1     | Auth + RBAC + audit log                                       | `app/utils/auth/`, `app/services/{users,roles,permissions,two-factor}.server.ts`                                                                                                                                                                            | —                                                                                        |
+| 1     | Auth + RBAC + audit log                                       | `app/utils/auth/`, `app/services/{users,roles,permissions}.server.ts`                                                                                                                                                                                       | —                                                                                        |
 | 2     | Multi-tenancy + invitations                                   | `app/routes/$tenant/_layout.tsx`, `app/services/{tenants,invitations,tenant-setup}.server.ts`, `app/utils/request-context.server.ts`                                                                                                                        | —                                                                                        |
 | 3     | Settings + feature flags + business hours                     | `app/services/{settings,business-hours}.server.ts`, `app/utils/config/{settings,feature-flags}.server.ts`                                                                                                                                                   | —                                                                                        |
 | 4     | i18n                                                          | `app/utils/i18n.ts`, `app/locales/`, `app/utils/i18n-cookie.server.ts`                                                                                                                                                                                      | See "i18n" below                                                                         |
@@ -72,7 +72,7 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
 - **Database:** PostgreSQL via Prisma 7 with `@prisma/adapter-pg` driver adapter
 - **UI:** shadcn/ui + Radix primitives + Tailwind CSS 4 + lucide-react
 - **Forms:** Conform (`@conform-to/react` + `@conform-to/zod/v4`) with Zod v4
-- **Auth:** Cookie-based sessions with DB backing, optional 2FA (TOTP + recovery codes), API keys with rate-limit tiers, SSO (OIDC + SAML)
+- **Auth:** Cookie-based sessions with DB backing, API keys with rate-limit tiers, SSO (OIDC + SAML)
 - **Events/jobs:** in-process Postgres-backed queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain events, SSE for real-time UI
 - **Observability:** pino logger, AsyncLocalStorage correlation IDs, Sentry (client + server), rate-limit audit trail
 - **i18n:** i18next with en + fr, cookie-persisted, 13 namespaces
@@ -178,7 +178,7 @@ Four tenant-scoped entities with no cross-tenant references:
 - **`Position`** — formal post inside an org, with a `reportsToId` self-reference for internal reporting chains.
 - **`PositionAssignment`** — temporal link between a Person and a Position (`startDate`, `endDate`, `isCurrent`). Auto-closes the prior current assignment when a new one starts on the same position.
 
-Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 member states with region joins), `OrganizationType`, `PositionType`. Seeded into the system tenant by `seedDirectory(tenantId)` in `prisma/seed.ts`.
+Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 member states with region joins), `OrganizationType`, `PositionType`, plus `Title`. These tables have no `tenantId`: one set is shared by every tenant, seeded create-only by `seedDirectoryReference()` / `seedTitles()` in `prisma/seed.ts`, and only the global admin can edit it (`app/utils/reference-data-access.server.ts`).
 
 ### Editorial workflow (ChangeRequest engine)
 

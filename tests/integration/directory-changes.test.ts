@@ -64,7 +64,6 @@ async function arrange(): Promise<Arranged> {
 
   const orgType = await prisma.organizationType.create({
     data: {
-      tenantId: tenant.id,
       code: "ROOT",
       name: "Root",
       level: 0,
@@ -73,17 +72,10 @@ async function arrange(): Promise<Arranged> {
 
   const positionType = await prisma.positionType.create({
     data: {
-      tenantId: tenant.id,
       code: "DIRECTOR",
       name: "Director",
       hierarchyLevel: 3,
     },
-  });
-
-  // Mirror the org + position type into the other tenant so we can assert
-  // tenant isolation on reads/conflicts without cross-tenant bleed.
-  await prisma.organizationType.create({
-    data: { tenantId: otherTenant.id, code: "ROOT", name: "Root", level: 0 },
   });
 
   return {
@@ -461,7 +453,7 @@ describe("directory-changes: batch approval", () => {
   it("processes items per-id atomically, isolating failures", async () => {
     const a = await arrange();
 
-    // Five good CREATE submissions + one invalid (typeId refers to another tenant).
+    // Five good CREATE submissions + one invalid (typeId refers to a deleted type).
     const good: string[] = [];
     for (let i = 0; i < 5; i++) {
       const c = await submitChange(
@@ -474,8 +466,8 @@ describe("directory-changes: batch approval", () => {
       );
       good.push(c.id);
     }
-    const otherTypeRow = await prisma.organizationType.findFirstOrThrow({
-      where: { tenantId: a.otherTenant.id, code: "ROOT" },
+    const retiredType = await prisma.organizationType.create({
+      data: { code: "RETIRED", name: "Retired", level: 9, deletedAt: new Date() },
     });
     const bad = await submitChange(
       {
@@ -483,7 +475,7 @@ describe("directory-changes: batch approval", () => {
         operation: "CREATE",
         payload: {
           name: "Bad",
-          typeId: otherTypeRow.id,
+          typeId: retiredType.id,
           isActive: true,
         },
       },
@@ -540,14 +532,11 @@ describe("directory-changes: cross-tenant public gate", () => {
       },
       managerCtx(a),
     );
-    const otherTypeRow = await prisma.organizationType.findFirstOrThrow({
-      where: { tenantId: a.otherTenant.id, code: "ROOT" },
-    });
     await submitAndApply(
       {
         entityType: "ORGANIZATION",
         operation: "CREATE",
-        payload: { name: "Secret Root", typeId: otherTypeRow.id, isActive: true },
+        payload: { name: "Secret Root", typeId: a.orgType.id, isActive: true },
       },
       { tenantId: a.otherTenant.id, userId: a.managerUser.id },
     );

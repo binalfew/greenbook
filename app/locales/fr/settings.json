@@ -39,6 +39,8 @@
   "tenantFlagHelp_FF_DIRECTORY": "Les gestionnaires et les points focaux de ce locataire peuvent ouvrir la section Annuaire.",
   "tenantFlag_FF_PUBLIC_DIRECTORY": "Recherche inter-locataires",
   "tenantFlagHelp_FF_PUBLIC_DIRECTORY": "Les personnes approuvées de ce locataire apparaissent dans la recherche de l'annuaire.",
+  "tenantFlag_FF_NOTIFICATIONS": "Notifications",
+  "tenantFlagHelp_FF_NOTIFICATIONS": "Les utilisateurs de ce locataire voient la cloche et la boîte de notifications, où sont annoncées les soumissions, approbations et rejets.",
   "businessHoursTitle": "Horaires d'ouverture",
   "businessHoursSubtitle": "Définissez les horaires d'ouverture du locataire. Utilisés pour les fenêtres de pause SLA et la planification.",
   "newProfile": "Nouveau profil",
@@ -51,5 +53,17 @@
   "end": "Fin",
   "editSettingTitle": "Modifier {{label}}",
   "currentValueLabel": "Valeur actuelle",
-  "defaultValueLabel": "Par défaut"
+  "defaultValueLabel": "Par défaut",
+  "tenantInitialUserTitle": "Utilisateur initial",
+  "tenantInitialUserHelp": "Vous pouvez placer dans ce locataire un utilisateur qui n'appartient à aucun locataire, comme premier point focal ou gestionnaire. Laissez vide pour créer le locataire sans membres ; vous pourrez affecter des utilisateurs plus tard depuis le formulaire de modification d'un utilisateur.",
+  "tenantInitialUserLabel": "Utilisateur",
+  "tenantInitialUserNone": "— Aucun (affecter plus tard) —",
+  "tenantInitialUserPlaceholder": "Sélectionner un utilisateur",
+  "tenantInitialUserEmpty": "Aucun utilisateur sans locataire n'est disponible. Créez d'abord un utilisateur, ou laissez vide et affectez quelqu'un plus tard.",
+  "tenantInitialUserRoleLabel": "Rôle",
+  "tenantInitialUserRolePlaceholder": "Sélectionner un rôle",
+  "tenantInitialUserRole_focal": "Point focal",
+  "tenantInitialUserRoleHelp_focal": "Enregistre des fiches et les soumet pour validation",
+  "tenantInitialUserRole_manager": "Gestionnaire",
+  "tenantInitialUserRoleHelp_manager": "Approuve les soumissions et modifie les fiches directement"
 }

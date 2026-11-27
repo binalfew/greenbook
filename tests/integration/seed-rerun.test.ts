@@ -45,7 +45,7 @@ describe("running the seed", () => {
     }
     const orgs = await prisma.organization.findMany({ where: { tenantId: system.id } });
     expect(orgs.map((o) => o.acronym).sort()).toEqual(["AU", "AUC", "ETTIM", "ODC", "OOC", "PAPS"]);
-    expect(await prisma.memberState.count({ where: { tenantId: system.id } })).toBe(55);
+    expect(await prisma.memberState.count()).toBe(55);
     expect(await prisma.person.count({ where: { tenantId: system.id } })).toBeGreaterThan(0);
     expect(
       await prisma.positionAssignment.count({ where: { tenantId: system.id, isCurrent: true } }),
@@ -96,11 +96,11 @@ describe("running the seed", () => {
       },
     });
     await prisma.organizationType.updateMany({
-      where: { tenantId: system.id, code: "UNIT" },
+      where: { code: "UNIT" },
       data: { name: "Renamed by hand" },
     });
     const etiopia = await prisma.memberState.findFirstOrThrow({
-      where: { tenantId: system.id, abbreviation: "ETH" },
+      where: { abbreviation: "ETH" },
     });
     await prisma.memberStateRegion.deleteMany({ where: { memberStateId: etiopia.id } });
 
@@ -123,9 +123,44 @@ describe("running the seed", () => {
 
     await runSeed();
 
-    for (const key of DIRECTORY_FLAGS) {
+    for (const key of [...DIRECTORY_FLAGS, "FF_NOTIFICATIONS"]) {
       expect(await enabledTenants(key)).toEqual([optedIn.id, system.id].sort());
     }
-    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([optedIn.id]);
+  });
+
+  it("opts the tenants that use the directory into notifications when no tenant has them yet", async () => {
+    await runSeed();
+    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
+    const working = await prisma.tenant.create({ data: buildTenant() });
+    const idle = await prisma.tenant.create({ data: buildTenant() });
+    await prisma.featureFlag.update({
+      where: { key: "FF_DIRECTORY" },
+      data: { enabledForTenants: { push: working.id } },
+    });
+    // The state databases seeded before this step are in.
+    await prisma.featureFlag.update({
+      where: { key: "FF_NOTIFICATIONS" },
+      data: { enabledForTenants: { set: [] } },
+    });
+
+    await runSeed();
+
+    const notified = await enabledTenants("FF_NOTIFICATIONS");
+    expect(notified).toEqual([system.id, working.id].sort());
+    expect(notified).not.toContain(idle.id);
+  });
+
+  it("leaves a tenant opted out of notifications by hand opted out when run again", async () => {
+    await runSeed();
+    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
+    const optedOut = await prisma.tenant.create({ data: buildTenant() });
+    await prisma.featureFlag.update({
+      where: { key: "FF_DIRECTORY" },
+      data: { enabledForTenants: { push: optedOut.id } },
+    });
+
+    await runSeed();
+
+    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([system.id]);
   });
 });

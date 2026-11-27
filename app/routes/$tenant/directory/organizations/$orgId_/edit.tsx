@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { data } from "react-router";
+import { RejectionNotes } from "~/components/directory/rejection-notes";
 import { getOrganization } from "~/services/organizations.server";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
@@ -19,7 +20,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const [org, types, parents] = await Promise.all([
     getOrganization(params.orgId, tenantId),
     prisma.organizationType.findMany({
-      where: { tenantId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: [{ level: "asc" }, { name: "asc" }],
       select: { id: true, name: true, code: true, level: true },
     }),
@@ -45,6 +46,7 @@ export default function EditOrganization({ loaderData, params, actionData }: Rou
         <h1 className="text-2xl font-semibold">{t("organizations.edit")}</h1>
         <p className="text-muted-foreground text-sm">{t("organizations.editSubtitle")}</p>
       </header>
+      <RejectionNotes rejection={loaderData.draft?.rejection} tenant={params.tenant} />
       <OrganizationEditor
         org={org}
         draftValues={draft?.values}

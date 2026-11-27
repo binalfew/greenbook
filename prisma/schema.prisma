@@ -57,7 +57,6 @@ model User {
   userRoles        UserRole[]
   sessions         Session[]
   password         Password?
-  recoveryCodes    RecoveryCode[]
   passwordHistory  PasswordHistory[]
   invitationsSent  Invitation[]
   notifications    Notification[]
@@ -229,16 +228,11 @@ model Tenant {
   invitations         Invitation[]
   systemSettings      SystemSetting[]
   notifications       Notification[]
-  titles              Title[]
   organizations       Organization[]
-  organizationTypes   OrganizationType[]
   people              Person[]
   personPhotos        PersonPhoto[]
   positions           Position[]
-  positionTypes       PositionType[]
   positionAssignments PositionAssignment[]
-  memberStates        MemberState[]
-  regionalGroups      RegionalGroup[]
   changeRequests      ChangeRequest[]
 
   @@index([name])
@@ -266,18 +260,6 @@ model AuditLog {
   @@index([createdAt])
   @@index([tenantId, action, createdAt])
   @@index([entityType, entityId])
-}
-
-model RecoveryCode {
-  id        String    @id @default(cuid())
-  userId    String
-  codeHash  String    @db.VarChar(255)
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
 
 model PasswordHistory {
@@ -404,7 +386,6 @@ model Notification {
 
 model Title {
   id        String   @id @default(cuid())
-  tenantId  String
   code      String   @db.VarChar(20)
   name      String   @db.VarChar(100)
   sortOrder Int      @default(0)
@@ -412,10 +393,8 @@ model Title {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, code])
-  @@index([tenantId, isActive, sortOrder])
+  @@index([code])
+  @@index([isActive, sortOrder])
 }
 
 // ─── SSO ─────────────────────────────────────────────
@@ -487,7 +466,6 @@ model SSOConnection {
 
 model RegionalGroup {
   id          String  @id @default(cuid())
-  tenantId    String
   code        String  @db.VarChar(20)
   name        String  @db.VarChar(100)
   description String?
@@ -496,17 +474,14 @@ model RegionalGroup {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   members MemberStateRegion[]
 
-  @@unique([tenantId, code])
-  @@index([tenantId])
+  @@index([code])
   @@index([deletedAt])
 }
 
 model MemberState {
   id             String   @id @default(cuid())
-  tenantId       String
   fullName       String   @db.VarChar(255)
   abbreviation   String   @db.VarChar(20)
   dateJoined     DateTime @db.Date
@@ -518,12 +493,10 @@ model MemberState {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   regions MemberStateRegion[]
   people  Person[]
 
-  @@unique([tenantId, abbreviation])
-  @@index([tenantId])
+  @@index([abbreviation])
   @@index([fullName])
   @@index([deletedAt])
 }
@@ -544,7 +517,6 @@ model MemberStateRegion {
 
 model OrganizationType {
   id          String  @id @default(cuid())
-  tenantId    String
   name        String  @db.VarChar(100)
   code        String  @db.VarChar(50)
   level       Int
@@ -555,11 +527,9 @@ model OrganizationType {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   organizations Organization[]
 
-  @@unique([tenantId, code])
-  @@index([tenantId])
+  @@index([code])
   @@index([deletedAt])
 }
 
@@ -663,7 +633,6 @@ model PersonPhoto {
 
 model PositionType {
   id             String  @id @default(cuid())
-  tenantId       String
   name           String  @db.VarChar(100)
   code           String  @db.VarChar(50)
   description    String?
@@ -673,11 +642,9 @@ model PositionType {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   positions Position[]
 
-  @@unique([tenantId, code])
-  @@index([tenantId])
+  @@index([code])
   @@index([deletedAt])
 }
 

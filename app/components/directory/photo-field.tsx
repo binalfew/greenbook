@@ -38,6 +38,9 @@ export function PhotoField({ id, current, initiallyRemoved = false, labels }: Ph
           width={64}
           height={64}
           className="size-16 shrink-0 rounded-full border object-cover"
+          // A reopened request can point at a photo that was since deleted.
+          onError={(event) => (event.currentTarget.hidden = true)}
+          onLoad={(event) => (event.currentTarget.hidden = false)}
         />
       ) : null}
       <div className="min-w-0 flex-1 space-y-2">
