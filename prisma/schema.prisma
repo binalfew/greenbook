@@ -222,17 +222,16 @@ enum DeliveryStatus {
 }
 
 model Tenant {
-  id               String  @id @default(cuid())
-  name             String  @unique @db.VarChar(255)
-  slug             String  @unique @db.VarChar(120)
-  email            String  @unique @db.VarChar(255)
-  phone            String  @db.VarChar(50)
-  city             String  @db.VarChar(100)
-  state            String  @db.VarChar(100)
-  address          String  @db.Text
-  logoUrl          String? @db.VarChar(500)
-  brandTheme       String  @default("") @db.VarChar(50)
-  subscriptionPlan String  @default("free") @db.VarChar(50)
+  id         String  @id @default(cuid())
+  name       String  @unique @db.VarChar(255)
+  slug       String  @unique @db.VarChar(120)
+  email      String  @unique @db.VarChar(255)
+  phone      String  @db.VarChar(50)
+  city       String  @db.VarChar(100)
+  state      String  @db.VarChar(100)
+  address    String  @db.Text
+  logoUrl    String? @db.VarChar(500)
+  brandTheme String  @default("") @db.VarChar(50)
 
   metadata Json?
 
@@ -247,7 +246,6 @@ model Tenant {
   notifications        Notification[]
   webhookSubscriptions WebhookSubscription[]
   titles               Title[]
-  languages            Language[]
   organizations        Organization[]
   organizationTypes    OrganizationType[]
   people               Person[]
@@ -485,23 +483,6 @@ model Title {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, code])
-  @@index([tenantId, isActive, sortOrder])
-}
-
-model Language {
-  id         String   @id @default(cuid())
-  tenantId   String
-  code       String   @db.VarChar(10)
-  name       String   @db.VarChar(100)
-  nativeName String?  @db.VarChar(100)
-  sortOrder  Int      @default(0)
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

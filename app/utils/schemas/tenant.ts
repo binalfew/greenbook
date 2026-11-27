@@ -1,8 +1,6 @@
 import { z } from "zod/v4";
 import { RESERVED_SLUG_MESSAGE, isReservedSlug } from "~/utils/reserved-slugs";
 
-const SUBSCRIPTION_PLANS = ["free", "starter", "professional", "enterprise"] as const;
-
 const slugField = z
   .string({ error: "Slug is required" })
   .min(1, "Slug is required")
@@ -12,13 +10,6 @@ const slugField = z
     "Slug must be lowercase alphanumeric with hyphens only, cannot start or end with a hyphen",
   )
   .refine((val) => !isReservedSlug(val), RESERVED_SLUG_MESSAGE);
-
-export const subscriptionPlanSchema = z.enum(SUBSCRIPTION_PLANS);
-
-export const PLAN_OPTIONS = SUBSCRIPTION_PLANS.map((p) => ({
-  value: p,
-  label: p.charAt(0).toUpperCase() + p.slice(1),
-}));
 
 export const createTenantSchema = z.object({
   name: z
@@ -31,7 +22,6 @@ export const createTenantSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
-  subscriptionPlan: subscriptionPlanSchema.optional(),
   logoUrl: z.string().optional(),
   brandTheme: z.string().optional(),
   // Optional: existing user to bootstrap as the new tenant's admin. Empty

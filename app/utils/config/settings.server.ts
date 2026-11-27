@@ -82,41 +82,17 @@ export async function getSetting(
   return toResolved(best);
 }
 
-export async function getSettingsByCategory(
-  category: string,
-  context?: SettingContext,
-): Promise<ResolvedSetting[]> {
-  const dbKeys = await prisma.systemSetting.findMany({
-    where: { category },
-    select: { key: true },
-    distinct: ["key"],
-  });
-  const keys = new Set<string>(dbKeys.map((r) => r.key));
-  for (const [k, def] of Object.entries(SETTING_DEFAULTS)) {
-    if (def.category === category) keys.add(k);
-  }
-
-  const resolved: ResolvedSetting[] = [];
-  for (const key of keys) {
-    const r = await getSetting(key, context);
-    if (r) resolved.push(r);
-  }
-  return resolved.sort((a, b) => a.key.localeCompare(b.key));
-}
-
+/**
+ * Resolves every setting in the registry, grouped by category. Rows stored
+ * under keys the registry no longer lists are left out.
+ */
 export async function getAllSettings(
   context?: SettingContext,
 ): Promise<Record<string, ResolvedSetting[]>> {
-  const categoriesFromDb = await prisma.systemSetting.findMany({
-    select: { category: true },
-    distinct: ["category"],
-  });
-  const categories = new Set<string>(categoriesFromDb.map((r) => r.category));
-  for (const def of Object.values(SETTING_DEFAULTS)) categories.add(def.category);
-
   const grouped: Record<string, ResolvedSetting[]> = {};
-  for (const category of categories) {
-    grouped[category] = await getSettingsByCategory(category, context);
+  for (const key of Object.keys(SETTING_DEFAULTS).sort()) {
+    const resolved = await getSetting(key, context);
+    if (resolved) (grouped[SETTING_DEFAULTS[key].category] ??= []).push(resolved);
   }
   return grouped;
 }

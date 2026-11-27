@@ -73,10 +73,6 @@ export default function DeleteTenantPage({ loaderData, actionData }: Route.Compo
               <p className="text-muted-foreground">{tenant.phone}</p>
             </div>
             <div>
-              <span className="text-foreground font-medium">Plan</span>
-              <p className="text-muted-foreground capitalize">{tenant.subscriptionPlan}</p>
-            </div>
-            <div>
               <span className="text-foreground font-medium">Users</span>
               <p className="text-muted-foreground">{tenant._count.users}</p>
             </div>

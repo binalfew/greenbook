@@ -7,7 +7,6 @@ import { getVisibleGroups, type Permission } from "~/config/navigation";
 type TenantInfo = {
   name: string;
   slug: string;
-  plan: string;
   logoUrl?: string | null;
 };
 
