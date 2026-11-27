@@ -1,13 +1,21 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { buildTenant } from "../factories";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { buildTenant, buildUser } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
+import { compare } from "bcryptjs";
 import { runSeed } from "../../prisma/seed";
 
 const DIRECTORY_FLAGS = ["FF_DIRECTORY", "FF_PUBLIC_DIRECTORY"];
 
+// The admin login the test run hands the seed (vitest.integration.config.ts).
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL!;
+
 beforeAll(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 /** Every directory and reference row in the database, whole rows, in a stable order. */
@@ -63,155 +71,186 @@ async function homeTenantSlug(email: string) {
   return user.tenant?.slug;
 }
 
+/**
+ * A working tenant with the kind of records a tenant builds up: two
+ * organizations, a position, two people, an assignment, a manager and one of
+ * the manager's change requests. Needs the seed to have run once.
+ */
+async function arrangeWorkingDirectory(tenantId: string) {
+  const status = await prisma.userStatus.findUniqueOrThrow({ where: { code: "ACTIVE" } });
+  const managerRole = await prisma.role.findFirstOrThrow({ where: { name: "manager" } });
+  const manager = await prisma.user.create({
+    data: {
+      ...buildUser({ tenantId, userStatusId: status.id }),
+      userRoles: { create: { roleId: managerRole.id } },
+    },
+  });
+  const orgType = await prisma.organizationType.findFirstOrThrow({ where: { code: "DEPARTMENT" } });
+  const positionType = await prisma.positionType.findFirstOrThrow();
+  const root = await prisma.organization.create({
+    data: { tenantId, name: "Peace Fund", acronym: "PF", typeId: orgType.id },
+  });
+  const child = await prisma.organization.create({
+    data: { tenantId, name: "Secretariat", typeId: orgType.id, parentId: root.id },
+  });
+  const position = await prisma.position.create({
+    data: { tenantId, title: "Director", organizationId: child.id, typeId: positionType.id },
+  });
+  const person = await prisma.person.create({
+    data: { tenantId, firstName: "Amina", lastName: "Diallo", languages: [] },
+  });
+  await prisma.person.create({
+    data: {
+      tenantId,
+      firstName: "Removed",
+      lastName: "Earlier",
+      languages: [],
+      deletedAt: new Date(),
+    },
+  });
+  await prisma.positionAssignment.create({
+    data: {
+      tenantId,
+      personId: person.id,
+      positionId: position.id,
+      startDate: new Date("2025-01-01"),
+      isCurrent: true,
+    },
+  });
+  await prisma.changeRequest.create({
+    data: {
+      tenantId,
+      entityType: "ORGANIZATION",
+      entityId: child.id,
+      operation: "UPDATE",
+      payload: { name: "Pending rename" },
+      submittedById: manager.id,
+    },
+  });
+  return { manager, person };
+}
+
 describe("running the seed", () => {
-  it("leaves the system tenant of a fresh database without a directory", async () => {
+  it("gives a fresh database the system tenant, the admin and nothing else", async () => {
     await runSeed();
 
-    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    expect(await directoryCounts(system.id)).toEqual(NO_DIRECTORY_RECORDS);
-    for (const key of DIRECTORY_FLAGS) {
-      expect(await enabledTenants(key)).not.toContain(system.id);
+    const tenants = await prisma.tenant.findMany();
+    expect(tenants.map((t) => t.slug)).toEqual(["system"]);
+    expect(await directoryCounts(tenants[0].id)).toEqual(NO_DIRECTORY_RECORDS);
+    for (const key of [...DIRECTORY_FLAGS, "FF_NOTIFICATIONS"]) {
+      expect(await enabledTenants(key)).toEqual([]);
     }
-    expect(await homeTenantSlug("admin@africanunion.org")).toBe("system");
-  });
-
-  it("gives a fresh database a working demo tenant with the starter directory", async () => {
-    await runSeed();
-
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
-    for (const key of DIRECTORY_FLAGS) {
-      expect(await enabledTenants(key)).toEqual([demo.id]);
-    }
-    const orgs = await prisma.organization.findMany({ where: { tenantId: demo.id } });
-    expect(orgs.map((o) => o.acronym).sort()).toEqual(["AU", "AUC", "ETTIM", "ODC", "OOC", "PAPS"]);
+    const users = await prisma.user.findMany({
+      select: { email: true, userRoles: { select: { role: { select: { name: true } } } } },
+    });
+    expect(users).toEqual([{ email: ADMIN_EMAIL, userRoles: [{ role: { name: "admin" } }] }]);
+    expect(await homeTenantSlug(ADMIN_EMAIL)).toBe("system");
     expect(await prisma.memberState.count()).toBe(55);
-    expect(await prisma.person.count({ where: { tenantId: demo.id } })).toBeGreaterThan(0);
-    expect(
-      await prisma.positionAssignment.count({ where: { tenantId: demo.id, isCurrent: true } }),
-    ).toBeGreaterThan(0);
-
-    for (const [email, role] of [
-      ["focal@africanunion.org", "focal"],
-      ["manager@africanunion.org", "manager"],
-    ]) {
-      const user = await prisma.user.findUniqueOrThrow({
-        where: { email },
-        select: { tenantId: true, userRoles: { select: { role: { select: { name: true } } } } },
-      });
-      expect(user.tenantId).toBe(demo.id);
-      expect(user.userRoles.map((ur) => ur.role.name)).toEqual([role]);
-    }
   });
 
-  it("uses the misd tenant as the demo tenant when it is already provisioned", async () => {
-    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
+  it("creates the admin with the email and password it is given", async () => {
+    vi.stubEnv("SEED_ADMIN_EMAIL", "  Root@Example.org ");
+    vi.stubEnv("SEED_ADMIN_PASSWORD", "a-password-for-root");
 
     await runSeed();
 
-    expect(await prisma.tenant.count({ where: { slug: "demo" } })).toBe(0);
-    expect(await prisma.organization.count({ where: { tenantId: misd.id } })).toBe(6);
-    expect(await homeTenantSlug("manager@africanunion.org")).toBe("misd");
+    const admin = await prisma.user.findUniqueOrThrow({
+      where: { email: "root@example.org" },
+      select: { password: { select: { hash: true } } },
+    });
+    expect(await compare("a-password-for-root", admin.password!.hash)).toBe(true);
   });
 
-  it("moves directory records out of an existing system tenant into the demo tenant", async () => {
+  it.each([
+    ["no email", { SEED_ADMIN_EMAIL: "" }],
+    ["no password", { SEED_ADMIN_PASSWORD: "" }],
+    ["a password under 8 characters", { SEED_ADMIN_PASSWORD: "short" }],
+  ])("stops before writing anything when it is given %s", async (_case, env) => {
+    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+
+    await expect(runSeed()).rejects.toThrow(/SEED_ADMIN_/);
+
+    expect(await prisma.tenant.count()).toBe(0);
+    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.userStatus.count()).toBe(0);
+  });
+
+  it("leaves the admin's password alone when run again with another one", async () => {
+    await runSeed();
+    vi.stubEnv("SEED_ADMIN_PASSWORD", "a-different-password");
+
+    await runSeed();
+
+    const admin = await prisma.user.findUniqueOrThrow({
+      where: { email: ADMIN_EMAIL },
+      select: { password: { select: { hash: true } } },
+    });
+    expect(await compare(process.env.SEED_ADMIN_PASSWORD!, admin.password!.hash)).toBe(false);
+    expect(await prisma.user.count()).toBe(1);
+  });
+
+  it("moves directory records out of an existing system tenant into the misd tenant", async () => {
     // A database seeded before the system tenant became admin-only: the
     // directory, both flags and the working accounts all sit in `system`.
     await runSeed();
     const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
-    const manager = await prisma.user.findUniqueOrThrow({
-      where: { email: "manager@africanunion.org" },
-    });
-    const anOrg = await prisma.organization.findFirstOrThrow({ where: { acronym: "PAPS" } });
-    await prisma.changeRequest.create({
+    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
+    const { manager, person } = await arrangeWorkingDirectory(system.id);
+    const photo = await prisma.personPhoto.create({
       data: {
-        tenantId: demo.id,
-        entityType: "ORGANIZATION",
-        entityId: anOrg.id,
-        operation: "UPDATE",
-        payload: { name: "Pending rename" },
-        submittedById: manager.id,
+        tenantId: system.id,
+        contentType: "image/webp",
+        width: 1,
+        height: 1,
+        size: 1,
+        data: new Uint8Array([0]),
       },
     });
-    const where = { tenantId: demo.id };
-    const data = { tenantId: system.id };
-    await prisma.organization.updateMany({ where, data });
-    await prisma.person.updateMany({ where, data });
-    await prisma.position.updateMany({ where, data });
-    await prisma.positionAssignment.updateMany({ where, data });
-    await prisma.changeRequest.updateMany({ where, data });
-    await prisma.user.updateMany({
-      where: { email: { in: ["focal@africanunion.org", "manager@africanunion.org"] } },
-      data,
-    });
+    await prisma.person.update({ where: { id: person.id }, data: { photoId: photo.id } });
     await prisma.featureFlag.updateMany({
       where: { key: { in: DIRECTORY_FLAGS } },
       data: { enabledForTenants: [system.id] },
     });
     const { organizations, positions, people, assignments, changeRequests } =
       await directorySnapshot();
-    const inDemo = <T extends { tenantId: string }>(rows: T[]) =>
-      rows.map((row) => ({ ...row, tenantId: demo.id }));
+    const inMisd = <T extends { tenantId: string }>(rows: T[]) =>
+      rows.map((row) => ({ ...row, tenantId: misd.id }));
 
     await runSeed();
 
     expect(await directoryCounts(system.id)).toEqual(NO_DIRECTORY_RECORDS);
     const after = await directorySnapshot();
-    expect(after.organizations).toEqual(inDemo(organizations));
-    expect(after.positions).toEqual(inDemo(positions));
-    expect(after.people).toEqual(inDemo(people));
-    expect(after.assignments).toEqual(inDemo(assignments));
-    expect(after.changeRequests).toEqual(inDemo(changeRequests));
+    expect(after.organizations).toEqual(inMisd(organizations));
+    expect(after.positions).toEqual(inMisd(positions));
+    expect(after.people).toEqual(inMisd(people));
+    expect(after.assignments).toEqual(inMisd(assignments));
+    expect(after.changeRequests).toEqual(inMisd(changeRequests));
+    expect((await prisma.personPhoto.findUniqueOrThrow({ where: { id: photo.id } })).tenantId).toBe(
+      misd.id,
+    );
     for (const key of DIRECTORY_FLAGS) {
-      expect(await enabledTenants(key)).toEqual([demo.id]);
+      expect(await enabledTenants(key)).toEqual([misd.id]);
     }
-    expect(await homeTenantSlug("focal@africanunion.org")).toBe("demo");
-    expect(await homeTenantSlug("manager@africanunion.org")).toBe("demo");
+    expect(await homeTenantSlug(manager.email)).toBe("misd");
+    expect(await homeTenantSlug(ADMIN_EMAIL)).toBe("system");
+  });
+
+  it("creates no tenant to move a system tenant's directory into", async () => {
+    await runSeed();
+    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
+    await arrangeWorkingDirectory(system.id);
+    const before = await directorySnapshot();
+
+    await runSeed();
+
+    expect(await prisma.tenant.count()).toBe(1);
+    expect(await directorySnapshot()).toEqual(before);
   });
 
   it("leaves existing directory records untouched when run again", async () => {
     await runSeed();
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
-    const manager = await prisma.user.findUniqueOrThrow({
-      where: { email: "manager@africanunion.org" },
-    });
-
-    // The kind of edits a tenant makes after the first seed.
-    const paps = await prisma.organization.findFirstOrThrow({ where: { acronym: "PAPS" } });
-    const au = await prisma.organization.findFirstOrThrow({ where: { acronym: "AU" } });
-    await prisma.organization.update({
-      where: { id: paps.id },
-      data: { name: "Political Affairs, Peace and Security", parentId: au.id, sortOrder: 9 },
-    });
-    const added = await prisma.organization.create({
-      data: { tenantId: demo.id, name: "Added by hand", typeId: paps.typeId, parentId: au.id },
-    });
-    const [edited, removed] = await prisma.person.findMany({ orderBy: { id: "asc" }, take: 2 });
-    await prisma.person.update({
-      where: { id: edited.id },
-      data: { bio: "Edited by hand", showEmail: !edited.showEmail },
-    });
-    const ended = await prisma.positionAssignment.findFirstOrThrow({
-      where: { personId: removed.id },
-    });
-    await prisma.positionAssignment.update({
-      where: { id: ended.id },
-      data: { isCurrent: false, endDate: new Date("2026-01-31") },
-    });
-    await prisma.person.update({ where: { id: removed.id }, data: { deletedAt: new Date() } });
-    await prisma.person.create({
-      data: { tenantId: demo.id, firstName: "Added", lastName: "Byhand", languages: [] },
-    });
-    await prisma.changeRequest.create({
-      data: {
-        tenantId: demo.id,
-        entityType: "ORGANIZATION",
-        entityId: added.id,
-        operation: "UPDATE",
-        payload: { name: "Pending rename" },
-        submittedById: manager.id,
-      },
-    });
+    const working = await prisma.tenant.create({ data: buildTenant() });
+    await arrangeWorkingDirectory(working.id);
     await prisma.organizationType.updateMany({
       where: { code: "UNIT" },
       data: { name: "Renamed by hand" },
@@ -225,11 +264,11 @@ describe("running the seed", () => {
     await runSeed();
 
     expect(await directorySnapshot()).toEqual(before);
+    expect(await prisma.tenant.count()).toBe(2);
   });
 
   it("keeps every tenant already on a flag's enabled list when run again", async () => {
     await runSeed();
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
     const optedIn = await prisma.tenant.create({ data: buildTenant() });
     for (const key of [...DIRECTORY_FLAGS, "FF_NOTIFICATIONS"]) {
       await prisma.featureFlag.update({
@@ -241,14 +280,14 @@ describe("running the seed", () => {
     await runSeed();
 
     for (const key of [...DIRECTORY_FLAGS, "FF_NOTIFICATIONS"]) {
-      expect(await enabledTenants(key)).toEqual([optedIn.id, demo.id].sort());
+      expect(await enabledTenants(key)).toEqual([optedIn.id]);
     }
   });
 
   it("opts the tenants that use the directory into notifications when the system tenant hands its directory over", async () => {
     await runSeed();
     const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
+    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
     const working = await prisma.tenant.create({ data: buildTenant() });
     const idle = await prisma.tenant.create({ data: buildTenant() });
     // The state of a database seeded before the system tenant became
@@ -257,25 +296,21 @@ describe("running the seed", () => {
       where: { key: { in: DIRECTORY_FLAGS } },
       data: { enabledForTenants: [system.id, working.id] },
     });
-    await prisma.featureFlag.update({
-      where: { key: "FF_NOTIFICATIONS" },
-      data: { enabledForTenants: { set: [] } },
-    });
 
     await runSeed();
 
     for (const key of DIRECTORY_FLAGS) {
-      expect(await enabledTenants(key)).toEqual([demo.id, working.id].sort());
+      expect(await enabledTenants(key)).toEqual([misd.id, working.id].sort());
     }
     const notified = await enabledTenants("FF_NOTIFICATIONS");
-    expect(notified).toEqual([demo.id, working.id].sort());
+    expect(notified).toEqual([misd.id, working.id].sort());
     expect(notified).not.toContain(idle.id);
   });
 
-  it("takes the system tenant off notifications", async () => {
+  it("hands the system tenant's place on notifications to the misd tenant", async () => {
     await runSeed();
     const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
+    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
     await prisma.featureFlag.update({
       where: { key: "FF_NOTIFICATIONS" },
       data: { enabledForTenants: { push: system.id } },
@@ -283,62 +318,19 @@ describe("running the seed", () => {
 
     await runSeed();
 
-    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([demo.id]);
-  });
-
-  it("leaves a flag turned off for the demo tenant turned off when run again", async () => {
-    await runSeed();
-    await prisma.featureFlag.updateMany({
-      where: { key: { in: ["FF_PUBLIC_DIRECTORY", "FF_NOTIFICATIONS"] } },
-      data: { enabledForTenants: [] },
-    });
-
-    await runSeed();
-
-    expect(await enabledTenants("FF_PUBLIC_DIRECTORY")).toEqual([]);
-    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([]);
-  });
-
-  it("moves the photos of the people it moves out of the system tenant", async () => {
-    await runSeed();
-    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
-    const person = await prisma.person.findFirstOrThrow({ where: { tenantId: demo.id } });
-    const photo = await prisma.personPhoto.create({
-      data: {
-        tenantId: system.id,
-        contentType: "image/webp",
-        width: 1,
-        height: 1,
-        size: 1,
-        data: new Uint8Array([0]),
-      },
-    });
-    await prisma.person.update({
-      where: { id: person.id },
-      data: { tenantId: system.id, photoId: photo.id },
-    });
-
-    await runSeed();
-
-    const moved = await prisma.person.findUniqueOrThrow({
-      where: { id: person.id },
-      select: { tenantId: true, photo: { select: { id: true, tenantId: true } } },
-    });
-    expect(moved).toEqual({ tenantId: demo.id, photo: { id: photo.id, tenantId: demo.id } });
+    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([misd.id]);
   });
 
   it("leaves a tenant opted out of notifications by hand opted out when run again", async () => {
     await runSeed();
-    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
-    const optedOut = await prisma.tenant.create({ data: buildTenant() });
+    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
     await prisma.featureFlag.update({
       where: { key: "FF_DIRECTORY" },
-      data: { enabledForTenants: { push: optedOut.id } },
+      data: { enabledForTenants: { push: misd.id } },
     });
 
     await runSeed();
 
-    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([demo.id]);
+    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([]);
   });
 });

@@ -80,7 +80,7 @@ describe("a tenant created through the UI", () => {
   it("can create an organization, a person and a position with every reference list filled", async () => {
     await runSeed();
     const admin = await prisma.user.findUniqueOrThrow({
-      where: { email: "admin@africanunion.org" },
+      where: { email: process.env.SEED_ADMIN_EMAIL! },
     });
     const adminCookie = await createSessionCookie(prisma, admin.id);
 

@@ -50,7 +50,8 @@ npm install
 
 # 2. Copy env + set secrets
 cp .env.example .env
-# Edit SESSION_SECRET and HONEYPOT_SECRET to strong random values
+# Edit SESSION_SECRET and HONEYPOT_SECRET to strong random values, and set
+# SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD to the admin login you want
 
 # 3. Bring up Postgres (dev + test containers)
 npm run docker:up
@@ -67,18 +68,14 @@ The app listens on `PORT` (3000 unless you change it): <http://localhost:3000>.
 
 The Postgres containers publish on the host ports named by `DB_PORT` (default 5432, development) and `DB_TEST_PORT` (default 5433, tests) in `.env`. Change them there when those ports are taken, and keep `DATABASE_URL` in step. The test runners connect to `DATABASE_TEST_URL` when it is set and otherwise build the address from `DB_TEST_PORT`.
 
-### Demo accounts
+### The first account
 
-`npm run db:seed` creates four accounts. Their passwords are published here, so change them before the app is reachable by anyone else.
+`npm run db:seed` creates one tenant and one account, and no demo data:
 
-| Email                      | Password     | Role and landing page                                    |
-| -------------------------- | ------------ | -------------------------------------------------------- |
-| `admin@africanunion.org`   | `admin123`   | `admin`, every permission in every tenant; `system` home |
-| `manager@africanunion.org` | `manager123` | `manager` in the demo tenant                             |
-| `focal@africanunion.org`   | `focal123`   | `focal` in the demo tenant                               |
-| `user@africanunion.org`    | `user123`    | `user`, a directory reader; lands on `/`                 |
+- the `system` tenant, the global admin's home, which holds no directory records;
+- the global admin, with the email and password in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. The seed stops without writing anything when either is missing or the password is under 8 characters.
 
-The demo tenant is `misd` when a tenant with that slug exists, otherwise a seeded `demo` tenant. The seed also gives it starter organizations, positions, people and assignments when it holds no directory records yet.
+The password is used only when the account is created; running the seed again never resets it. Sign in as that admin and create the working tenants, and their managers and focal persons, under **Tenants** and **Settings → Security → Users**.
 
 ## Project layout
 
@@ -109,7 +106,7 @@ greenbook/
 │   └── root.tsx                 # SSR shell
 ├── prisma/
 │   ├── schema.prisma            # Single Prisma schema
-│   └── seed.ts                  # Re-runnable seed (roles, permissions, flags, reference data, demo data)
+│   └── seed.ts                  # Re-runnable seed (roles, permissions, flags, reference data, system tenant, admin)
 ├── public/                      # Service worker, manifest, robots.txt
 ├── server/                      # Express middleware (correlation, request log, rate limit, CORS, Sentry, shutdown)
 ├── tests/
@@ -159,13 +156,13 @@ Read [CLAUDE.md](./CLAUDE.md) first. It maps each subsystem to its files, descri
 
 Flags live in the `FeatureFlag` table and are seeded by `prisma/seed.ts`; the seed removes any flag that is not in this list. A tenant-scoped flag is on for exactly the tenants in its enabled list. `/$tenant/settings/features` lists the flags; a tenant's own opt-ins are managed from its Features page under `/$tenant/tenants/$tenantId/features`.
 
-| Key                   | Scope  | Seeded state           | What it gates                                      |
-| --------------------- | ------ | ---------------------- | -------------------------------------------------- |
-| `FF_DIRECTORY`        | tenant | on for the demo tenant | The `/$tenant/directory/*` workspace               |
-| `FF_PUBLIC_DIRECTORY` | tenant | on for the demo tenant | Whether the tenant's records appear in the search  |
-| `FF_NOTIFICATIONS`    | tenant | on for the demo tenant | In-app notification bell + list                    |
-| `FF_PWA`              | global | off                    | Service worker + manifest + install/update prompts |
-| `FF_I18N`             | global | off                    | Language switcher                                  |
+| Key                   | Scope  | Seeded state       | What it gates                                      |
+| --------------------- | ------ | ------------------ | -------------------------------------------------- |
+| `FF_DIRECTORY`        | tenant | on for new tenants | The `/$tenant/directory/*` workspace               |
+| `FF_PUBLIC_DIRECTORY` | tenant | on for new tenants | Whether the tenant's records appear in the search  |
+| `FF_NOTIFICATIONS`    | tenant | on for new tenants | In-app notification bell + list                    |
+| `FF_PWA`              | global | off                | Service worker + manifest + install/update prompts |
+| `FF_I18N`             | global | off                | Language switcher                                  |
 
 A tenant created through the app is opted into the three tenant-scoped flags.
 
@@ -215,6 +212,6 @@ For production:
 
 1. Generate strong values for `SESSION_SECRET` + `HONEYPOT_SECRET` (≥ 32 bytes random).
 2. Set `NODE_ENV=production`, `APP_URL=https://your-domain`, `CORS_ORIGINS=https://your-domain`.
-3. Change the passwords of the seeded demo accounts, or remove the accounts.
+3. Set `SEED_ADMIN_EMAIL` and a generated `SEED_ADMIN_PASSWORD` before the first seed; they are the global admin's login.
 4. Wire `SENTRY_DSN` if you want error tracking.
 5. If you enable `FF_PWA`, add the icons `public/manifest.json` refers to; the repository ships none.

@@ -13,8 +13,15 @@ export default async function globalSetup() {
     stdio: "inherit",
   });
 
+  // The seed needs the global admin's login; the test database gets a fixed one
+  // unless the environment already names another.
   execSync(`DATABASE_URL="${TEST_DB_URL}" npx tsx prisma/seed.ts`, {
     stdio: "inherit",
+    env: {
+      SEED_ADMIN_EMAIL: "admin@greenbook.test",
+      SEED_ADMIN_PASSWORD: "e2e-test-admin-password",
+      ...process.env,
+    },
   });
 
   console.log("[E2E] Test database ready.\n");

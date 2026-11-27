@@ -89,20 +89,16 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 | `RESEND_API_KEY`  | `app/utils/email/email.server.ts`                                                                                                                                                                                | Auth token for the Resend transactional email API. Verification emails and password resets flow through this.                                                                              |
 | `EMAIL_FROM`      | `app/utils/email/email.server.ts`                                                                                                                                                                                | Sender of every outgoing email, e.g. `Greenbook <address>`. The address must be on a domain verified in Resend.                                                                            |
 
-##### Not applicable: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
+##### The first admin: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
 
-Other apps on this estate — facilities, for one — let the first admin account be set from the env file, and their guides tell you to put `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in place before the first-run seed. **Greenbook has no such path.** `prisma/seed.ts` never reads either variable; adding them to `/etc/greenbook.env` does nothing at all.
+The seed ([§7.7](#77-first-run-bootstrap-one-time)) creates exactly one account, the global admin, from these two variables. It has no built-in account and no built-in password, and it stops before writing anything when either variable is missing or the password is shorter than 8 characters.
 
-Greenbook instead hard-codes four demo accounts, with passwords published in this repository:
+| Variable              | Read by          | Notes                                                                                                   |
+| --------------------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `SEED_ADMIN_EMAIL`    | `prisma/seed.ts` | Login of the global admin. Use a mailbox you control, so password reset works.                          |
+| `SEED_ADMIN_PASSWORD` | `prisma/seed.ts` | Used only when the account is created. A later seed run never resets it. Generate it; do not reuse one. |
 
-| Account                    | Password     | Role                                     |
-| -------------------------- | ------------ | ---------------------------------------- |
-| `admin@africanunion.org`   | `admin123`   | `admin` — every permission, global scope |
-| `manager@africanunion.org` | `manager123` | `manager`                                |
-| `focal@africanunion.org`   | `focal123`   | `focal`                                  |
-| `user@africanunion.org`    | `user123`    | `user`                                   |
-
-So the lockdown in [§7.7](#77-first-run-bootstrap-one-time) is not a nice-to-have for this app — rotating the admin and deleting the other three is the _only_ control over who can log in as a global administrator. There is nothing to configure here beforehand.
+The running app never reads either variable. Once the first-run seed has created the account you can remove `SEED_ADMIN_PASSWORD` from `/etc/greenbook.env`; put it back (any value of 8+ characters) if you ever run the seed again.
 
 ##### Optional (operational knobs)
 
@@ -202,6 +198,11 @@ SESSION_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_48
 
 # Honeypot-field encryption seed. Generate with: openssl rand -base64 32
 HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
+
+# The global admin the first-run seed creates (§7.7). The password is used
+# only when the account is created. Generate with: openssl rand -base64 24
+SEED_ADMIN_EMAIL=REPLACE_WITH_THE_ADMINS_MAILBOX
+SEED_ADMIN_PASSWORD=REPLACE_WITH_OPENSSL_RAND_BASE64_24
 
 # Resend transactional email. Create in the Resend dashboard.
 RESEND_API_KEY=re_REPLACE_WITH_REAL_KEY
@@ -494,7 +495,8 @@ $ docker run --rm \
     greenbook:$VERSION \
     npx tsx prisma/seed.ts
 # Expected runtime: 5-30s. Creates roles, permissions, feature flags,
-# the system tenant, and demo AUC leadership data.
+# reference data, the system tenant, and the global admin named by
+# SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD in /etc/greenbook.env.
 
 # ────────────────────────────────────────────────────────────────
 # STEP 5. Pin the version compose will use.
@@ -518,21 +520,14 @@ $ curl -sI https://greenbook.africanunion.org/  | grep -E "HTTP|strict-transport
 # Expected: "HTTP/2 200" and an HSTS header.
 
 # ────────────────────────────────────────────────────────────────
-# STEP 8. Rotate the seeded demo passwords (FIRST DEPLOY ONLY).
+# STEP 8. Sign in as the admin (FIRST DEPLOY ONLY).
 # ────────────────────────────────────────────────────────────────
-# No env variable controls this — greenbook's seed hard-codes the four
-# demo accounts (§7.2.2). Rotating them is the only control there is.
-#
-# Log into the admin UI as admin@africanunion.org / admin123,
-# IMMEDIATELY change the admin password, then delete the three demo
-# users (manager@, focal@, user@) before opening the URL to anyone
-# else. See §7.7 for details.
-#
-# Do this BEFORE step 7's public URL is shared, not after — between the
-# seed and the rotation, admin123 is a working global-admin login.
+# Log in with SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD, then create the
+# working tenants and their managers and focal persons. The seed
+# creates no other account and no demo data. See §7.7.
 ```
 
-That's it. From here on, re-deploys follow the six-command walkthrough below — same shape with steps 4 (seed) and 8 (rotate demo passwords) removed.
+That's it. From here on, re-deploys follow the six-command walkthrough below — same shape with steps 4 (seed) and 8 (first sign-in passwords) removed.
 
 > **⚠ Don't skip step 4 on a fresh database**
 >
@@ -1267,7 +1262,7 @@ $ SCHEMA_MODE=migrate /opt/greenbook/deploy.sh v1.3.0
 
 ### 7.7 First-run bootstrap (one-time)
 
-Greenbook ships a seed script (`prisma/seed.ts`) that creates the baseline data the app refuses to run without: roles, permissions, system tenant, feature-flag defaults, reference data (regional groups, member states, countries), directory types, and the demo AU Commission leadership structure. **Until seed runs, no user can log in.**
+Greenbook ships a seed script (`prisma/seed.ts`) that creates the baseline data the app refuses to run without: roles, permissions, system tenant, feature-flag defaults, reference data (regional groups, member states, countries), directory types, and the global admin account. **Until seed runs, no user can log in.**
 
 Run this ONCE against a fresh database, before the first real deploy:
 
@@ -1284,8 +1279,9 @@ $ docker run --rm --env-file /etc/greenbook.env \
 $ docker run --rm --env-file /etc/greenbook.env \
   greenbook:$VERSION npx tsx prisma/seed.ts
 # Runtime: ~5-30 seconds. Creates the system tenant, the "admin" / "manager" /
-# "focal" / "user" roles with permissions, the FF_DIRECTORY + FF_PUBLIC_DIRECTORY
-# feature flags opted-in for the system tenant, and AUC demo leadership.
+# "focal" / "user" roles with permissions, the feature flags (on for no tenant
+# yet), the shared reference data, and the global admin from SEED_ADMIN_EMAIL /
+# SEED_ADMIN_PASSWORD. Stops with an error if either variable is missing.
 
 # Step 3 — verify (optional):
 $ docker run --rm --env-file /etc/greenbook.env \
@@ -1299,42 +1295,24 @@ $ docker run --rm --env-file /etc/greenbook.env \
     });
     await p.\$disconnect();
   })"
-# Expected: tenants >= 1, roles >= 4, users >= 4 (admin/manager/focal/user demos).
+# Expected on a fresh database: tenants 1 (system), roles 4, users 1 (the admin).
 ```
 
-The seed script is safe to re-run on a database that holds data: it leaves existing directory records and reference data alone, and it only adds tenants to a feature flag's enabled list. The starter organizations, positions and people are created only in a tenant that has no directory records. A re-run still restores the permissions of the four canonical roles, re-creates any missing demo account, and moves the demo accounts back to their seeded tenant.
+The seed script is safe to re-run on a database that holds data: it leaves existing tenants, directory records and reference data alone, and it never removes a tenant from a feature flag's enabled list. A re-run still restores the permissions of the four canonical roles, and re-creates the admin named by `SEED_ADMIN_EMAIL` if that account is missing. It never resets the password of an account that exists.
 
-> **⚠ Harden the seeded accounts before anyone else gets the URL**
+The seed creates no working tenant, no demo users and no directory records. After it runs, sign in as the admin and create the tenants, and their managers and focal persons, in the UI.
+
+> **⚠ A database seeded by an earlier version still has the old demo accounts**
 >
-> `prisma/seed.ts` creates four demo users with fixed passwords that are published in this repository:
+> Earlier versions of `prisma/seed.ts` created four accounts with fixed passwords that were published in this repository, plus a `demo` tenant with starter records. The current seed does not create them, and does not remove them either:
 >
-> | Account                    | Password     | Do this                               |
-> | -------------------------- | ------------ | ------------------------------------- |
-> | `admin@africanunion.org`   | `admin123`   | change the password, keep the account |
-> | `manager@africanunion.org` | `manager123` | delete                                |
-> | `focal@africanunion.org`   | `focal123`   | delete                                |
-> | `user@africanunion.org`    | `user123`    | delete                                |
+> | Account                    | Do this                                                     |
+> | -------------------------- | ----------------------------------------------------------- |
+> | `admin@africanunion.org`   | change the password, or delete it once another admin exists |
+> | `manager@africanunion.org` | delete                                                      |
+> | `focal@africanunion.org`   | delete                                                      |
+> | `user@africanunion.org`    | delete                                                      |
 >
-> `admin@africanunion.org` holds the `admin` role at global scope — every permission, in every tenant. From the moment nginx serves the public hostname until you rotate it, `admin123` is a working global-admin login for anyone who has read this repo.
->
-> **There is no env-file fix.** Unlike facilities, greenbook's seed reads no `SEED_ADMIN_*` variables ([§7.2.2](#not-applicable-seed_admin_email--seed_admin_password)) — you cannot pre-empt this, only clean up after it. The sequence:
->
-> 1. Log in as `admin@africanunion.org` / `admin123`.
-> 2. `/$tenant/profile/change-password` — set a real password. Record the **date** in the deployment register, never the password.
-> 3. `/$tenant/profile/change-email` — if this deployment's admin should be a different address, move it to a mailbox you control so password reset works.
-> 4. Delete `manager@`, `focal@`, and `user@`.
->
-> Do step 2 before step 3: if you change the email first and lose the session, reset mail goes to an inbox you may not have.
->
-> Then verify from the App VM, which bypasses the CDN's bot challenge — every one of these should fail:
->
-> ```bash
-> $ for c in admin:admin123 manager:manager123 focal:focal123 user:user123; do
->     u=${c%%:*}; p=${c#*:}
->     printf '%-8s ' "$u"
->     curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: greenbook.africanunion.org' \
->       -X POST http://127.0.0.1/login -d "email=$u@africanunion.org&password=$p"
->   done
-> ```
+> If `SEED_ADMIN_EMAIL` names a different address, a re-run adds that admin beside the old one; the old account keeps working until you deal with it.
 
 ---

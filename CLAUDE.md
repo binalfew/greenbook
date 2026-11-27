@@ -47,7 +47,7 @@ npm run format           # Prettier format all files
 npm run docker:up        # Start PostgreSQL (dev + test containers; host ports from DB_PORT / DB_TEST_PORT)
 npm run docker:down      # Stop containers
 npm run db:push          # Remove duplicate user-role rows (upgrade step), then sync Prisma schema to DB
-npm run db:seed          # Seed roles, permissions, feature flags, reference data, demo users
+npm run db:seed          # Seed roles, permissions, feature flags, reference data, the system tenant and the global admin
 npm run db:studio        # Prisma Studio GUI
 ```
 
@@ -219,7 +219,7 @@ Post-MVP polish that landed alongside the cross-tenant directory tier:
 - **Reference-id hydration in diffs** (`computeDiff` in `directory-changes.server.ts`). Per-field cuid references — `parentId`, `typeId`, `organizationId`, `reportsToId`, `memberStateId`, `personId`, `positionId` — resolve to human-readable names in the approval UI. Uses `REFERENCE_FIELDS` + `resolverFor` tables per `DirectoryEntityKey`; each resolver runs a single `findMany` across all referenced ids.
 - **`AssignmentTimeline` on public pages.** `publicGetPerson` now returns `history: PublicPersonTimelineEntry[]` (capped at 50, same ceiling as `publicGetOrganization.positions`). The public person + position detail pages drop the hand-rolled list renderer and render `AssignmentTimeline` with `mode="byPerson"` / `"byPosition"`.
 - **i18n'd tree toolbar.** `HierarchyTree` accepts a `labels` prop with `expandAll / collapseAll / moving / placeholder / resultCount`. `OrganizationHierarchyTree` threads it through; both the admin (`directory` namespace) and public (`directory-public` namespace) routes pass locale-bound values.
-- **Seed fix.** The seed opts its demo tenant into `FF_DIRECTORY` and `FF_PUBLIC_DIRECTORY` in the post-DEFAULT_FLAGS block. Tenant-scoped flags ignore the `enabled` boolean — membership in `enabledForTenants` is the actual gate.
+- **Tenant-scoped flags.** They ignore the `enabled` boolean — membership in `enabledForTenants` is the actual gate. A tenant gets on the lists when it is created (`NEW_TENANT_FLAGS`); the seed puts no tenant on them.
 
 ### Routes (admin, `app/routes/$tenant/directory/`)
 
@@ -297,14 +297,14 @@ There are four roles, and they are global: each is one row with `tenantId = null
 - `focal` (scope `TENANT`) — directory reads + `directory-change:{submit, withdraw-own, read-own}` in the user's home tenant
 - `manager` (scope `TENANT`) — everything `focal` has + entity writes and deletes + `directory-change:{read-all, approve, reject}` + `user:{read,create,update,delete}` and `role:read` in the user's home tenant
 
-Demo users: `admin@africanunion.org / admin123`, `manager@africanunion.org / manager123`, `focal@africanunion.org / focal123`, and `user@africanunion.org / user123` (plain directory reader — lands on `/`, not a tenant workspace). The admin's home is the `system` tenant. The focal, manager and reader accounts belong to the demo tenant, which also carries the starter organizations: `misd` when that tenant exists, otherwise a `demo` tenant the seed creates.
+The seed creates one tenant and one account, and no demo data: the `system` tenant and the global admin, whose email and password come from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (`adminAccountFromEnv` in `prisma/seed.ts`). The seed stops before writing anything when either is missing or the password is under 8 characters, and it never resets the password of an account that exists. There is no demo tenant, no seeded focal person, manager or reader, and no starter directory: working tenants and their users are created in the UI. Do not reintroduce an account with a built-in password.
 
-The `system` tenant is admin-only: it holds no directory records, is on neither directory flag's enabled list, and no user in it can hold a tenant-scope role (`SystemTenantRoleError` in `app/services/users.server.ts`, `SystemTenantDirectoryError` in `app/services/tenant-features.server.ts`). The seed step `emptySystemTenantDirectory` (`prisma/seed-system-tenant.ts`) moves anything an older database kept there into the demo tenant.
+The `system` tenant is admin-only: it holds no directory records, is on neither directory flag's enabled list, and no user in it can hold a tenant-scope role (`SystemTenantRoleError` in `app/services/users.server.ts`, `SystemTenantDirectoryError` in `app/services/tenant-features.server.ts`). It is recognised by its slug (`SYSTEM_TENANT_SLUG`), which cannot be changed, and it cannot be deleted (`updateTenant` / `deleteTenant` in `app/services/tenants.server.ts`). The seed step `emptySystemTenantDirectory` (`prisma/seed-system-tenant.ts`) moves anything an older database kept there into the `misd` tenant, when that tenant exists.
 
 ### Feature flags
 
-- `FF_DIRECTORY` — gates the `/$tenant/directory/*` admin surface, evaluated against the tenant in the URL for every user, the global admin included (on for new tenants and the seed's demo tenant; never for the system tenant).
-- `FF_PUBLIC_DIRECTORY` — **opts the tenant into the unified public directory** (on for new tenants and the seed's demo tenant; never for the system tenant). Public helpers aggregate across opted-in tenants via `getPublicTenantIds()`.
+- `FF_DIRECTORY` — gates the `/$tenant/directory/*` admin surface, evaluated against the tenant in the URL for every user, the global admin included (on for new tenants; never for the system tenant).
+- `FF_PUBLIC_DIRECTORY` — **opts the tenant into the unified public directory** (on for new tenants; never for the system tenant). Public helpers aggregate across opted-in tenants via `getPublicTenantIds()`.
 
 ### Deviations + open issues
 
@@ -314,7 +314,6 @@ The `system` tenant is admin-only: it holds no directory records, is on neither 
 - **Assignment timeline pagination** — `publicGetPerson.history` capped at 50. A person with >50 recorded posts needs a dedicated timeline pagination route.
 - **Tree lazy-load bypasses HTTP cache** — each tree expand is a POST FormData, so `Cache-Control` headers don't apply. The in-component `loadedChildrenRef` prevents duplicate queries within one session; across visitors each expand hits the DB.
 - **Tree DnD rollback on backend failure** — optimistic cache update is not reverted when `/api/organizations/move` returns `{ ok: false }`. User sees an error toast and can re-drag.
-- **Starter directory data is seeded once** — the seed gives the demo tenant starter organizations, positions, people and assignments only while it holds no directory records; it never overwrites or tops up existing ones.
 - **No notification chrome on the directory search surface** — notifications fire but the bell/inbox UI only lives on tenant layouts. Users on `/` and `/people/*` are now logged in but still see no bell; operators get it once they're in their tenant workspace, and plain `user`-role readers receive no workflow notifications anyway.
 
 ## Agent skills

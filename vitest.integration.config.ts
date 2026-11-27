@@ -40,6 +40,9 @@ export default defineConfig({
       HONEYPOT_SECRET: "integration-test-honeypot-secret",
       RESEND_API_KEY: "test-resend-key",
       EMAIL_FROM: "Greenbook Test <no-reply@greenbook.test>",
+      // The global admin `runSeed()` creates in the tests that call it.
+      SEED_ADMIN_EMAIL: "admin@greenbook.test",
+      SEED_ADMIN_PASSWORD: "integration-test-admin-password",
       NODE_ENV: "test",
     },
   },
