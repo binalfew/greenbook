@@ -1050,14 +1050,14 @@ async function resolveNames(
     }
     case "organizationType": {
       const rows = await prisma.organizationType.findMany({
-        where: { id: { in: ids }, tenantId },
+        where: { id: { in: ids } },
         select: { id: true, name: true },
       });
       return Object.fromEntries(rows.map((r) => [r.id, r.name]));
     }
     case "memberState": {
       const rows = await prisma.memberState.findMany({
-        where: { id: { in: ids }, tenantId },
+        where: { id: { in: ids } },
         select: { id: true, fullName: true, abbreviation: true },
       });
       return Object.fromEntries(
@@ -1066,7 +1066,7 @@ async function resolveNames(
     }
     case "positionType": {
       const rows = await prisma.positionType.findMany({
-        where: { id: { in: ids }, tenantId },
+        where: { id: { in: ids } },
         select: { id: true, name: true },
       });
       return Object.fromEntries(rows.map((r) => [r.id, r.name]));

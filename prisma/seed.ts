@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { PrismaClient } from "../app/generated/prisma/client";
 import { addTenantToFlag } from "../app/utils/config/tenant-flag-membership.server";
 import { detachRolesFromTenants } from "./seed-role-tenancy";
+import { mergeDuplicateReferenceData } from "./seed-shared-reference-data";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter });
@@ -453,13 +454,23 @@ export async function runSeed() {
     await addTenantToFlag(prisma, "FF_PUBLIC_DIRECTORY", tenantId);
   }
 
-  // Seed default reference data for the system tenant.
-  console.log("Seeding default reference data...");
-  await seedReferenceData(tenant.id);
+  // Data move (#6): reference data used to be stored once per tenant. Collapse
+  // those copies into the one shared set before seeding it. Idempotent.
+  const mergedReferenceRows = await mergeDuplicateReferenceData(prisma);
+  if (mergedReferenceRows > 0) {
+    console.log(`Merged ${mergedReferenceRows} per-tenant reference row(s) into the shared set.`);
+  }
 
-  // Seed directory baseline for the system tenant: org types, position
-  // types, regions, member states, starter org tree. Demo focal/manager
-  // user accounts go to the working tenant (misd if provisioned, else
+  // Seed the shared reference data: titles, org types, position types,
+  // regions, member states. One set, read by every tenant, so a tenant
+  // created later needs nothing seeded for it.
+  console.log("Seeding shared reference data...");
+  await seedTitles();
+  await seedDirectoryReference();
+  await seedLanguages(tenant.id);
+
+  // Seed directory baseline for the system tenant: starter org tree. Demo
+  // focal/manager user accounts go to the working tenant (misd if provisioned, else
   // system) so the demo flow is exercised end-to-end against a "real"
   // working tenant rather than the platform-admin home.
   console.log("Seeding directory baseline...");
@@ -470,20 +481,13 @@ export async function runSeed() {
     userTenantId: workingTenant.id,
   });
 
-  // Reference data belongs to EVERY tenant, not just `system`. Seed the
-  // generic reference catalogue (countries/titles/languages/currencies) and
-  // the directory reference data (org/position types, regions, member states)
-  // into every other non-deleted tenant — the working `misd` tenant plus any
-  // provisioned via the UI — so their focal/manager users can actually create
-  // records. Without this, a tenant's directory dropdowns are empty. Idempotent.
+  // Languages are still stored per tenant.
   const otherTenants = await prisma.tenant.findMany({
     where: { deletedAt: null, id: { not: tenant.id } },
     select: { id: true, slug: true },
   });
   for (const t of otherTenants) {
-    console.log(`Seeding reference data for tenant "${t.slug}"...`);
-    await seedReferenceData(t.id);
-    await seedDirectoryReference(t.id);
+    await seedLanguages(t.id);
   }
 
   console.log("✅ Seeding completed!");
@@ -494,11 +498,13 @@ export async function runSeed() {
   console.log("   Manager:      manager@africanunion.org / manager123");
 }
 
-/**
- * Populate reference data for a newly-created tenant. Safe to re-run — each
- * row upserts on `(tenantId, code)`.
- */
-async function seedReferenceData(tenantId: string) {
+/** True when no row of the shared table holds this code yet, deleted rows included. */
+async function isNewCode(holder: Promise<{ id: string } | null>) {
+  return (await holder) === null;
+}
+
+/** Shared titles. Create-only: an existing code is left as it is. */
+async function seedTitles() {
   const titles = [
     { code: "MR", name: "Mr." },
     { code: "MRS", name: "Mrs." },
@@ -507,13 +513,14 @@ async function seedReferenceData(tenantId: string) {
     { code: "PROF", name: "Prof." },
   ];
   for (const [i, t] of titles.entries()) {
-    await prisma.title.upsert({
-      where: { tenantId_code: { tenantId, code: t.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...t },
-    });
+    if (await isNewCode(prisma.title.findFirst({ where: { code: t.code }, select: { id: true } }))) {
+      await prisma.title.create({ data: { sortOrder: i, ...t } });
+    }
   }
+}
 
+/** Per-tenant languages. Safe to re-run — each row upserts on `(tenantId, code)`. */
+async function seedLanguages(tenantId: string) {
   const languages = [
     { code: "en", name: "English", nativeName: "English" },
     { code: "fr", name: "French", nativeName: "Français" },
@@ -531,9 +538,6 @@ async function seedReferenceData(tenantId: string) {
     });
   }
 }
-
-/** Exported for tenant-setup.server.ts to copy defaults to new tenants. */
-export { seedReferenceData };
 
 // ─── Directory baseline ──────────────────────────────────────────────────
 
@@ -632,47 +636,41 @@ const MEMBER_STATES: Array<{
 ];
 
 // Directory reference data — organization types, position types, regional
-// groups, and member states. Conceptually this catalogue belongs to *every*
-// tenant that runs the directory (not just the system tenant), so the seed
-// calls this for each tenant. Idempotent and create-only: a row is keyed on
-// (tenantId, code/abbreviation) and an existing row is left as it is, so
-// edits made in the app survive a re-run.
-async function seedDirectoryReference(tenantId: string) {
+// groups, and member states. One set shared by every tenant. Idempotent and
+// create-only: a row is keyed on its code / abbreviation and an existing row
+// (deleted ones included) is left as it is, so edits made in the app survive
+// a re-run.
+async function seedDirectoryReference() {
   for (const [i, t] of ORGANIZATION_TYPES.entries()) {
-    await prisma.organizationType.upsert({
-      where: { tenantId_code: { tenantId, code: t.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...t, description: t.description ?? null },
-    });
+    const held = prisma.organizationType.findFirst({ where: { code: t.code }, select: { id: true } });
+    if (await isNewCode(held)) {
+      await prisma.organizationType.create({
+        data: { sortOrder: i, ...t, description: t.description ?? null },
+      });
+    }
   }
   for (const t of POSITION_TYPES) {
-    await prisma.positionType.upsert({
-      where: { tenantId_code: { tenantId, code: t.code } },
-      update: {},
-      create: { tenantId, ...t },
-    });
+    const held = prisma.positionType.findFirst({ where: { code: t.code }, select: { id: true } });
+    if (await isNewCode(held)) await prisma.positionType.create({ data: t });
   }
 
   // Regions + member states (55 AU members)
   const regionByCode: Record<string, string> = {};
   for (const r of REGIONAL_GROUPS) {
-    const row = await prisma.regionalGroup.upsert({
-      where: { tenantId_code: { tenantId, code: r.code } },
-      update: {},
-      create: { tenantId, code: r.code, name: r.name },
-    });
+    const row =
+      (await prisma.regionalGroup.findFirst({ where: { code: r.code }, select: { id: true } })) ??
+      (await prisma.regionalGroup.create({ data: { code: r.code, name: r.name } }));
     regionByCode[r.code] = row.id;
   }
   for (const m of MEMBER_STATES) {
-    const existing = await prisma.memberState.findUnique({
-      where: { tenantId_abbreviation: { tenantId, abbreviation: m.abbr } },
+    const existing = await prisma.memberState.findFirst({
+      where: { abbreviation: m.abbr },
       select: { id: true },
     });
     if (existing) continue;
     const regionId = regionByCode[m.regionCode];
     await prisma.memberState.create({
       data: {
-        tenantId,
         fullName: m.name,
         abbreviation: m.abbr,
         dateJoined: new Date(m.dateJoined),
@@ -696,11 +694,6 @@ async function seedDirectory(
   },
 ) {
   const demoUserTenantId = userTenantId ?? tenantId;
-  // Directory reference data now lives in a shared helper seeded for
-  // every tenant (see seedDirectoryReference) — call it here so seedDirectory
-  // stays self-contained for the system tenant.
-  await seedDirectoryReference(tenantId);
-
   // Starter directory: only for a tenant that holds no directory records at
   // all. Once a tenant has records the seed leaves every one of them alone —
   // edited, moved, deleted or added by hand.
@@ -757,17 +750,17 @@ async function hasNoDirectoryRecords(tenantId: string) {
 async function seedStarterOrganizations(tenantId: string) {
   // Starter org tree: AU (root) → Commission (main organ) → 3 sample
   // departments / offices.
-  const rootType = await prisma.organizationType.findUniqueOrThrow({
-    where: { tenantId_code: { tenantId, code: "ROOT" } },
+  const rootType = await prisma.organizationType.findFirstOrThrow({
+    where: { code: "ROOT", deletedAt: null },
   });
-  const mainOrganType = await prisma.organizationType.findUniqueOrThrow({
-    where: { tenantId_code: { tenantId, code: "MAIN_ORGAN" } },
+  const mainOrganType = await prisma.organizationType.findFirstOrThrow({
+    where: { code: "MAIN_ORGAN", deletedAt: null },
   });
-  const deptType = await prisma.organizationType.findUniqueOrThrow({
-    where: { tenantId_code: { tenantId, code: "DEPARTMENT" } },
+  const deptType = await prisma.organizationType.findFirstOrThrow({
+    where: { code: "DEPARTMENT", deletedAt: null },
   });
-  const officeType = await prisma.organizationType.findUniqueOrThrow({
-    where: { tenantId_code: { tenantId, code: "OFFICE" } },
+  const officeType = await prisma.organizationType.findFirstOrThrow({
+    where: { code: "OFFICE", deletedAt: null },
   });
 
   const au = await upsertOrg(tenantId, {
@@ -1063,13 +1056,13 @@ async function seedPositionsPeopleAssignments(tenantId: string) {
   );
 
   const posTypes = await prisma.positionType.findMany({
-    where: { tenantId, deletedAt: null },
+    where: { deletedAt: null },
     select: { id: true, code: true },
   });
   const typeByCode = new Map(posTypes.map((t) => [t.code, t.id]));
 
   const memberStates = await prisma.memberState.findMany({
-    where: { tenantId, deletedAt: null },
+    where: { deletedAt: null },
     select: { id: true, abbreviation: true },
   });
   const memberStateByAbbr = new Map(memberStates.map((m) => [m.abbreviation, m.id]));

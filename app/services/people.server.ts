@@ -117,9 +117,9 @@ export async function getPerson(id: string, tenantId: string) {
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
-async function assertReferencedMemberState(memberStateId: string, tenantId: string, db: Db) {
+async function assertReferencedMemberState(memberStateId: string, db: Db) {
   const row = await db.memberState.findFirst({
-    where: { id: memberStateId, tenantId, deletedAt: null },
+    where: { id: memberStateId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {
@@ -158,7 +158,7 @@ export async function _applyCreatePerson(
   tx?: Prisma.TransactionClient,
 ) {
   const db: Db = tx ?? prisma;
-  if (payload.memberStateId) await assertReferencedMemberState(payload.memberStateId, tenantId, db);
+  if (payload.memberStateId) await assertReferencedMemberState(payload.memberStateId, db);
 
   logger.info(
     { tenantId, userId: ctx.userId, firstName: payload.firstName, lastName: payload.lastName },
@@ -207,7 +207,7 @@ export async function _applyUpdatePerson(
   });
   if (!existing) throw new PersonError("Person not found", 404, "NOT_FOUND");
 
-  if (payload.memberStateId) await assertReferencedMemberState(payload.memberStateId, tenantId, db);
+  if (payload.memberStateId) await assertReferencedMemberState(payload.memberStateId, db);
 
   logger.info({ tenantId, userId: ctx.userId, personId: id }, "applying UPDATE person");
 

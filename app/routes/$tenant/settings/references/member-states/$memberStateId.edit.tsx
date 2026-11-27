@@ -5,7 +5,7 @@ import {
   listRegionalGroups,
   ReferenceDataError,
 } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import { MemberStateEditor } from "./+shared/member-state-editor";
 import type { Route } from "./+types/$memberStateId.edit";
 
@@ -14,15 +14,11 @@ export const handle = { breadcrumb: "Edit" };
 export { action } from "./+shared/member-state-editor.server";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "write");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requireReferenceDataAdmin(request);
   try {
     const [memberState, regionalGroups] = await Promise.all([
-      getMemberState(params.memberStateId, tenantId),
-      listRegionalGroups(tenantId),
+      getMemberState(params.memberStateId),
+      listRegionalGroups(),
     ]);
     return data({ memberState, regionalGroups });
   } catch (err) {

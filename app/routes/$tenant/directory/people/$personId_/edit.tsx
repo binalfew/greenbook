@@ -16,12 +16,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const [person, memberStates, titles] = await Promise.all([
     getPerson(params.personId, tenantId),
     prisma.memberState.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
+      where: { deletedAt: null, isActive: true },
       orderBy: { fullName: "asc" },
       select: { id: true, fullName: true, abbreviation: true },
     }),
     prisma.title.findMany({
-      where: { tenantId, isActive: true },
+      where: { isActive: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, name: true },
     }),
