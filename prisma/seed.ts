@@ -5,6 +5,7 @@ import { PrismaClient } from "../app/generated/prisma/client";
 import { addTenantToNewTenantFlags } from "../app/utils/config/tenant-flag-membership.server";
 import { detachRolesFromTenants } from "./seed-role-tenancy";
 import { mergeDuplicateReferenceData } from "./seed-shared-reference-data";
+import { emptySystemTenantDirectory } from "./seed-system-tenant";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter });
@@ -326,23 +327,12 @@ export async function runSeed() {
     }
   }
 
-  // The `system` tenant is reserved for the platform admin. Demo accounts
-  // for the working roles (focal / manager / regular user) live in a
-  // separate working tenant — `misd` if it has been provisioned via the UI,
-  // otherwise we fall back to system so a fresh DB still has somewhere to
-  // attach them. seedDirectory uses the same fallback below.
-  const workingTenant =
-    (await prisma.tenant.findFirst({
-      where: { slug: "misd", deletedAt: null },
-      select: { id: true, slug: true },
-    })) ?? { id: tenant.id, slug: tenant.slug };
-  if (workingTenant.id !== tenant.id) {
-    console.log(`Demo working accounts will be attached to tenant "${workingTenant.slug}".`);
-  } else {
-    console.log(
-      `Tenant "misd" not provisioned yet — demo working accounts will fall back to "${tenant.slug}".`,
-    );
-  }
+  // The `system` tenant is the platform admin's home and nothing else: no
+  // directory, no focal persons, no managers. The directory demo lives in a
+  // separate working tenant — `misd` where it has been provisioned by hand,
+  // otherwise a `demo` tenant created here.
+  const workingTenant = await resolveDemoTenant();
+  console.log(`Demo directory and working accounts live in tenant "${workingTenant.slug}".`);
 
   // Create platform admin (lives in the system tenant only).
   console.log("Creating admin user...");
@@ -438,13 +428,20 @@ export async function runSeed() {
 
   // Tenant-scoped flags with `enabled: true` are off by default until a
   // tenant is explicitly added to `enabledForTenants` (see evaluateFlag in
-  // feature-flags.server.ts); the `enabled` boolean is ignored. Opt the
-  // system tenant + the working tenant (misd, if provisioned) into
-  // FF_DIRECTORY / FF_PUBLIC_DIRECTORY so the demo users can reach the admin
-  // directory + public directory out of the box. This only ever adds: tenants
-  // opted in by hand stay on the list.
-  for (const tenantId of new Set([tenant.id, workingTenant.id])) {
-    await addTenantToNewTenantFlags(prisma, tenantId);
+  // feature-flags.server.ts); the `enabled` boolean is ignored. Opt the demo
+  // tenant in, as tenant creation does for a tenant made in the UI, so the
+  // demo users can reach the directory out of the box. This only ever adds:
+  // tenants opted in by hand stay on the list.
+  await addTenantToNewTenantFlags(prisma, workingTenant.id);
+
+  // Data move (#24): the system tenant used to hold the directory. Hand its
+  // records, its focal persons and managers and its place on the directory
+  // flags to the demo tenant. Idempotent.
+  const movedOutOfSystem = await emptySystemTenantDirectory(prisma, tenant.id, workingTenant.id);
+  if (movedOutOfSystem > 0) {
+    console.log(
+      `Moved ${movedOutOfSystem} directory record(s) and user(s) from "${tenant.slug}" to "${workingTenant.slug}".`,
+    );
   }
 
   // Data move (#6): reference data used to be stored once per tenant. Collapse
@@ -461,16 +458,13 @@ export async function runSeed() {
   await seedTitles();
   await seedDirectoryReference();
 
-  // Seed directory baseline for the system tenant: starter org tree. Demo
-  // focal/manager user accounts go to the working tenant (misd if provisioned, else
-  // system) so the demo flow is exercised end-to-end against a "real"
-  // working tenant rather than the platform-admin home.
+  // Seed the demo tenant's directory baseline (starter org tree, positions,
+  // people) and its demo focal person and manager.
   console.log("Seeding directory baseline...");
-  await seedDirectory(tenant.id, {
+  await seedDirectory(workingTenant.id, {
     activeStatusId: activeStatus.id,
     focalRoleId: focalRole.id,
     managerRoleId: managerRole.id,
-    userTenantId: workingTenant.id,
   });
 
   console.log("✅ Seeding completed!");
@@ -479,6 +473,31 @@ export async function runSeed() {
   console.log("   User:         user@africanunion.org / user123");
   console.log("   Focal person: focal@africanunion.org / focal123");
   console.log("   Manager:      manager@africanunion.org / manager123");
+}
+
+/**
+ * The working tenant the demo runs in: `misd` if it exists, otherwise `demo`,
+ * created on first run and left alone afterwards.
+ */
+async function resolveDemoTenant(): Promise<{ id: string; slug: string }> {
+  const select = { id: true, slug: true };
+  const existing =
+    (await prisma.tenant.findFirst({ where: { slug: "misd", deletedAt: null }, select })) ??
+    (await prisma.tenant.findFirst({ where: { slug: "demo", deletedAt: null }, select }));
+  if (existing) return existing;
+  return prisma.tenant.create({
+    data: {
+      name: "Demo Directorate",
+      slug: "demo",
+      email: "demo@africanunion.org",
+      phone: "+251 11 551 7700",
+      city: "Addis Ababa",
+      state: "Addis Ababa",
+      address: "Roosevelt Street (Old Airport Area), P.O. Box 3243, Addis Ababa, Ethiopia",
+      brandTheme: "auc",
+    },
+    select,
+  });
 }
 
 /** True when no row of the shared table holds this code yet, deleted rows included. */
@@ -646,17 +665,12 @@ async function seedDirectoryReference() {
 
 async function seedDirectory(
   tenantId: string,
-  { activeStatusId, focalRoleId, managerRoleId, userTenantId }: {
+  { activeStatusId, focalRoleId, managerRoleId }: {
     activeStatusId: string;
     focalRoleId: string;
     managerRoleId: string;
-    /** Tenant the demo focal / manager *user accounts* belong to. Defaults
-     *  to `tenantId` (system) when not provided. The directory data itself
-     *  always lives in `tenantId`. */
-    userTenantId?: string;
   },
 ) {
-  const demoUserTenantId = userTenantId ?? tenantId;
   // Starter directory: only for a tenant that holds no directory records at
   // all. Once a tenant has records the seed leaves every one of them alone —
   // edited, moved, deleted or added by hand.
@@ -667,18 +681,17 @@ async function seedDirectory(
     await seedPositionsPeopleAssignments(tenantId);
   }
 
-  // Demo users: focal person + manager. Idempotent on email.
-  // These accounts belong to the *working* tenant (where focal/manager
-  // exercise the directory workflow), not the directory data tenant.
+  // Demo users: focal person + manager, in the same tenant as the directory
+  // they work on. Idempotent on email.
   const focalPassword = await hash("focal123", 10);
   await prisma.user.upsert({
     where: { email: "focal@africanunion.org" },
-    update: { tenantId: demoUserTenantId },
+    update: { tenantId },
     create: {
       email: "focal@africanunion.org",
       firstName: "Fola",
       lastName: "Adeyemi",
-      tenantId: demoUserTenantId,
+      tenantId,
       userStatusId: activeStatusId,
       userRoles: { create: { roleId: focalRoleId } },
       password: { create: { hash: focalPassword } },
@@ -687,12 +700,12 @@ async function seedDirectory(
   const managerPassword = await hash("manager123", 10);
   await prisma.user.upsert({
     where: { email: "manager@africanunion.org" },
-    update: { tenantId: demoUserTenantId },
+    update: { tenantId },
     create: {
       email: "manager@africanunion.org",
       firstName: "Marta",
       lastName: "Okonkwo",
-      tenantId: demoUserTenantId,
+      tenantId,
       userStatusId: activeStatusId,
       userRoles: { create: { roleId: managerRoleId } },
       password: { create: { hash: managerPassword } },

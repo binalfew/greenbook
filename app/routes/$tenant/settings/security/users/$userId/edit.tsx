@@ -8,7 +8,12 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { RoleScope } from "~/generated/prisma/client";
-import { EmailTakenError, setUserTenantAssignment, updateUser } from "~/services/users.server";
+import {
+  EmailTakenError,
+  setUserTenantAssignment,
+  SystemTenantRoleError,
+  updateUser,
+} from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { requireUserInScope } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
@@ -80,7 +85,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   // A form without the tenant field is not a request to clear the tenant;
   // only an explicit value ("" included) from the picker reassigns.
   if (isGlobalAdmin && formData.has("tenantId")) {
-    await setUserTenantAssignment(params.userId, targetTenantId, ctx);
+    try {
+      await setUserTenantAssignment(params.userId, targetTenantId, ctx);
+    } catch (error) {
+      if (!(error instanceof SystemTenantRoleError)) throw error;
+      return data(submission.reply({ fieldErrors: { tenantId: [error.message] } }), {
+        status: 400,
+      });
+    }
   }
 
   return redirect(`/${params.tenant}/settings/security/users/${params.userId}`);

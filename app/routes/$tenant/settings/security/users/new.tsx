@@ -9,7 +9,12 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { RoleScope } from "~/generated/prisma/client";
-import { createUser, EmailTakenError, setUserTenantAssignment } from "~/services/users.server";
+import {
+  createUser,
+  EmailTakenError,
+  setUserTenantAssignment,
+  SystemTenantRoleError,
+} from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
@@ -117,6 +122,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   } catch (error) {
     if (error instanceof EmailTakenError) {
       return data(submission.reply({ fieldErrors: { email: [error.message] } }), { status: 400 });
+    }
+    if (error instanceof SystemTenantRoleError) {
+      return data(submission.reply({ fieldErrors: { tenantId: [error.message] } }), {
+        status: 400,
+      });
     }
     return data(
       submission.reply({

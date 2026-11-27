@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import {
   NotATenantFlagError,
+  SystemTenantDirectoryError,
   listTenantFeatures,
   setTenantFeature,
 } from "~/services/tenant-features.server";
@@ -61,7 +62,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       buildServiceContext(request, user, tenant.id),
     );
   } catch (error) {
-    if (error instanceof NotATenantFlagError) {
+    if (error instanceof NotATenantFlagError || error instanceof SystemTenantDirectoryError) {
       return data({ ok: false as const, error: error.message }, { status: 400 });
     }
     throw error;

@@ -3,6 +3,7 @@ import { Prisma, RoleScope } from "~/generated/prisma/client";
 import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { prisma } from "~/utils/db/db.server";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 
 export async function getUser(userId: string) {
   return prisma.user.findUnique({
@@ -132,6 +133,34 @@ function rethrowEmailClash(error: unknown): never {
 }
 
 /**
+ * Refused because it would put a focal person or manager in the system
+ * tenant, which is the platform admin's home and has no directory. The
+ * message is safe to show on the form.
+ */
+export class SystemTenantRoleError extends Error {
+  constructor() {
+    super(
+      "Focal persons and managers cannot belong to the system tenant. Use a working tenant, or remove the role first.",
+    );
+  }
+}
+
+// Every tenant-scope role (focal, manager, any custom one) carries authority
+// over its holder's home tenant, so none of them may be held there.
+async function assertNoTenantRolesInSystemTenant(tenantId: string | null, roleIds: string[]) {
+  if (!tenantId || roleIds.length === 0) return;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { slug: true },
+  });
+  if (tenant?.slug !== SYSTEM_TENANT_SLUG) return;
+  const tenantRoles = await prisma.role.count({
+    where: { id: { in: roleIds }, scope: RoleScope.TENANT },
+  });
+  if (tenantRoles > 0) throw new SystemTenantRoleError();
+}
+
+/**
  * Placeholder written over a deleted user's email so the real address can be
  * registered again. The original stays in the audit log's DELETE entry.
  */
@@ -165,6 +194,7 @@ export async function createUser(input: CreateUserInput, ctx: TenantServiceConte
   const targetTenantId = input.tenantId === undefined ? ctx.tenantId : input.tenantId;
 
   await assertEmailAvailable(input.email);
+  await assertNoTenantRolesInSystemTenant(targetTenantId, input.roleIds ?? []);
 
   const created = await prisma
     .$transaction(async (tx) => {
@@ -255,6 +285,9 @@ export async function updateUser(
  *   - Global-scope grants (`admin`, `user`) are preserved.
  *   - Does NOT auto-grant any role on move. Granting `manager`/`focal` is an
  *     explicit step via the user-roles UI.
+ *   - A focal person or manager is not moved into the system tenant at all
+ *     (`SystemTenantRoleError`): the admin removes the role first, so nobody
+ *     loses their working role by a slip of the tenant picker.
  *
  * Idempotent. Re-running on a user already in the target state is a no-op.
  */
@@ -270,6 +303,14 @@ export async function setUserTenantAssignment(
   if (!currentUser) throw new Error("User not found");
 
   const oldTenantId = currentUser.tenantId;
+
+  if (oldTenantId !== newTenantId) {
+    const held = await prisma.userRole.findMany({ where: { userId }, select: { roleId: true } });
+    await assertNoTenantRolesInSystemTenant(
+      newTenantId,
+      held.map((r) => r.roleId),
+    );
+  }
 
   await prisma.$transaction(async (tx) => {
     // Strip TENANT-scope role grants on move — focal/manager authority
@@ -351,6 +392,12 @@ export async function replaceUserRoles(
     roleIds.length > 0 &&
     (await prisma.role.count({ where: { id: { in: roleIds }, ...GLOBAL_ADMIN_ROLE } })) > 0;
   if (!keepsAdmin) await assertNotLastGlobalAdmin(userId);
+
+  const holder = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tenantId: true },
+  });
+  await assertNoTenantRolesInSystemTenant(holder?.tenantId ?? null, roleIds);
 
   await prisma.$transaction(async (tx) => {
     await tx.userRole.deleteMany({ where: { userId } });

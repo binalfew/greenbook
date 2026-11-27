@@ -2,10 +2,12 @@ import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import {
+  DIRECTORY_FLAGS,
   addTenantToFlag,
   removeTenantFromFlag,
 } from "~/utils/config/tenant-flag-membership.server";
 import { prisma } from "~/utils/db/db.server";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 import type { ServiceContext } from "~/utils/types.server";
 
 // One tenant's membership of the tenant-scoped feature flags, for the global
@@ -23,6 +25,13 @@ export type TenantFeature = {
 export class NotATenantFlagError extends Error {
   constructor(flagKey: string) {
     super(`"${flagKey}" is not a tenant-scoped feature flag`);
+  }
+}
+
+/** The system tenant is the global admin's home only and cannot have a directory. */
+export class SystemTenantDirectoryError extends Error {
+  constructor() {
+    super("The system tenant cannot be opted into the directory or cross-tenant search.");
   }
 }
 
@@ -51,6 +60,14 @@ export async function setTenantFeature(
     select: { id: true, scope: true },
   });
   if (!flag || flag.scope !== "tenant") throw new NotATenantFlagError(flagKey);
+
+  if (enabled && DIRECTORY_FLAGS.includes(flagKey)) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { slug: true },
+    });
+    if (tenant?.slug === SYSTEM_TENANT_SLUG) throw new SystemTenantDirectoryError();
+  }
 
   if (enabled) await addTenantToFlag(prisma, flagKey, tenantId);
   else await removeTenantFromFlag(prisma, flagKey, tenantId);

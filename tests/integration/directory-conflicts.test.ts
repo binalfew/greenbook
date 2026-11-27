@@ -19,8 +19,8 @@ beforeEach(() => {
 
 async function arrange() {
   const status = await seedActiveUserStatus(prisma);
-  // The request helpers below address the acting tenant as /system/...
-  const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "system" }) });
+  // The request helpers below address the acting tenant as /medical/...
+  const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "medical" }) });
   const passwordHash = await hash("test-password", 4);
 
   async function grant(roleId: string, resource: string, action: string) {
@@ -113,7 +113,7 @@ async function arrange() {
 }
 
 function post(cookie: string, body: Record<string, string>, lang?: "en" | "fr"): Request {
-  return new Request("http://localhost/system/directory", {
+  return new Request("http://localhost/medical/directory", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -124,7 +124,7 @@ function post(cookie: string, body: Record<string, string>, lang?: "en" | "fr"):
 }
 
 function get(cookie: string): Request {
-  return new Request("http://localhost/system/directory", { headers: { cookie } });
+  return new Request("http://localhost/medical/directory", { headers: { cookie } });
 }
 
 type DataResult = { data: unknown; init: { status?: number } | null };
@@ -136,7 +136,7 @@ type DataResult = { data: unknown; init: { status?: number } | null };
 async function run(action: (args: never) => unknown, request: Request, params: object) {
   const result = await action({
     request,
-    params: { tenant: "system", ...params },
+    params: { tenant: "medical", ...params },
     context: {},
   } as never);
   if (result instanceof Response) throw new Error(`expected a form reply, got ${result.status}`);
@@ -316,7 +316,7 @@ describe("a record with a pending change is locked", () => {
   async function detail(cookie: string, personId: string) {
     const result = (await personDetailLoader({
       request: get(cookie),
-      params: { tenant: "system", personId },
+      params: { tenant: "medical", personId },
       context: {},
     } as never)) as unknown as { data: { pendingChange: { submittedById: string } | null } };
     return result.data;

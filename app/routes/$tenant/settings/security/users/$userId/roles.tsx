@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { RoleScope } from "~/generated/prisma/client";
-import { LastAdminError, replaceUserRoles } from "~/services/users.server";
+import { LastAdminError, replaceUserRoles, SystemTenantRoleError } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { assertCanGrantRoles, requireUserInScope } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
@@ -63,7 +63,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   try {
     await replaceUserRoles(params.userId, roleIds, ctx);
   } catch (error) {
-    if (!(error instanceof LastAdminError)) throw error;
+    if (!(error instanceof LastAdminError || error instanceof SystemTenantRoleError)) throw error;
     return data({ error: error.message }, { status: 400 });
   }
 
