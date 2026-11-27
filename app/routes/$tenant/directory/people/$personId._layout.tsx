@@ -12,6 +12,7 @@ import { findPendingChange } from "~/services/directory-changes.server";
 import { getPerson } from "~/services/people.server";
 import { hasPermission } from "~/utils/auth/require-auth.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
+import { personPhotoPath } from "~/utils/directory-routes";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$personId._layout";
 
@@ -85,6 +86,15 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
       {locked && (canEdit || canDel) ? <RecordLockedNotice /> : null}
 
       <header className="space-y-2">
+        {person.photoId ? (
+          <img
+            src={personPhotoPath(params.tenant, person.photoId)}
+            alt={t("people.photo.alt", { name: fullName })}
+            width={80}
+            height={80}
+            className="size-20 rounded-full border object-cover"
+          />
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{fullName}</h1>
           {person.memberState ? (

@@ -3,6 +3,7 @@ import { _applyCreateAssignment } from "~/services/position-assignments.server";
 import { prisma } from "~/utils/db/db.server";
 import { normaliseSearchTerm } from "~/utils/db/search.server";
 import { logger } from "~/utils/monitoring/logger.server";
+import { photoStorage } from "~/utils/photo-storage.server";
 import type { PersonPayload } from "~/utils/schemas/directory";
 import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
 
@@ -26,7 +27,7 @@ const personSelect = {
   email: true,
   phone: true,
   bio: true,
-  photoUrl: true,
+  photoId: true,
   memberStateId: true,
   languages: true,
   showEmail: true,
@@ -141,12 +142,20 @@ function personDataFromPayload(payload: PersonPayload) {
     officeEmail: payload.officeEmail ?? null,
     officePhone: payload.officePhone ?? null,
     bio: payload.bio ?? null,
-    photoUrl: payload.photoUrl ?? null,
     memberStateId: payload.memberStateId ?? null,
     languages: payload.languages ?? [],
     showEmail: payload.showEmail ?? false,
     showPhone: payload.showPhone ?? false,
   };
+}
+
+// The photo a payload asks for: `undefined` leaves the record's photo alone,
+// `null` removes it. A photo that is gone or belongs to another tenant is
+// treated as "leave alone" rather than failing the whole change.
+async function photoIdFromPayload(payload: PersonPayload, tenantId: string, db: Db) {
+  if (!payload.photoId) return payload.photoId;
+  const photo = await photoStorage.stat(payload.photoId, db);
+  return photo?.tenantId === tenantId ? photo.id : undefined;
 }
 
 // ─── Internal writers (called only from directory-changes engine) ───────
@@ -166,7 +175,11 @@ export async function _applyCreatePerson(
   );
 
   const created = await db.person.create({
-    data: { tenantId, ...personDataFromPayload(payload) },
+    data: {
+      tenantId,
+      ...personDataFromPayload(payload),
+      photoId: await photoIdFromPayload(payload, tenantId, db),
+    },
     select: personSelect,
   });
 
@@ -213,7 +226,11 @@ export async function _applyUpdatePerson(
 
   return db.person.update({
     where: { id },
-    data: { ...personDataFromPayload(payload), version: { increment: 1 } },
+    data: {
+      ...personDataFromPayload(payload),
+      photoId: await photoIdFromPayload(payload, tenantId, db),
+      version: { increment: 1 },
+    },
     select: personSelect,
   });
 }
@@ -262,7 +279,7 @@ type PublicPerson = {
   officeEmail: string | null;
   officePhone: string | null;
   bio: string | null;
-  photoUrl: string | null;
+  photoId: string | null;
   languages: string[];
   memberState: { id: string; fullName: string; abbreviation: string } | null;
   currentAssignments: {
@@ -282,7 +299,7 @@ function stripPII(row: {
   officeEmail: string | null;
   officePhone: string | null;
   bio: string | null;
-  photoUrl: string | null;
+  photoId: string | null;
   languages: string[];
   showEmail: boolean;
   showPhone: boolean;
@@ -306,7 +323,7 @@ function stripPII(row: {
     officeEmail: row.officeEmail,
     officePhone: row.officePhone,
     bio: row.bio,
-    photoUrl: row.photoUrl,
+    photoId: row.photoId,
     languages: row.languages,
     memberState: row.memberState,
     currentAssignments: (row.assignments ?? []).map((a) => ({
@@ -389,7 +406,7 @@ export async function publicListPeople(
         officeEmail: true,
         officePhone: true,
         bio: true,
-        photoUrl: true,
+        photoId: true,
         languages: true,
         showEmail: true,
         showPhone: true,
@@ -536,7 +553,7 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
       officeEmail: true,
       officePhone: true,
       bio: true,
-      photoUrl: true,
+      photoId: true,
       languages: true,
       showEmail: true,
       showPhone: true,

@@ -8,6 +8,7 @@ import {
   notifyManagersOfSubmissions,
   notifySubmitterOfDecision,
 } from "~/services/directory-notifications.server";
+import { photosTouchedBy, releaseUnreferencedPhotos } from "~/services/person-photos.server";
 import {
   payloadSchemaFor,
   type ChangeOperationKey,
@@ -358,7 +359,8 @@ export async function saveDraft(
   // `submitDrafts` repeats the check under the entity lock.
   await assertNoPendingConflict(ctx.tenantId, input.entityType, entityId);
 
-  return prisma.$transaction(async (tx) => {
+  let replacedPhotos: string[] = [];
+  const saved = await prisma.$transaction(async (tx) => {
     if (options.draftId) {
       const existing = await tx.changeRequest.findFirst({
         where: {
@@ -367,7 +369,7 @@ export async function saveDraft(
           submittedById: ctx.userId,
           status: "DRAFT",
         },
-        select: { id: true, entityType: true, operation: true, entityId: true },
+        select: { id: true, entityType: true, operation: true, entityId: true, payload: true },
       });
       if (!existing) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
       if (
@@ -381,6 +383,11 @@ export async function saveDraft(
           "DRAFT_MISMATCH",
         );
       }
+      replacedPhotos = await photosTouchedBy({
+        tenantId: ctx.tenantId,
+        entityType: existing.entityType,
+        payload: existing.payload,
+      });
       return tx.changeRequest.update({
         where: { id: existing.id },
         data: { payload: validated as Prisma.InputJsonValue },
@@ -426,6 +433,8 @@ export async function saveDraft(
       include: changeListInclude,
     });
   });
+  await releaseUnreferencedPhotos(replacedPhotos);
+  return saved;
 }
 
 /** The caller's own draft, or null. Other users' drafts are never returned. */
@@ -454,10 +463,13 @@ export async function findOwnDraftForEntity(
 
 /** Delete the caller's own draft. Anything else is reported as not found. */
 export async function discardDraft(id: string, ctx: TenantServiceContext) {
+  const draft = await getOwnDraft(id, ctx);
+  const photos = draft ? await photosTouchedBy(draft) : [];
   const deleted = await prisma.changeRequest.deleteMany({
     where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
   });
   if (deleted.count === 0) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
+  await releaseUnreferencedPhotos(photos);
 }
 
 // ─── Reopen a rejected request ──────────────────────────────────────────
@@ -813,6 +825,7 @@ export async function approveChange(
     "approving change request",
   );
 
+  const photos = await photosTouchedBy(change);
   const result = await prisma.$transaction(async (tx) => {
     // Claim the row FIRST with a conditional, status-guarded update. The
     // pre-check above is outside the transaction and offers no protection
@@ -858,6 +871,7 @@ export async function approveChange(
     });
     return { change: updated, entity };
   });
+  await releaseUnreferencedPhotos(photos);
 
   emitDomainEvent(ctx.tenantId, "change.approved", {
     id: result.change.id,
@@ -945,6 +959,7 @@ export async function rejectChange(
       "NOT_PENDING",
     );
   }
+  await releaseUnreferencedPhotos(await photosTouchedBy(change));
   const updated = await prisma.changeRequest.findFirstOrThrow({
     where: { id },
     include: changeListInclude,
@@ -1006,6 +1021,7 @@ export async function withdrawChange(id: string, ctx: TenantServiceContext) {
       "NOT_PENDING",
     );
   }
+  await releaseUnreferencedPhotos(await photosTouchedBy(change));
   const updated = await prisma.changeRequest.findFirstOrThrow({
     where: { id },
     include: changeListInclude,
@@ -1043,6 +1059,12 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
     "submit+apply change request (self-approved)",
   );
 
+  const photos = await photosTouchedBy({
+    tenantId: ctx.tenantId,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    payload: validated,
+  });
   const result = await prisma.$transaction(async (tx) => {
     // Same lock as submitChange — a manager's direct edit must not race with a
     // focal submission (or another manager) for the same entity.
@@ -1085,6 +1107,7 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
     });
     return { change, entity };
   });
+  await releaseUnreferencedPhotos(photos);
 
   emitDomainEvent(ctx.tenantId, domainEventFor(input.entityType, input.operation, validated), {
     id: result.change.entityId,

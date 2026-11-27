@@ -101,13 +101,26 @@
       "officeEmail": "Official email",
       "officePhone": "Official phone",
       "bio": "Biography",
-      "photoUrl": "Photo URL",
+      "photo": "Photo",
       "memberState": "Nationality",
       "memberStatePlaceholder": "Select a member state",
       "languages": "Languages",
       "languagesHelp": "Comma-separated ISO codes (en, fr, am).",
       "showEmail": "Show email publicly",
       "showPhone": "Show phone publicly"
+    },
+    "photo": {
+      "help": "JPEG, PNG or WebP, up to 5 MB. The photo is resized before it is saved.",
+      "remove": "Remove photo",
+      "undoRemove": "Keep photo",
+      "willBeRemoved": "The photo will be removed when you save.",
+      "alt": "Photo of {{name}}",
+      "current": "Current photo",
+      "unavailable": "Photo no longer available",
+      "errors": {
+        "TOO_LARGE": "The photo is larger than 5 MB. Choose a smaller file.",
+        "UNSUPPORTED_TYPE": "The photo must be a JPEG, PNG or WebP image."
+      }
     },
     "cards": {
       "basics": "Basics",

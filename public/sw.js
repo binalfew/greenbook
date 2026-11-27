@@ -47,6 +47,9 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (request.method !== "GET") return;
 
+  // Person photos are private to the logged-in user: never cache them here
+  if (/^\/[^/]+\/directory\/photos\/|^\/people\/[^/]+\/photo$/.test(url.pathname)) return;
+
   // Navigation requests: network-first with offline fallback
   if (request.mode === "navigate") {
     event.respondWith(

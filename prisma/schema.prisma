@@ -222,6 +222,7 @@ model Tenant {
   notifications       Notification[]
   organizations       Organization[]
   people              Person[]
+  personPhotos        PersonPhoto[]
   positions           Position[]
   positionAssignments PositionAssignment[]
   changeRequests      ChangeRequest[]
@@ -540,7 +541,10 @@ model Person {
   officeEmail   String?  @db.VarChar(255)
   officePhone   String?  @db.VarChar(50)
   bio           String?  @db.Text
-  photoUrl      String?  @db.VarChar(500)
+  // Published photo. Bytes live in PersonPhoto so listing people never
+  // loads images; a proposed photo is referenced from the change request's
+  // payload until approval copies its id here.
+  photoId       String?
   memberStateId String?
   languages     String[]
 
@@ -556,13 +560,34 @@ model Person {
 
   tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberState MemberState?         @relation(fields: [memberStateId], references: [id])
+  photo       PersonPhoto?         @relation(fields: [photoId], references: [id], onDelete: SetNull)
   assignments PositionAssignment[]
 
   @@index([tenantId])
+  @@index([photoId])
   @@index([tenantId, lastName, firstName])
   @@index([tenantId, memberStateId])
   @@index([email])
   @@index([deletedAt])
+}
+
+// A person's photo, already resized and re-encoded by the server. Read and
+// written only through app/utils/photo-storage.server.ts.
+model PersonPhoto {
+  id           String   @id @default(cuid())
+  tenantId     String
+  uploadedById String?
+  contentType  String   @db.VarChar(50)
+  width        Int
+  height       Int
+  size         Int
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  people Person[]
+
+  @@index([tenantId])
 }
 
 model PositionType {

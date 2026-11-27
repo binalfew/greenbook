@@ -20,6 +20,11 @@ export function directoryEntitySegment(entity: DirectoryEntity): string {
   return SEGMENT[entity];
 }
 
+/** URL of a person photo on the tenant's admin pages (see `photos.$photoId.tsx`). */
+export function personPhotoPath(tenantSlug: string, photoId: string): string {
+  return `/${tenantSlug}/directory/photos/${photoId}`;
+}
+
 // Query param carrying the id of the draft an editor page is resuming. The
 // editor forms post back to their own URL, so the param reaches
 // `dispatchDirectoryChange`, which re-saves that draft instead of creating one.

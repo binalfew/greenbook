@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Form, Link } from "react-router";
+import { Form, Link, useParams } from "react-router";
 import {
   SelectField,
   SwitchField,
@@ -9,6 +9,7 @@ import {
   useForm,
 } from "~/components/form";
 import { FormError } from "~/components/directory/form-error";
+import { PhotoField } from "~/components/directory/photo-field";
 import {
   CONFIRM_DUPLICATES_FIELD,
   PossibleDuplicates,
@@ -18,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import { personPhotoPath } from "~/utils/directory-routes";
 import type { PossibleDuplicate } from "~/services/person-duplicates.server";
 import { personFormSchema } from "~/utils/schemas/directory";
 import type { Route } from "../$personId_/+types/edit";
@@ -33,7 +35,7 @@ type PersonLike = {
   officeEmail: string | null;
   officePhone: string | null;
   bio: string | null;
-  photoUrl: string | null;
+  photoId: string | null;
   memberStateId: string | null;
   languages: string[];
   showEmail: boolean;
@@ -116,7 +118,6 @@ export function PersonEditor({
       officeEmail: person?.officeEmail ?? "",
       officePhone: person?.officePhone ?? "",
       bio: person?.bio ?? "",
-      photoUrl: person?.photoUrl ?? "",
       memberStateId: person?.memberStateId ?? "",
       languages: person?.languages ?? [],
       showEmail: person?.showEmail ?? false,
@@ -128,9 +129,17 @@ export function PersonEditor({
     },
   });
 
+  // A draft carries its own photo; an empty one on a person who has a
+  // published photo means the draft removes it.
+  const { tenant = "" } = useParams();
+  const draftPhotoId =
+    draftValues && "photoId" in draftValues ? String(draftValues.photoId ?? "") : undefined;
+  const photoId = draftPhotoId || person?.photoId || null;
+
   // Present only when the action held the save back with a duplicate warning.
   const duplicates =
     (actionData as { duplicates?: PossibleDuplicate[] } | undefined)?.duplicates ?? [];
+
   const cancelHref = person ? `${basePrefix}/${person.id}` : basePrefix;
   const submitLabel = canDirectApply
     ? t("actions.submitAndApprove")
@@ -139,7 +148,7 @@ export function PersonEditor({
       : t("actions.submit");
 
   return (
-    <Form method="post" {...getFormProps(form)} className="space-y-6">
+    <Form method="post" encType="multipart/form-data" {...getFormProps(form)} className="space-y-6">
       <FormError message={form.errors?.[0]} />
       {person?.id ? (
         <>
@@ -208,14 +217,23 @@ export function PersonEditor({
               />
             </FieldRow>
             <FieldRow
-              id={fields.photoUrl.id}
-              label={t("people.fields.photoUrl")}
-              errors={fields.photoUrl.errors}
+              id={fields.photo.id}
+              label={t("people.fields.photo")}
+              errors={fields.photo.errors}
+              help={t("people.photo.help")}
             >
-              <Input
-                {...getInputProps(fields.photoUrl, { type: "url" })}
-                key={fields.photoUrl.key}
-                placeholder="https://"
+              <PhotoField
+                id={fields.photo.id}
+                current={
+                  photoId ? { id: photoId, src: personPhotoPath(tenant, photoId) } : undefined
+                }
+                initiallyRemoved={draftPhotoId === "" && Boolean(person?.photoId)}
+                labels={{
+                  current: t("people.photo.current"),
+                  remove: t("people.photo.remove"),
+                  undoRemove: t("people.photo.undoRemove"),
+                  willBeRemoved: t("people.photo.willBeRemoved"),
+                }}
               />
             </FieldRow>
           </div>
