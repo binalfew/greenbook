@@ -73,7 +73,6 @@ export async function bootstrapNewTenant(args: {
       where: {
         userId: initialAdminUserId,
         roleId: canonical.managerRoleId,
-        eventId: null,
       },
       select: { id: true },
     });

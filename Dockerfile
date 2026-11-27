@@ -178,10 +178,7 @@ STOPSIGNAL SIGTERM
 # Signal Docker sends on `docker stop`. greenbook's server/app.ts installs
 # SIGTERM + SIGINT handlers that:
 #   1. flush the rate-limit audit buffer (server/rate-limit-audit.ts)
-#   2. stop the job processor (app/utils/events/job-queue.server.ts)
-#   3. flush pending Sentry events when SENTRY_DSN is set
-# The 10-second default Docker grace can be tight when the job queue has
-# long-running handlers; docker-compose.yml extends it via stop_grace_period.
+#   2. flush pending Sentry events when SENTRY_DSN is set
 
 EXPOSE 3000
 # Documentation — does NOT publish the port. See compose "ports:".

@@ -9,23 +9,6 @@ import { mergeDuplicateReferenceData } from "./seed-shared-reference-data";
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter });
 
-const SEED_PERMISSIONS = [
-  { resource: "user", action: "read", module: "system", description: "Read user data", access: "own" },
-  { resource: "user", action: "update", module: "system", description: "Update own user data", access: "own" },
-  { resource: "user", action: "read", module: "system", description: "Read all user data", access: "any" },
-  { resource: "user", action: "create", module: "system", description: "Create users", access: "any" },
-  { resource: "user", action: "update", module: "system", description: "Update any user", access: "any" },
-  { resource: "user", action: "delete", module: "system", description: "Delete users", access: "any" },
-  { resource: "role", action: "read", module: "system", description: "Read roles", access: "any" },
-  { resource: "role", action: "create", module: "system", description: "Create roles", access: "any" },
-  { resource: "role", action: "update", module: "system", description: "Update roles", access: "any" },
-  { resource: "role", action: "delete", module: "system", description: "Delete roles", access: "any" },
-  { resource: "permission", action: "read", module: "system", description: "Read permissions", access: "any" },
-  { resource: "permission", action: "create", module: "system", description: "Create permissions", access: "any" },
-  { resource: "permission", action: "update", module: "system", description: "Update permissions", access: "any" },
-  { resource: "permission", action: "delete", module: "system", description: "Delete permissions", access: "any" },
-];
-
 // Unique permissions by resource+action for upsert
 const UNIQUE_PERMISSIONS = [
   { resource: "user", action: "read", module: "system", description: "Read user data" },
@@ -33,27 +16,10 @@ const UNIQUE_PERMISSIONS = [
   { resource: "user", action: "create", module: "system", description: "Create users" },
   { resource: "user", action: "delete", module: "system", description: "Delete users" },
   { resource: "role", action: "read", module: "system", description: "Read roles" },
-  { resource: "role", action: "create", module: "system", description: "Create roles" },
-  { resource: "role", action: "update", module: "system", description: "Update roles" },
-  { resource: "role", action: "delete", module: "system", description: "Delete roles" },
-  { resource: "permission", action: "read", module: "system", description: "Read permissions" },
-  { resource: "permission", action: "create", module: "system", description: "Create permissions" },
-  { resource: "permission", action: "update", module: "system", description: "Update permissions" },
-  { resource: "permission", action: "delete", module: "system", description: "Delete permissions" },
-  { resource: "tenant", action: "read", module: "system", description: "Read tenants" },
-  { resource: "tenant", action: "create", module: "system", description: "Create tenants" },
-  { resource: "tenant", action: "update", module: "system", description: "Update tenants" },
-  { resource: "tenant", action: "delete", module: "system", description: "Delete tenants" },
   { resource: "settings", action: "read", module: "system", description: "Read system settings" },
   { resource: "settings", action: "write", module: "system", description: "Write system settings" },
   { resource: "feature-flag", action: "read", module: "system", description: "Read feature flags" },
   { resource: "feature-flag", action: "write", module: "system", description: "Manage feature flags" },
-  { resource: "notification", action: "read", module: "events", description: "Read notifications" },
-  { resource: "notification", action: "write", module: "events", description: "Manage notifications" },
-  { resource: "notification", action: "delete", module: "events", description: "Delete notifications" },
-  { resource: "saved-view", action: "read", module: "data", description: "Read saved views" },
-  { resource: "saved-view", action: "write", module: "data", description: "Manage saved views" },
-  { resource: "saved-view", action: "delete", module: "data", description: "Delete saved views" },
   { resource: "reference-data", action: "read", module: "data", description: "Read reference data" },
   { resource: "reference-data", action: "write", module: "data", description: "Manage reference data" },
   { resource: "reference-data", action: "delete", module: "data", description: "Delete reference data" },
@@ -169,6 +135,17 @@ export async function runSeed() {
   await prisma.permission.deleteMany({ where: { resource: "two-factor" } });
   await prisma.systemSetting.deleteMany({ where: { key: "security.require2fa" } });
   await prisma.verification.deleteMany({ where: { type: { in: ["2fa", "2fa-verify"] } } });
+
+  // Permissions nothing checks (#20): tenant, permission and role management
+  // are gated on the global admin role, not on a permission. Safe to re-run.
+  await prisma.permission.deleteMany({
+    where: {
+      OR: [
+        { resource: { in: ["tenant", "permission", "notification", "saved-view"] } },
+        { resource: "role", action: { in: ["create", "update", "delete"] } },
+      ],
+    },
+  });
 
   // Create roles
   //
@@ -382,12 +359,6 @@ export async function runSeed() {
   console.log("Seeding default feature flags...");
   const DEFAULT_FLAGS = [
     {
-      key: "FF_IMPERSONATION",
-      scope: "global",
-      enabled: true,
-      description: "Allow global admins to impersonate tenant users",
-    },
-    {
       key: "FF_NOTIFICATIONS",
       scope: "tenant",
       enabled: true,
@@ -404,12 +375,6 @@ export async function runSeed() {
       scope: "global",
       enabled: false,
       description: "Multi-language UI",
-    },
-    {
-      key: "FF_AUDIT_EXPORT",
-      scope: "tenant",
-      enabled: false,
-      description: "Export audit log (CSV/JSON)",
     },
     {
       key: "FF_DIRECTORY",

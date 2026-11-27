@@ -28,10 +28,7 @@ const toggleFlagSchema = z.object({
 const FLAG_LABELS: Record<string, string> = {
   FF_I18N: "Multi-language (i18n)",
   FF_PWA: "Progressive web app",
-  FF_IMPERSONATION: "Impersonation",
   FF_NOTIFICATIONS: "Notifications",
-  FF_NOTES: "Notes",
-  FF_AUDIT_EXPORT: "Audit export",
 };
 
 export async function loader({ request }: Route.LoaderArgs) {

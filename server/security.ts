@@ -16,14 +16,7 @@ export const corsMiddleware = cors({
   origin: allowedOrigins,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  allowedHeaders: [
-    "Content-Type",
-    "X-CSRF-Token",
-    "If-Match",
-    "Idempotency-Key",
-    "X-Correlation-Id",
-    "X-Request-Id",
-  ],
+  allowedHeaders: ["Content-Type", "X-CSRF-Token", "If-Match", "X-Correlation-Id", "X-Request-Id"],
 });
 
 // ─── Cross-site request forgery ────────────────────────────

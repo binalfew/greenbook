@@ -172,15 +172,14 @@ model RolePermission {
 }
 
 model UserRole {
-  id      String  @id @default(cuid())
-  userId  String
-  roleId  String
-  eventId String?
+  id     String @id @default(cuid())
+  userId String
+  roleId String
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, roleId, eventId])
+  @@unique([userId, roleId])
   @@index([userId])
   @@index([roleId])
 }
@@ -196,13 +195,6 @@ enum InvitationStatus {
   ACCEPTED
   REVOKED
   EXPIRED
-}
-
-enum JobStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
 }
 
 model Tenant {
@@ -325,39 +317,6 @@ model FeatureFlag {
   enabledForUsers    String[] @default([])
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-}
-
-// ─── Events & Jobs ─────────────────────────────────────
-
-model Job {
-  id          String    @id @default(cuid())
-  type        String    @db.VarChar(100)
-  payload     Json
-  status      JobStatus @default(PENDING)
-  attempts    Int       @default(0)
-  maxAttempts Int       @default(3)
-  nextRunAt   DateTime  @default(now())
-  lastError   String?   @db.Text
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
-
-  @@index([status, nextRunAt])
-  @@index([type])
-}
-
-model IdempotencyKey {
-  id           String   @id @default(cuid())
-  key          String   @db.VarChar(255)
-  tenantId     String
-  method       String   @db.VarChar(10)
-  path         String   @db.VarChar(500)
-  statusCode   Int
-  responseBody String   @db.Text
-  createdAt    DateTime @default(now())
-  expiresAt    DateTime
-
-  @@unique([key, tenantId])
-  @@index([expiresAt])
 }
 
 model Notification {

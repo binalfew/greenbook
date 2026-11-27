@@ -167,7 +167,6 @@ export default function PermissionsListPage({ loaderData }: Route.ComponentProps
             label: "New permission",
             icon: Plus,
             href: `${basePath}/new`,
-            permission: "permission:create",
           },
         ]}
         rowActions={[
@@ -175,14 +174,12 @@ export default function PermissionsListPage({ loaderData }: Route.ComponentProps
             label: "Edit",
             icon: Pencil,
             href: (row) => `${basePath}/${row.id}/edit`,
-            permission: "permission:update",
           },
           {
             label: "Delete",
             icon: Trash2,
             href: (row) => `${basePath}/${row.id}/delete`,
             variant: "destructive",
-            permission: "permission:delete",
           },
         ]}
         pagination={pagination}

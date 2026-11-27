@@ -56,7 +56,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 type RoleRow = Route.ComponentProps["loaderData"]["roles"][number];
 
 export default function RolesListPage({ loaderData }: Route.ComponentProps) {
-  const { roles, pagination } = loaderData;
+  const { roles, pagination, isGlobalAdmin } = loaderData;
   const base = useBasePrefix();
   const basePath = `${base}/settings/security/roles`;
 
@@ -117,38 +117,33 @@ export default function RolesListPage({ loaderData }: Route.ComponentProps) {
         columns={columns}
         rowKey="id"
         searchConfig={{ placeholder: "Search roles…" }}
-        toolbarActions={[
-          {
-            label: "New role",
-            icon: Plus,
-            href: `${basePath}/new`,
-            permission: "role:create",
-          },
-        ]}
-        rowActions={[
-          {
-            label: "Edit",
-            icon: Pencil,
-            href: (row) => `${basePath}/${row.id}/edit`,
-            permission: "role:update",
-          },
-          {
-            // Editing a role's permission grants is global-admin-only (the
-            // route does requireGlobalAdmin). Gate the button on role:update
-            // — only global admins still hold that permission.
-            label: "Permissions",
-            icon: KeyRound,
-            href: (row) => `${basePath}/${row.id}/permissions`,
-            permission: "role:update",
-          },
-          {
-            label: "Delete",
-            icon: Trash2,
-            href: (row) => `${basePath}/${row.id}/delete`,
-            variant: "destructive",
-            permission: "role:delete",
-          },
-        ]}
+        // Creating, editing and deleting roles is global-admin-only (each
+        // route does requireGlobalAdmin), so only a global admin sees the buttons.
+        toolbarActions={
+          isGlobalAdmin ? [{ label: "New role", icon: Plus, href: `${basePath}/new` }] : []
+        }
+        rowActions={
+          isGlobalAdmin
+            ? [
+                {
+                  label: "Edit",
+                  icon: Pencil,
+                  href: (row) => `${basePath}/${row.id}/edit`,
+                },
+                {
+                  label: "Permissions",
+                  icon: KeyRound,
+                  href: (row) => `${basePath}/${row.id}/permissions`,
+                },
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  href: (row) => `${basePath}/${row.id}/delete`,
+                  variant: "destructive",
+                },
+              ]
+            : []
+        }
         pagination={pagination}
         emptyState={{
           icon: Shield,
