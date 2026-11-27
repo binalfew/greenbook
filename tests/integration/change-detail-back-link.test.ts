@@ -4,6 +4,7 @@ import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
+import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -90,9 +91,19 @@ async function arrange() {
     context: {},
   } as never).catch((thrown) => thrown);
 
+  // The save is a draft; the focal person sends it for review.
   const change = await prisma.changeRequest.findFirstOrThrow({
-    where: { tenantId: tenant.id, status: "PENDING" },
+    where: { tenantId: tenant.id, status: "DRAFT" },
   });
+  await submitDraftsAction({
+    request: new Request(`http://localhost/${tenant.slug}/directory/approvals/submit-drafts`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: focalSession },
+      body: new URLSearchParams({ "ids[]": change.id }).toString(),
+    }),
+    params: { tenant: tenant.slug },
+    context: {},
+  } as never);
 
   return { slug: tenant.slug, changeId: change.id, focalSession, managerSession };
 }

@@ -3,6 +3,7 @@ import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
+import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -109,9 +110,19 @@ async function diffAfterEdit(a: Arranged, overrides: Record<string, string>) {
   } as never);
   expect((response as Response).status).toBe(302);
 
+  // The save is a draft; the focal person sends it for review.
   const change = await prisma.changeRequest.findFirstOrThrow({
-    where: { tenantId: a.tenantId, entityId: a.org.id, status: "PENDING" },
+    where: { tenantId: a.tenantId, entityId: a.org.id, status: "DRAFT" },
   });
+  await submitDraftsAction({
+    request: new Request(`http://localhost/${a.slug}/directory/approvals/submit-drafts`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: a.focalCookie },
+      body: new URLSearchParams({ "ids[]": change.id }).toString(),
+    }),
+    params: { tenant: a.slug },
+    context: {},
+  } as never);
   const detail = (await changeDetailLoader({
     request: new Request(`http://localhost/${a.slug}/directory/approvals/x`, {
       headers: { cookie: a.managerCookie },

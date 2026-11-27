@@ -1,6 +1,7 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
+import { draftsPath } from "~/utils/directory-routes";
 import { dispatchDirectoryChange } from "~/utils/directory-submit.server";
 import { personFormSchema } from "~/utils/schemas/directory";
 
@@ -47,5 +48,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (outcome.mode === "SELF_APPROVED" && outcome.change.entityId) {
     return redirect(`${base}/${outcome.change.entityId}`);
   }
+  if (outcome.mode === "DRAFT") return redirect(draftsPath(String(params.tenant)));
   return redirect(`${base}?submitted=1`);
 }

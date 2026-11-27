@@ -36,6 +36,19 @@ export async function notifyManagersOfSubmission(
   change: ChangeNotificationSeed,
   submitter: Actor | null,
 ): Promise<void> {
+  return notifyManagersOfSubmissions([change], submitter);
+}
+
+/**
+ * One notification per approver for a whole submission, however many change
+ * requests it carries. All changes must share a tenant and a submitter.
+ */
+export async function notifyManagersOfSubmissions(
+  changes: ChangeNotificationSeed[],
+  submitter: Actor | null,
+): Promise<void> {
+  const change = changes[0];
+  if (!change) return;
   try {
     const reviewers = await prisma.user.findMany({
       where: {
@@ -61,13 +74,14 @@ export async function notifyManagersOfSubmission(
     });
 
     const submitterName = displayName(submitter, "A focal person");
-    const title = "New directory change to review";
-    const message = `${submitterName} submitted a ${change.operation} for ${change.entityType}`;
-    const data = {
-      changeId: change.id,
-      entityType: change.entityType,
-      operation: change.operation,
-    };
+    const single = changes.length === 1;
+    const title = single ? "New directory change to review" : "New directory changes to review";
+    const message = single
+      ? `${submitterName} submitted a ${change.operation} for ${change.entityType}`
+      : `${submitterName} submitted ${changes.length} directory changes for review`;
+    const data = single
+      ? { changeId: change.id, entityType: change.entityType, operation: change.operation }
+      : { changeIds: changes.map((c) => c.id), count: changes.length };
 
     await Promise.all(
       reviewers.map((u) =>

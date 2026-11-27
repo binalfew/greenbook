@@ -5,6 +5,7 @@ import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { logger } from "~/utils/monitoring/logger.server";
 import {
   notifyManagersOfSubmission,
+  notifyManagersOfSubmissions,
   notifySubmitterOfDecision,
 } from "~/services/directory-notifications.server";
 import {
@@ -89,7 +90,7 @@ export type AppliedEntity = { id: string };
 
 export type BatchItemOk = { id: string; change: ChangeRequest };
 export type BatchItemFail = { id: string; code: string; message: string };
-export type BatchItemSkip = { id: string; reason: "NOT_PENDING" | "NOT_FOUND" };
+export type BatchItemSkip = { id: string; reason: "NOT_PENDING" | "NOT_DRAFT" | "NOT_FOUND" };
 
 export type BatchResult = {
   succeeded: BatchItemOk[];
@@ -315,6 +316,217 @@ export async function submitChange(input: SubmitInput, ctx: TenantServiceContext
   return change;
 }
 
+// ─── Drafts ─────────────────────────────────────────────────────────────
+//
+// A focal person's save lands as a DRAFT: visible only to its author, never
+// in the approval queue, no events, no notifications. `submitDrafts` moves a
+// selection of drafts to PENDING; from there the normal review flow applies.
+
+/**
+ * Create a draft, or — when `draftId` is given — replace the payload of the
+ * caller's own existing draft. A draft never blocks other users. Refused when
+ * the record already has a change in review (`PENDING_REQUEST_EXISTS`) or the
+ * author already holds a draft for it (`DRAFT_EXISTS`). The stale-edit check
+ * and the binding pending-conflict check run later, in `submitDrafts`.
+ */
+export async function saveDraft(
+  input: SubmitInput,
+  ctx: TenantServiceContext,
+  options: { draftId?: string } = {},
+) {
+  const validated = validatePayload(input.entityType, input.operation, input.payload);
+
+  if (
+    (input.operation === "UPDATE" || input.operation === "DELETE" || input.operation === "MOVE") &&
+    !input.entityId
+  ) {
+    throw new ChangeRequestError(`${input.operation} requires entityId`, 400, "MISSING_ENTITY_ID");
+  }
+  if (input.operation === "CREATE" && input.entityId) {
+    throw new ChangeRequestError("CREATE must not include entityId", 400, "UNEXPECTED_ENTITY_ID");
+  }
+  const entityId = input.entityId ?? null;
+
+  // A record with a change in review is locked, so say so now instead of
+  // letting the author write a draft that cannot be submitted. Advisory only:
+  // `submitDrafts` repeats the check under the entity lock.
+  await assertNoPendingConflict(ctx.tenantId, input.entityType, entityId);
+
+  return prisma.$transaction(async (tx) => {
+    if (options.draftId) {
+      const existing = await tx.changeRequest.findFirst({
+        where: {
+          id: options.draftId,
+          tenantId: ctx.tenantId,
+          submittedById: ctx.userId,
+          status: "DRAFT",
+        },
+        select: { id: true, entityType: true, operation: true, entityId: true },
+      });
+      if (!existing) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
+      if (
+        existing.entityType !== input.entityType ||
+        existing.operation !== input.operation ||
+        existing.entityId !== entityId
+      ) {
+        throw new ChangeRequestError(
+          "This draft belongs to a different record",
+          400,
+          "DRAFT_MISMATCH",
+        );
+      }
+      return tx.changeRequest.update({
+        where: { id: existing.id },
+        data: { payload: validated as Prisma.InputJsonValue },
+        include: changeListInclude,
+      });
+    }
+
+    if (entityId) {
+      // Serialize the author's concurrent saves for this record (double
+      // click) so the check below cannot be raced into two drafts.
+      const key = `dirdraft:${ctx.tenantId}:${ctx.userId}:${input.entityType}:${entityId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      const own = await tx.changeRequest.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          submittedById: ctx.userId,
+          entityType: input.entityType,
+          entityId,
+          status: "DRAFT",
+        },
+        select: { id: true },
+      });
+      if (own) {
+        throw new ChangeRequestError(
+          "You already have a draft for this record. Edit or discard that draft first.",
+          409,
+          "DRAFT_EXISTS",
+        );
+      }
+    }
+
+    return tx.changeRequest.create({
+      data: {
+        tenantId: ctx.tenantId,
+        entityType: input.entityType,
+        entityId,
+        operation: input.operation,
+        payload: validated as Prisma.InputJsonValue,
+        submittedById: ctx.userId,
+        status: "DRAFT",
+        approvalMode: "REVIEWED",
+      },
+      include: changeListInclude,
+    });
+  });
+}
+
+/** The caller's own draft, or null. Other users' drafts are never returned. */
+export async function getOwnDraft(id: string, ctx: TenantServiceContext) {
+  return prisma.changeRequest.findFirst({
+    where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
+  });
+}
+
+/** The caller's own draft against a published record, or null. */
+export async function findOwnDraftForEntity(
+  entityType: DirectoryEntityKey,
+  entityId: string,
+  ctx: TenantServiceContext,
+) {
+  return prisma.changeRequest.findFirst({
+    where: {
+      tenantId: ctx.tenantId,
+      submittedById: ctx.userId,
+      entityType,
+      entityId,
+      status: "DRAFT",
+    },
+  });
+}
+
+/** Delete the caller's own draft. Anything else is reported as not found. */
+export async function discardDraft(id: string, ctx: TenantServiceContext) {
+  const deleted = await prisma.changeRequest.deleteMany({
+    where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
+  });
+  if (deleted.count === 0) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
+}
+
+async function submitDraft(id: string, ctx: TenantServiceContext): Promise<ChangeListRow> {
+  // Scoped to the author: someone else's draft is indistinguishable from a
+  // missing one.
+  const draft = await prisma.changeRequest.findFirst({
+    where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId },
+  });
+  if (!draft) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
+  if (draft.status !== "DRAFT") {
+    throw new ChangeRequestError(
+      `Cannot submit: current status is ${draft.status}`,
+      409,
+      "NOT_DRAFT",
+    );
+  }
+  const entityType = draft.entityType as DirectoryEntityKey;
+
+  const change = await prisma.$transaction(async (tx) => {
+    await lockEntityAndAssertNoPending(tx, ctx.tenantId, entityType, draft.entityId);
+    if (draft.entityId && (draft.operation === "UPDATE" || draft.operation === "MOVE")) {
+      await assertVersionMatches(
+        tx,
+        ctx.tenantId,
+        entityType,
+        draft.entityId,
+        extractBaseVersion(draft.payload),
+      );
+    }
+    const claim = await tx.changeRequest.updateMany({
+      where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
+      data: { status: "PENDING", submittedAt: new Date() },
+    });
+    if (claim.count === 0) {
+      throw new ChangeRequestError("Cannot submit: no longer a draft", 409, "NOT_DRAFT");
+    }
+    return tx.changeRequest.findFirstOrThrow({ where: { id }, include: changeListInclude });
+  });
+
+  emitDomainEvent(ctx.tenantId, "change.submitted", {
+    id: change.id,
+    entityType: change.entityType,
+    entityId: change.entityId,
+    operation: change.operation,
+    submittedById: change.submittedById,
+  });
+
+  return change;
+}
+
+/**
+ * Submit the caller's drafts for review. Atomic per draft, same cap and
+ * skipped / failed reporting as batch approve: ids that are not the caller's
+ * drafts are `skipped`; a stale edit (`VERSION_CONFLICT`) or a record that
+ * already has a pending change (`PENDING_REQUEST_EXISTS`) is `failed` and
+ * stays a draft. Approvers get ONE notification for the whole call.
+ */
+export async function submitDrafts(ids: string[], ctx: TenantServiceContext): Promise<BatchResult> {
+  assertBatchSize(ids);
+  const submitted: ChangeListRow[] = [];
+  const result = await runBatch(
+    ids,
+    async (id) => {
+      const change = await submitDraft(id, ctx);
+      submitted.push(change);
+      return change;
+    },
+    ctx,
+  );
+  if (submitted.length > 0) {
+    await notifyManagersOfSubmissions(submitted, submitted[0].submittedBy);
+  }
+  return result;
+}
+
 // ─── Apply (shared by approve + submitAndApply) ─────────────────────────
 
 type ApplyOperationInput = {
@@ -426,7 +638,10 @@ export async function approveChange(
   const change = await prisma.changeRequest.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!change) throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  // A draft is private to its author — to a reviewer it does not exist.
+  if (!change || change.status === "DRAFT") {
+    throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  }
   if (change.status !== "PENDING") {
     throw new ChangeRequestError(
       `Cannot approve: current status is ${change.status}`,
@@ -538,7 +753,9 @@ export async function rejectChange(
   const change = await prisma.changeRequest.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!change) throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  if (!change || change.status === "DRAFT") {
+    throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  }
   if (change.status !== "PENDING") {
     throw new ChangeRequestError(
       `Cannot reject: current status is ${change.status}`,
@@ -606,7 +823,9 @@ export async function withdrawChange(id: string, ctx: TenantServiceContext) {
   const change = await prisma.changeRequest.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!change) throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  if (!change || (change.status === "DRAFT" && change.submittedById !== ctx.userId)) {
+    throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  }
   if (change.status !== "PENDING") {
     throw new ChangeRequestError(
       `Cannot withdraw: current status is ${change.status}`,
@@ -772,7 +991,7 @@ export async function rejectChanges(
 // verb that matches the action (approved | rejected | withdrawn).
 export function formatBatchSummary(
   result: BatchResult,
-  verb: "approved" | "rejected" | "withdrawn",
+  verb: "approved" | "rejected" | "withdrawn" | "submitted",
 ): string {
   const parts: string[] = [];
   if (result.succeeded.length > 0) parts.push(`${result.succeeded.length} ${verb}`);
@@ -802,8 +1021,8 @@ async function runBatch(
           result.skipped.push({ id, reason: "NOT_FOUND" });
           continue;
         }
-        if (error.code === "NOT_PENDING") {
-          result.skipped.push({ id, reason: "NOT_PENDING" });
+        if (error.code === "NOT_PENDING" || error.code === "NOT_DRAFT") {
+          result.skipped.push({ id, reason: error.code });
           continue;
         }
       }
@@ -862,9 +1081,7 @@ export async function listMyChanges(
   const filter: Prisma.ChangeRequestWhereInput = {
     tenantId,
     submittedById: userId,
-    ...(where.status
-      ? { status: where.status as "PENDING" | "APPROVED" | "REJECTED" | "WITHDRAWN" }
-      : {}),
+    ...(where.status ? { status: where.status as ChangeRequest["status"] } : {}),
     ...buildChangeSearchFilter(where.search),
   };
 
@@ -906,12 +1123,16 @@ export async function listChangeHistory(tenantId: string, options: PaginatedQuer
   return { data, total };
 }
 
-export async function getChange(id: string, tenantId: string) {
+// `viewerId` is required so no caller can forget the draft rule: a DRAFT is
+// visible only to its author and reads as not-found for everyone else.
+export async function getChange(id: string, tenantId: string, viewerId: string) {
   const change = await prisma.changeRequest.findFirst({
     where: { id, tenantId },
     include: changeListInclude,
   });
-  if (!change) throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  if (!change || (change.status === "DRAFT" && change.submittedById !== viewerId)) {
+    throw new ChangeRequestError("Change request not found", 404, "NOT_FOUND");
+  }
   return change;
 }
 

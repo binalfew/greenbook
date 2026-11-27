@@ -5,6 +5,7 @@ import { prisma } from "../setup/integration-setup";
 
 import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
 import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
+import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -133,9 +134,19 @@ async function submitAsFocal(a: Arranged): Promise<string> {
       context: {},
     }),
   );
+  // The save is a draft; the focal person sends it for review.
   const change = await prisma.changeRequest.findFirstOrThrow({
-    where: { tenantId: a.tenantId, status: "PENDING" },
+    where: { tenantId: a.tenantId, status: "DRAFT" },
   });
+  await run(() =>
+    submitDraftsAction({
+      request: post(`/${a.slug}/directory/approvals/submit-drafts`, a.focalSession, {
+        "ids[]": change.id,
+      }),
+      params: { tenant: a.slug },
+      context: {},
+    }),
+  );
   return change.id;
 }
 

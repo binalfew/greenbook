@@ -182,9 +182,9 @@ Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 mem
 
 ### Editorial workflow (ChangeRequest engine)
 
-Every mutation flows through `app/services/directory-changes.server.ts`. The real entity tables hold only published state; proposed changes live as `ChangeRequest` rows with status `PENDING → APPROVED | REJECTED | WITHDRAWN`.
+Every mutation flows through `app/services/directory-changes.server.ts`. The real entity tables hold only published state; proposed changes live as `ChangeRequest` rows with status `DRAFT → PENDING → APPROVED | REJECTED | WITHDRAWN`.
 
-- **Focal persons** (role `focal`) hold `directory-change:submit`. Their edits `submitChange()` — the record doesn't change until a manager approves.
+- **Focal persons** (role `focal`) hold `directory-change:submit`. Their edits `saveDraft()` — a `DRAFT` is private to its author and never reaches the approval queue. `submitDrafts(ids, ctx)` moves the author's drafts to `PENDING` (same batch cap and skipped/failed reporting as batch approve; stale-edit and one-open-change checks run here) and notifies approvers once per call. The record doesn't change until a manager approves.
 - **Managers** (role `manager`) hold `{organization,person,position,position-assignment}:write`. Their direct edits `submitAndApply()` — creates a self-approved ChangeRequest + applies in one transaction.
 - **One PENDING per `(entityType, entityId)`** enforced in service (future partial unique DB index).
 - **Approval runs in a single `$transaction`** — `_applyCreate/Update/Move/SoftDelete` writers each accept an optional `tx: Prisma.TransactionClient` so guards, writes, and the ChangeRequest update commit atomically.
@@ -210,7 +210,7 @@ Naming note: "public" in this section — the `public*` service helpers, `app/ro
 
 Post-MVP polish that landed alongside the cross-tenant directory tier:
 
-- **Notifications on workflow transitions** (`app/services/directory-notifications.server.ts`). `submitChange` notifies every user in the tenant with `directory-change:approve` (except the submitter). `approveChange` / `rejectChange` notify the submitter with the reviewer's name + reject notes when present. All fire-and-forget: failures are logged, never unwind the approval transaction. Skip when reviewer = submitter.
+- **Notifications on workflow transitions** (`app/services/directory-notifications.server.ts`). `submitDrafts` notifies every user in the tenant with `directory-change:approve` (except the submitter) once per call, however many drafts it carries. `approveChange` / `rejectChange` notify the submitter with the reviewer's name + reject notes when present. All fire-and-forget: failures are logged, never unwind the approval transaction. Skip when reviewer = submitter.
 - **Reference-id hydration in diffs** (`computeDiff` in `directory-changes.server.ts`). Per-field cuid references — `parentId`, `typeId`, `organizationId`, `reportsToId`, `memberStateId`, `personId`, `positionId` — resolve to human-readable names in the approval UI. Uses `REFERENCE_FIELDS` + `resolverFor` tables per `DirectoryEntityKey`; each resolver runs a single `findMany` across all referenced ids.
 - **`AssignmentTimeline` on public pages.** `publicGetPerson` now returns `history: PublicPersonTimelineEntry[]` (capped at 50, same ceiling as `publicGetOrganization.positions`). The public person + position detail pages drop the hand-rolled list renderer and render `AssignmentTimeline` with `mode="byPerson"` / `"byPosition"`.
 - **i18n'd tree toolbar.** `HierarchyTree` accepts a `labels` prop with `expandAll / collapseAll / moving / placeholder / resultCount`. `OrganizationHierarchyTree` threads it through; both the admin (`directory` namespace) and public (`directory-public` namespace) routes pass locale-bound values.
@@ -240,26 +240,26 @@ approvals/
   index.tsx (pending queue; selectable + batch dialog for reject notes)
   mine.tsx, history.tsx
   $changeId._layout.tsx (diff + metadata + action buttons)
-  $changeId.approve.tsx, .reject.tsx, .withdraw.tsx (dialogs)
-  batch-approve.tsx, batch-reject.tsx (resource routes)
+  $changeId.approve.tsx, .reject.tsx, .withdraw.tsx, .discard.tsx (dialogs)
+  batch-approve.tsx, batch-reject.tsx, submit-drafts.tsx (resource routes)
 ```
 
 ### Key helpers
 
-| Helper                                                                | File                                               | Purpose                                                                                                                   |
-| --------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `requireDirectoryAccess(request, { write? })`                         | `app/utils/directory-access.server.ts`             | Resolves `{ user, tenantId, canDirect, canSubmit, canReview }` in one call                                                |
-| `requireDirectoryWriteAccess(request, resource)`                      | same                                               | Gates new/edit/delete loaders — fails 403 if neither direct-write nor submit                                              |
-| `requireReviewContext(request)` / `requireSubmitContext(request)`     | same                                               | Collapses `requireDirectoryAccess + buildServiceContext` for approval/submission routes                                   |
-| `dispatchDirectoryChange(request, resource, input)`                   | `app/utils/directory-submit.server.ts`             | Editor actions call this; routes through `submitAndApply` (manager) or `submitChange` (focal person) based on permissions |
-| `dispatchDirectoryDelete(request, resource, entityType, id, reason?)` | same                                               | Convenience wrapper for DELETE dialogs                                                                                    |
-| `directoryEntitySegment(entity)`                                      | `app/utils/directory-routes.ts`                    | Maps `DirectoryEntity` enum to admin URL segment (for deep-links from the change-detail page)                             |
-| `formatBatchSummary(result, verb)`                                    | `app/services/directory-changes.server.ts`         | Produces "5 approved · 1 skipped" strings for the fetcher responses                                                       |
-| `NavTabs`                                                             | `app/components/layout/nav-tabs.tsx`               | Shared horizontal tab strip, used by Directory `_layout.tsx` + Changes `_layout.tsx`                                      |
-| `PendingBadge`                                                        | `app/components/directory/pending-badge.tsx`       | Amber pill shown on entity detail pages when a pending change exists                                                      |
-| `ChangeStatusPill`                                                    | `app/components/directory/change-status-pill.tsx`  | Status badge across queue + detail                                                                                        |
-| `ChangeDiff`                                                          | `app/components/directory/change-diff.tsx`         | Renders `FieldDiff[]` from `computeDiff()` as field / before / after                                                      |
-| `AssignmentTimeline`                                                  | `app/components/directory/assignment-timeline.tsx` | Vertical timeline of assignments; used on Person + Position detail pages                                                  |
+| Helper                                                                | File                                               | Purpose                                                                                                                                                  |
+| --------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requireDirectoryAccess(request, { write? })`                         | `app/utils/directory-access.server.ts`             | Resolves `{ user, tenantId, canDirect, canSubmit, canReview }` in one call                                                                               |
+| `requireDirectoryWriteAccess(request, resource)`                      | same                                               | Gates new/edit/delete loaders — fails 403 if neither direct-write nor submit                                                                             |
+| `requireReviewContext(request)` / `requireSubmitContext(request)`     | same                                               | Collapses `requireDirectoryAccess + buildServiceContext` for approval/submission routes                                                                  |
+| `dispatchDirectoryChange(request, resource, input)`                   | `app/utils/directory-submit.server.ts`             | Editor actions call this; routes through `submitAndApply` (manager) or `saveDraft` (focal person; `?draft=<id>` updates that draft) based on permissions |
+| `dispatchDirectoryDelete(request, resource, entityType, id, reason?)` | same                                               | Convenience wrapper for DELETE dialogs                                                                                                                   |
+| `directoryEntitySegment(entity)`                                      | `app/utils/directory-routes.ts`                    | Maps `DirectoryEntity` enum to admin URL segment (for deep-links from the change-detail page)                                                            |
+| `formatBatchSummary(result, verb)`                                    | `app/services/directory-changes.server.ts`         | Produces "5 approved · 1 skipped" strings for the fetcher responses                                                                                      |
+| `NavTabs`                                                             | `app/components/layout/nav-tabs.tsx`               | Shared horizontal tab strip, used by Directory `_layout.tsx` + Changes `_layout.tsx`                                                                     |
+| `PendingBadge`                                                        | `app/components/directory/pending-badge.tsx`       | Amber pill shown on entity detail pages when a pending change exists                                                                                     |
+| `ChangeStatusPill`                                                    | `app/components/directory/change-status-pill.tsx`  | Status badge across queue + detail                                                                                                                       |
+| `ChangeDiff`                                                          | `app/components/directory/change-diff.tsx`         | Renders `FieldDiff[]` from `computeDiff()` as field / before / after                                                                                     |
+| `AssignmentTimeline`                                                  | `app/components/directory/assignment-timeline.tsx` | Vertical timeline of assignments; used on Person + Position detail pages                                                                                 |
 
 ### Form schemas
 

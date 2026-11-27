@@ -31,6 +31,8 @@ type PositionLike = {
 
 export interface PositionEditorProps {
   position?: PositionLike;
+  /** Saved draft values to resume; they win over the published record's. */
+  draftValues?: Record<string, unknown>;
   organizations: Array<{ id: string; name: string; acronym: string | null }>;
   types: Array<{ id: string; name: string; code: string }>;
   reportsToCandidates: Array<{ id: string; title: string }>;
@@ -66,6 +68,7 @@ function FieldRow({
 
 export function PositionEditor({
   position,
+  draftValues,
   organizations,
   types,
   reportsToCandidates,
@@ -88,6 +91,7 @@ export function PositionEditor({
       description: position?.description ?? "",
       isActive: position ? position.isActive : true,
       sortOrder: position?.sortOrder ?? 0,
+      ...draftValues,
     },
   });
 

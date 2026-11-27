@@ -31,7 +31,7 @@
     "editSubtitle": "Your edit will go to the approval queue before becoming public.",
     "deleteTitle": "Delete this organization?",
     "deleteDescription": "The organization will be soft-deleted after the change is approved. Children must be reparented first.",
-    "deleteButton": "Submit for deletion",
+    "deleteButton": "Save deletion as draft",
     "deleteButtonDirect": "Delete now",
     "deleteReasonLabel": "Reason (optional)",
     "deleteBlockedChildren_one": "Cannot delete — {{count}} child organization must be reparented first.",
@@ -86,7 +86,7 @@
     "editSubtitle": "Your edit will go to the approval queue before becoming public.",
     "deleteTitle": "Delete this person?",
     "deleteDescription": "The person record will be soft-deleted after approval. End their current assignments first.",
-    "deleteButton": "Submit for deletion",
+    "deleteButton": "Save deletion as draft",
     "deleteButtonDirect": "Delete now",
     "deleteReasonLabel": "Reason (optional)",
     "deleteBlockedAssignments_one": "Cannot delete — {{count}} current assignment must be ended first.",
@@ -138,7 +138,7 @@
     "editSubtitle": "Your edit will go to the approval queue before becoming public.",
     "deleteTitle": "Delete this position?",
     "deleteDescription": "The position will be soft-deleted after approval. End the current assignment first.",
-    "deleteButton": "Submit for deletion",
+    "deleteButton": "Save deletion as draft",
     "deleteButtonDirect": "Delete now",
     "deleteReasonLabel": "Reason (optional)",
     "deleteBlockedAssignments_one": "Cannot delete — {{count}} current assignment must be ended first.",
@@ -192,14 +192,14 @@
     "title": "Approvals queue",
     "subtitle": "Review and publish directory changes submitted by focal persons.",
     "mineTitle": "My submissions",
-    "mineSubtitle": "Track your pending, approved, rejected, and withdrawn change requests.",
+    "mineSubtitle": "Your drafts and your pending, approved, rejected, and withdrawn change requests. Select drafts to submit them together.",
     "historyTitle": "History",
     "historySubtitle": "Every approved, rejected, and withdrawn change request in this tenant.",
     "searchPlaceholder": "Search submitter, reviewer, or record ID…",
     "emptyPending": "No pending change requests.",
     "emptyPendingDescription": "Focal persons' submissions will appear here for review.",
-    "emptyMine": "You haven't submitted any changes yet.",
-    "emptyMineDescription": "When you edit a record, your submission will appear here.",
+    "emptyMine": "No drafts or submissions yet.",
+    "emptyMineDescription": "When you edit a record, your draft will appear here, ready to submit.",
     "emptyHistory": "No change history yet.",
     "emptyHistoryDescription": "Approved, rejected, and withdrawn submissions will appear here.",
     "detailTitle": "Change request",
@@ -231,6 +231,7 @@
       "MOVE": "Move"
     },
     "statusLabel": {
+      "DRAFT": "Draft",
       "PENDING": "Pending",
       "APPROVED": "Approved",
       "REJECTED": "Rejected",
@@ -246,7 +247,17 @@
       "withdraw": "Withdraw",
       "viewEntity": "View current record",
       "batchApprove": "Approve selected",
-      "batchReject": "Reject selected"
+      "batchReject": "Reject selected",
+      "editDraft": "Edit draft",
+      "discard": "Discard draft",
+      "submitDraft": "Submit for review",
+      "submitSelected_one": "Submit {{count}} draft",
+      "submitSelected_other": "Submit {{count}} drafts"
+    },
+    "discardDialog": {
+      "title": "Discard this draft?",
+      "description": "The draft will be permanently deleted. The published record is not changed.",
+      "confirm": "Discard draft"
     },
     "approveDialog": {
       "title": "Approve this change?",
@@ -286,9 +297,9 @@
     "metadata": "Metadata"
   },
   "actions": {
-    "submit": "Submit for review",
+    "submit": "Save as draft",
     "submitAndApprove": "Save and publish",
-    "submitAndEdit": "Submit changes",
+    "submitAndEdit": "Save changes as draft",
     "save": "Save",
     "cancel": "Cancel",
     "edit": "Edit",
@@ -305,6 +316,7 @@
   },
   "conflicts": {
     "PENDING_REQUEST_EXISTS": "This record already has a change waiting for review. It can be edited again once that change is approved, rejected or withdrawn.",
+    "DRAFT_EXISTS": "You already have a draft for this record. Edit, submit or discard that draft first.",
     "VERSION_CONFLICT": "This record was changed by someone else after you opened it. Reload the page and try again.",
     "HAS_ACTIVE_ASSIGNMENTS": "This record still has a current assignment. End the assignment first, then delete.",
     "REFERENCED_RECORD_NOT_PUBLISHED": "This change refers to a record that has since been deleted. Reject it or ask for a correction.",

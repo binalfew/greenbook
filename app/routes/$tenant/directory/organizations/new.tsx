@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { data } from "react-router";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
+import { loadEditorDraft } from "~/utils/directory-submit.server";
 import { OrganizationEditor } from "./+shared/organization-editor";
 import type { Route } from "./+types/new";
 
@@ -10,7 +11,9 @@ export { action } from "./+shared/organization-editor.server";
 export const handle = { breadcrumb: "New" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "organization");
+  const access = await requireDirectoryWriteAccess(request, "organization");
+  const { tenantId, canDirect } = access;
+  const draft = await loadEditorDraft(request, access, "ORGANIZATION");
 
   const [types, parents] = await Promise.all([
     prisma.organizationType.findMany({
@@ -26,7 +29,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }),
   ]);
 
-  return data({ types, parents, canDirect });
+  return data({ types, parents, canDirect, draft });
 }
 
 export default function NewOrganization({ loaderData, params, actionData }: Route.ComponentProps) {
@@ -40,6 +43,8 @@ export default function NewOrganization({ loaderData, params, actionData }: Rout
         <p className="text-muted-foreground text-sm">{t("organizations.newSubtitle")}</p>
       </header>
       <OrganizationEditor
+        key={loaderData.draft?.id}
+        draftValues={loaderData.draft?.values}
         types={loaderData.types}
         parents={loaderData.parents}
         canDirectApply={loaderData.canDirect}

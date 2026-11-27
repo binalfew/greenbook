@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { data } from "react-router";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
+import { loadEditorDraft } from "~/utils/directory-submit.server";
 import { PersonEditor } from "./+shared/person-editor";
 import type { Route } from "./+types/new";
 
@@ -10,7 +11,9 @@ export { action } from "./+shared/person-editor.server";
 export const handle = { breadcrumb: "New" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "person");
+  const access = await requireDirectoryWriteAccess(request, "person");
+  const { tenantId, canDirect } = access;
+  const draft = await loadEditorDraft(request, access, "PERSON");
 
   const [memberStates, positions, titles] = await Promise.all([
     prisma.memberState.findMany({
@@ -35,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }),
   ]);
 
-  return data({ memberStates, positions, titles, canDirect });
+  return data({ memberStates, positions, titles, canDirect, draft });
 }
 
 export default function NewPerson({ loaderData, params, actionData }: Route.ComponentProps) {
@@ -49,6 +52,7 @@ export default function NewPerson({ loaderData, params, actionData }: Route.Comp
         <p className="text-muted-foreground text-sm">{t("people.newSubtitle")}</p>
       </header>
       <PersonEditor
+        draftValues={loaderData.draft?.values}
         memberStates={loaderData.memberStates}
         positions={loaderData.positions}
         titles={loaderData.titles}

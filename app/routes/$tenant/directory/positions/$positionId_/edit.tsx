@@ -3,6 +3,7 @@ import { data } from "react-router";
 import { getPosition } from "~/services/positions.server";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
+import { loadEditorDraft } from "~/utils/directory-submit.server";
 import { PositionEditor } from "../+shared/position-editor";
 import type { Route } from "./+types/edit";
 
@@ -11,7 +12,9 @@ export { action } from "../+shared/position-editor.server";
 export const handle = { breadcrumb: "Edit" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "position");
+  const access = await requireDirectoryWriteAccess(request, "position");
+  const { tenantId, canDirect } = access;
+  const draft = await loadEditorDraft(request, access, "POSITION", params.positionId);
 
   const [position, organizations, types, reportsToCandidates] = await Promise.all([
     getPosition(params.positionId, tenantId),
@@ -34,7 +37,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }),
   ]);
 
-  return data({ position, organizations, types, reportsToCandidates, canDirect });
+  return data({ position, organizations, types, reportsToCandidates, canDirect, draft });
 }
 
 export default function EditPosition({ loaderData, params, actionData }: Route.ComponentProps) {
@@ -50,6 +53,7 @@ export default function EditPosition({ loaderData, params, actionData }: Route.C
       </header>
       <PositionEditor
         position={position}
+        draftValues={loaderData.draft?.values}
         organizations={organizations}
         types={types}
         reportsToCandidates={reportsToCandidates}
