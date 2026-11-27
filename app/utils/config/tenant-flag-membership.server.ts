@@ -39,10 +39,15 @@ export async function removeTenantFromFlag(db: FlagDb, flagKey: string, tenantId
 
 /**
  * The tenant-scoped flags every working tenant is opted into when it is
- * provisioned: the directory itself and cross-tenant search. A flag added
- * here reaches tenants created in the UI and by the seed alike.
+ * provisioned: the directory itself, cross-tenant search, and the bell and
+ * inbox its workflow notifications are read in. A flag added here reaches
+ * tenants created in the UI and by the seed alike.
  */
-export const NEW_TENANT_FLAGS = ["FF_DIRECTORY", "FF_PUBLIC_DIRECTORY"] as const;
+export const NEW_TENANT_FLAGS = [
+  "FF_DIRECTORY",
+  "FF_PUBLIC_DIRECTORY",
+  "FF_NOTIFICATIONS",
+] as const;
 
 /** Opt a newly provisioned tenant into every flag in `NEW_TENANT_FLAGS`. */
 export async function addTenantToNewTenantFlags(db: FlagDb, tenantId: string) {

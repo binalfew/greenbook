@@ -39,6 +39,8 @@
   "tenantFlagHelp_FF_DIRECTORY": "Les gestionnaires et les points focaux de ce locataire peuvent ouvrir la section Annuaire.",
   "tenantFlag_FF_PUBLIC_DIRECTORY": "Recherche inter-locataires",
   "tenantFlagHelp_FF_PUBLIC_DIRECTORY": "Les personnes approuvées de ce locataire apparaissent dans la recherche de l'annuaire.",
+  "tenantFlag_FF_NOTIFICATIONS": "Notifications",
+  "tenantFlagHelp_FF_NOTIFICATIONS": "Les utilisateurs de ce locataire voient la cloche et la boîte de notifications, où sont annoncées les soumissions, approbations et rejets.",
   "businessHoursTitle": "Horaires d'ouverture",
   "businessHoursSubtitle": "Définissez les horaires d'ouverture du locataire. Utilisés pour les fenêtres de pause SLA et la planification.",
   "newProfile": "Nouveau profil",
