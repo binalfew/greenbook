@@ -109,3 +109,5 @@ prisma/migrations/
 
 # Playwright MCP session artifacts
 .playwright-mcp/
+# Emails captured by the test mocks (tests/mocks/utils.ts)
+tests/fixtures/
