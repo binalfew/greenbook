@@ -116,6 +116,21 @@ export type ChangeListRow = ChangeRequest & {
 
 // ─── Guards ─────────────────────────────────────────────────────────────
 
+// The change that currently blocks a new edit or delete of this record, if
+// any. Detail pages use it to show the pending badge and to disable Edit and
+// Delete, so its notion of "blocking" must stay in step with the submit guard
+// (`lockEntityAndAssertNoPending`) below.
+export async function findPendingChange(
+  tenantId: string,
+  entityType: DirectoryEntityKey,
+  entityId: string,
+) {
+  return prisma.changeRequest.findFirst({
+    where: { tenantId, entityType, entityId, status: "PENDING" },
+    select: { id: true, submittedById: true, submittedAt: true },
+  });
+}
+
 export async function assertNoPendingConflict(
   tenantId: string,
   entityType: DirectoryEntityKey,
