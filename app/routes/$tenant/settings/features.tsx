@@ -8,6 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { prisma } from "~/utils/db/db.server";
 import type { Route } from "./+types/features";
 
@@ -117,6 +118,10 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   clearFlagCache();
+  // The public directory gate keeps its own 5-minute cache of opted-in tenant
+  // ids. Clear it too so opting a tenant OUT of FF_PUBLIC_DIRECTORY removes its
+  // people from the public search immediately, not up to 5 minutes later.
+  clearPublicTenantIdsCache();
   return data({ ok: true });
 }
 

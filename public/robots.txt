@@ -1,15 +1,6 @@
-# Greenbook public directory aggregates approved records from participating
-# AU bodies. Admin surfaces under /login, /signup, and tenant-scoped paths
-# stay out of crawler indexes; public surfaces are explicitly welcomed.
+# Greenbook is a login-gated directory for AU staff and member states.
+# Every page either requires a session or is an auth form, so there is
+# nothing for a crawler to index.
 
 User-agent: *
-Allow: /
-Allow: /people/
-
-Disallow: /admin/
-Disallow: /login
-Disallow: /signup
-Disallow: /forgot-password
-Disallow: /reset-password
-Disallow: /verify
-Disallow: /accept-invite
+Disallow: /

@@ -10,6 +10,7 @@ import {
 import { writeAudit } from "~/utils/auth/audit.server";
 import { getSessionExpirationDate } from "~/utils/auth/auth.server";
 import { sessionKey } from "~/utils/auth/constants";
+import { resolvePostLoginRedirect } from "~/utils/auth/post-login-redirect.server";
 import { authSessionStorage } from "~/utils/auth/session.server";
 import {
   decodeSAMLRelayState,
@@ -47,12 +48,13 @@ async function createSessionAndRedirect(args: {
 /**
  * Resolve the post-SSO landing URL. If the explicit `redirectTo` from flow
  * state is present we honour it (already restricted to relative paths in
- * /sso/start); otherwise land on the user's tenant home, falling back to `/`
- * for tenantless users (e.g. global admins, fresh auto-provisioned users).
+ * /sso/start); otherwise operators land on their tenant workspace while plain
+ * directory readers (`user` role) and tenantless users land on the directory
+ * search at `/`.
  */
-function defaultPostAuthRedirect(redirectTo: string, tenantSlug: string | null): string {
+async function defaultPostAuthRedirect(redirectTo: string, userId: string): Promise<string> {
   if (redirectTo) return redirectTo;
-  return tenantSlug ? `/${tenantSlug}` : "/";
+  return resolvePostLoginRedirect(userId);
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -132,7 +134,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     return createSessionAndRedirect({
       userId,
-      redirectTo: defaultPostAuthRedirect(flowState.redirectTo, tenantSlug),
+      redirectTo: await defaultPostAuthRedirect(flowState.redirectTo, userId),
       destroyCookieHeader: destroyCookie,
     });
   } catch (error) {
@@ -202,7 +204,7 @@ export async function action({ request }: Route.ActionArgs) {
 
     return createSessionAndRedirect({
       userId,
-      redirectTo: defaultPostAuthRedirect(flowState.redirectTo, tenantSlug),
+      redirectTo: await defaultPostAuthRedirect(flowState.redirectTo, userId),
     });
   } catch (error) {
     const message = error instanceof SSOError ? error.message : "SAML authentication failed";

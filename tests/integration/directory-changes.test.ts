@@ -7,6 +7,7 @@ import {
   approveChange,
   approveChanges,
   ChangeRequestError,
+  computeDiff,
   rejectChange,
   submitAndApply,
   submitChange,
@@ -329,6 +330,130 @@ describe("directory-changes: manager self-approve (submitAndApply)", () => {
     expect(change.reviewedById).toBe(a.managerUser.id);
     expect(change.submittedById).toBe(a.managerUser.id);
     expect(change.entityId).toBe((entity as { id: string }).id);
+  });
+});
+
+describe("directory-changes: optimistic concurrency + delete guards", () => {
+  it("rejects a stale UPDATE built against an outdated version", async () => {
+    const a = await arrange();
+    const created = await submitAndApply(
+      {
+        entityType: "ORGANIZATION",
+        operation: "CREATE",
+        payload: { name: "Org", typeId: a.orgType.id, isActive: true },
+      },
+      managerCtx(a),
+    );
+    const orgId = (created.entity as { id: string }).id;
+
+    // Bump the org to version 1.
+    await submitAndApply(
+      {
+        entityType: "ORGANIZATION",
+        operation: "UPDATE",
+        entityId: orgId,
+        payload: { name: "Org v2", typeId: a.orgType.id, isActive: true },
+      },
+      managerCtx(a),
+    );
+
+    // A focal edit built against the now-stale version 0 must be rejected.
+    await expect(
+      submitChange(
+        {
+          entityType: "ORGANIZATION",
+          operation: "UPDATE",
+          entityId: orgId,
+          payload: { name: "Org stale", typeId: a.orgType.id, isActive: true, baseVersion: 0 },
+        },
+        focalCtx(a),
+      ),
+    ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+  });
+
+  it("allows an UPDATE that carries the current version", async () => {
+    const a = await arrange();
+    const created = await submitAndApply(
+      {
+        entityType: "ORGANIZATION",
+        operation: "CREATE",
+        payload: { name: "Fresh", typeId: a.orgType.id, isActive: true },
+      },
+      managerCtx(a),
+    );
+    const orgId = (created.entity as { id: string }).id;
+
+    // baseVersion matches the live version (0) → no conflict.
+    const change = await submitChange(
+      {
+        entityType: "ORGANIZATION",
+        operation: "UPDATE",
+        entityId: orgId,
+        payload: { name: "Fresh edit", typeId: a.orgType.id, isActive: true, baseVersion: 0 },
+      },
+      focalCtx(a),
+    );
+    expect(change.status).toBe("PENDING");
+  });
+
+  it("keeps the baseVersion token out of the approval diff", async () => {
+    const a = await arrange();
+    const created = await submitAndApply(
+      {
+        entityType: "ORGANIZATION",
+        operation: "CREATE",
+        payload: { name: "Diffed", typeId: a.orgType.id, isActive: true },
+      },
+      managerCtx(a),
+    );
+    const orgId = (created.entity as { id: string }).id;
+
+    const change = await submitChange(
+      {
+        entityType: "ORGANIZATION",
+        operation: "UPDATE",
+        entityId: orgId,
+        payload: { name: "Diffed v2", typeId: a.orgType.id, isActive: true, baseVersion: 0 },
+      },
+      focalCtx(a),
+    );
+
+    // Only the field the focal person actually changed should reach reviewers.
+    const diff = await computeDiff(change);
+    expect(diff.map((d) => d.field)).toEqual(["name"]);
+  });
+
+  it("blocks deleting an organization that still has positions", async () => {
+    const a = await arrange();
+    const org = await submitAndApply(
+      {
+        entityType: "ORGANIZATION",
+        operation: "CREATE",
+        payload: { name: "Host", typeId: a.orgType.id, isActive: true },
+      },
+      managerCtx(a),
+    );
+    const orgId = (org.entity as { id: string }).id;
+    await submitAndApply(
+      {
+        entityType: "POSITION",
+        operation: "CREATE",
+        payload: {
+          title: "Director",
+          organizationId: orgId,
+          typeId: a.positionType.id,
+          isActive: true,
+        },
+      },
+      managerCtx(a),
+    );
+
+    await expect(
+      submitAndApply(
+        { entityType: "ORGANIZATION", operation: "DELETE", entityId: orgId, payload: {} },
+        managerCtx(a),
+      ),
+    ).rejects.toMatchObject({ code: "HAS_POSITIONS" });
   });
 });
 

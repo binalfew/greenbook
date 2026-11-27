@@ -247,6 +247,154 @@ describe("public directory: PII strip for people", () => {
     expect(closedInList?.phone).toBeNull();
   });
 
+  it("always surfaces official contact even when personal contact is hidden", async () => {
+    const a = await arrange();
+    // Personal email/phone locked down, but official contact is filled in.
+    const person = await prisma.person.create({
+      data: {
+        tenantId: a.tenantA.id,
+        firstName: "Head",
+        lastName: "OfUnit",
+        email: "personal@au.int",
+        phone: "+251-11-2222222",
+        officeEmail: "unit.office@au.int",
+        officePhone: "+251-11-3333333",
+        showEmail: false,
+        showPhone: false,
+      },
+    });
+
+    await optInTenants([a.tenantA.id]);
+    const ids = await getPublicTenantIds();
+
+    const row = await publicGetPerson(person.id, ids);
+    // Personal contact stripped, official contact shown.
+    expect(row?.email).toBeNull();
+    expect(row?.phone).toBeNull();
+    expect(row?.officeEmail).toBe("unit.office@au.int");
+    expect(row?.officePhone).toBe("+251-11-3333333");
+
+    const list = await publicListPeople(ids, {});
+    const inList = list.data.find((p) => p.lastName === "OfUnit");
+    expect(inList?.officeEmail).toBe("unit.office@au.int");
+    expect(inList?.officePhone).toBe("+251-11-3333333");
+  });
+
+  it("matches a search on the current position title or organization", async () => {
+    const a = await arrange();
+    const org = await prisma.organization.create({
+      data: { tenantId: a.tenantA.id, name: "Peace and Security", typeId: a.orgTypeA.id },
+    });
+    const position = await prisma.position.create({
+      data: {
+        tenantId: a.tenantA.id,
+        title: "Special Envoy",
+        organizationId: org.id,
+        typeId: a.posTypeA.id,
+      },
+    });
+    // Person whose NAME does not contain the search terms — only the post does.
+    const person = await prisma.person.create({
+      data: { tenantId: a.tenantA.id, firstName: "Amara", lastName: "Okafor" },
+    });
+    await prisma.positionAssignment.create({
+      data: {
+        tenantId: a.tenantA.id,
+        positionId: position.id,
+        personId: person.id,
+        startDate: new Date("2020-01-01"),
+        isCurrent: true,
+      },
+    });
+
+    await optInTenants([a.tenantA.id]);
+    const ids = await getPublicTenantIds();
+
+    // Search by position title.
+    const byTitle = await publicListPeople(ids, { search: "Envoy" });
+    expect(byTitle.data.map((p) => p.lastName)).toContain("Okafor");
+
+    // Search by the organization the position sits in.
+    const byOrg = await publicListPeople(ids, { search: "Peace" });
+    expect(byOrg.data.map((p) => p.lastName)).toContain("Okafor");
+  });
+
+  it("hides a soft-deleted position from a person's current role and search", async () => {
+    const a = await arrange();
+    const org = await prisma.organization.create({
+      data: { tenantId: a.tenantA.id, name: "Bureau", typeId: a.orgTypeA.id },
+    });
+    const position = await prisma.position.create({
+      data: {
+        tenantId: a.tenantA.id,
+        title: "Special Rapporteur",
+        organizationId: org.id,
+        typeId: a.posTypeA.id,
+      },
+    });
+    const person = await prisma.person.create({
+      data: { tenantId: a.tenantA.id, firstName: "Nadia", lastName: "Bello" },
+    });
+    await prisma.positionAssignment.create({
+      data: {
+        tenantId: a.tenantA.id,
+        positionId: position.id,
+        personId: person.id,
+        startDate: new Date("2021-01-01"),
+        isCurrent: true,
+      },
+    });
+    // Soft-delete the position after the assignment exists.
+    await prisma.position.update({ where: { id: position.id }, data: { deletedAt: new Date() } });
+
+    await optInTenants([a.tenantA.id]);
+    const ids = await getPublicTenantIds();
+
+    // Search by the removed position title must not surface the holder.
+    const byTitle = await publicListPeople(ids, { search: "Rapporteur" });
+    expect(byTitle.data.map((p) => p.lastName)).not.toContain("Bello");
+
+    // The deleted position must not appear on the person's public profile.
+    const detail = await publicGetPerson(person.id, ids);
+    expect(detail?.history.some((h) => h.position.title === "Special Rapporteur")).toBe(false);
+  });
+
+  it("does not surface a person via a soft-deleted organization's name", async () => {
+    const a = await arrange();
+    const org = await prisma.organization.create({
+      data: { tenantId: a.tenantA.id, name: "Legacy Directorate", typeId: a.orgTypeA.id },
+    });
+    const position = await prisma.position.create({
+      data: {
+        tenantId: a.tenantA.id,
+        title: "Analyst",
+        organizationId: org.id,
+        typeId: a.posTypeA.id,
+      },
+    });
+    const person = await prisma.person.create({
+      data: { tenantId: a.tenantA.id, firstName: "Omar", lastName: "Sy" },
+    });
+    await prisma.positionAssignment.create({
+      data: {
+        tenantId: a.tenantA.id,
+        positionId: position.id,
+        personId: person.id,
+        startDate: new Date("2021-01-01"),
+        isCurrent: true,
+      },
+    });
+    // Soft-delete the organization (position stays live).
+    await prisma.organization.update({ where: { id: org.id }, data: { deletedAt: new Date() } });
+
+    await optInTenants([a.tenantA.id]);
+    const ids = await getPublicTenantIds();
+
+    // Searching the removed org's name must not surface people posted under it.
+    const byOrg = await publicListPeople(ids, { search: "Legacy" });
+    expect(byOrg.data.map((p) => p.lastName)).not.toContain("Sy");
+  });
+
   it("omits people from opt-out tenants", async () => {
     const a = await arrange();
     const rgB = await prisma.regionalGroup.create({

@@ -13,22 +13,30 @@ import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
 import { PublicDetailNotFound } from "~/components/public/not-found";
 import { Badge } from "~/components/ui/badge";
+import { requireUserId } from "~/utils/auth/auth.server";
 import { publicGetPerson } from "~/services/people.server";
 import { formatDate } from "~/utils/format-date";
-import { PUBLIC_CACHE_HEADER, getPublicContext } from "~/utils/public-directory.server";
+import { getPublicContext } from "~/utils/public-directory.server";
 import type { Route } from "./+types/$personId";
 
-export async function loader({ params }: Route.LoaderArgs) {
+// Auth-gated profile — the directory serves AU staff + member states only,
+// so responses are per-session and never shared on an edge cache.
+const DETAIL_CACHE_HEADER = "private, no-store";
+
+export async function loader({ request, params }: Route.LoaderArgs) {
+  // Login required to view any profile.
+  await requireUserId(request);
+
   const { publicTenantIds, isEmpty } = await getPublicContext();
   const person = isEmpty ? null : await publicGetPerson(params.personId, publicTenantIds);
   if (!person) {
-    throw data(null, { status: 404, headers: { "Cache-Control": PUBLIC_CACHE_HEADER } });
+    throw data(null, { status: 404, headers: { "Cache-Control": DETAIL_CACHE_HEADER } });
   }
-  return data({ person }, { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } });
+  return data({ person }, { headers: { "Cache-Control": DETAIL_CACHE_HEADER } });
 }
 
 export function headers() {
-  return { "Cache-Control": PUBLIC_CACHE_HEADER };
+  return { "Cache-Control": DETAIL_CACHE_HEADER };
 }
 
 type Person = Route.ComponentProps["loaderData"]["person"];
@@ -113,7 +121,12 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
           </div>
 
           {/* Meta strip — nationality / languages / contact in one row */}
-          {(person.memberState || person.languages.length > 0 || person.email || person.phone) && (
+          {(person.memberState ||
+            person.languages.length > 0 ||
+            person.email ||
+            person.phone ||
+            person.officeEmail ||
+            person.officePhone) && (
             <div className="border-border mt-6 grid gap-6 border-t pt-6 sm:grid-cols-3">
               <div className="flex items-start gap-3">
                 <Globe2 className="text-muted-foreground mt-0.5 size-4 shrink-0" />
@@ -169,7 +182,28 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
                       {person.phone}
                     </div>
                   ) : null}
-                  {!person.email && !person.phone ? (
+                  {person.officeEmail || person.officePhone ? (
+                    <div className="border-border/60 mt-1 space-y-1 border-t pt-1">
+                      <div className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                        {t("personDetail.officialContact")}
+                      </div>
+                      {person.officeEmail ? (
+                        <a
+                          href={`mailto:${person.officeEmail}`}
+                          className="text-foreground hover:text-primary block truncate text-sm transition-colors"
+                        >
+                          {person.officeEmail}
+                        </a>
+                      ) : null}
+                      {person.officePhone ? (
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <Phone className="text-muted-foreground size-3" />
+                          {person.officePhone}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {!person.email && !person.phone && !person.officeEmail && !person.officePhone ? (
                     <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
                       <MapPin className="size-3 shrink-0" />
                       {t("personDetail.contactPrivate")}

@@ -473,6 +473,22 @@ async function main() {
     userTenantId: workingTenant.id,
   });
 
+  // Reference data belongs to EVERY tenant, not just `system`. Seed the
+  // generic reference catalogue (countries/titles/languages/currencies) and
+  // the directory reference data (org/position types, regions, member states)
+  // into every other non-deleted tenant — the working `misd` tenant plus any
+  // provisioned via the UI — so their focal/manager users can actually create
+  // records. Without this, a tenant's directory dropdowns are empty. Idempotent.
+  const otherTenants = await prisma.tenant.findMany({
+    where: { deletedAt: null, id: { not: tenant.id } },
+    select: { id: true, slug: true },
+  });
+  for (const t of otherTenants) {
+    console.log(`Seeding reference data for tenant "${t.slug}"...`);
+    await seedReferenceData(t.id);
+    await seedDirectoryReference(t.id);
+  }
+
   console.log("✅ Seeding completed!");
   console.log("🔑 Users created:");
   console.log("   Admin:        admin@africanunion.org / admin123");
@@ -647,19 +663,12 @@ const MEMBER_STATES: Array<{
   { abbr: "ESH", name: "Sahrawi Arab Democratic Republic", dateJoined: "1982-02-22", regionCode: "NA" },
 ];
 
-async function seedDirectory(
-  tenantId: string,
-  { activeStatusId, focalRoleId, managerRoleId, userTenantId }: {
-    activeStatusId: string;
-    focalRoleId: string;
-    managerRoleId: string;
-    /** Tenant the demo focal / manager *user accounts* belong to. Defaults
-     *  to `tenantId` (system) when not provided. The directory data itself
-     *  always lives in `tenantId`. */
-    userTenantId?: string;
-  },
-) {
-  const demoUserTenantId = userTenantId ?? tenantId;
+// Directory reference data — organization types, position types, regional
+// groups, and member states. Conceptually this catalogue belongs to *every*
+// tenant that runs the directory (not just the system tenant), so the seed
+// calls this for each tenant. Idempotent: every write is an upsert keyed on
+// (tenantId, code/abbreviation).
+async function seedDirectoryReference(tenantId: string) {
   for (const [i, t] of ORGANIZATION_TYPES.entries()) {
     await prisma.organizationType.upsert({
       where: { tenantId_code: { tenantId, code: t.code } },
@@ -718,6 +727,25 @@ async function seedDirectory(
       }
     }
   }
+}
+
+async function seedDirectory(
+  tenantId: string,
+  { activeStatusId, focalRoleId, managerRoleId, userTenantId }: {
+    activeStatusId: string;
+    focalRoleId: string;
+    managerRoleId: string;
+    /** Tenant the demo focal / manager *user accounts* belong to. Defaults
+     *  to `tenantId` (system) when not provided. The directory data itself
+     *  always lives in `tenantId`. */
+    userTenantId?: string;
+  },
+) {
+  const demoUserTenantId = userTenantId ?? tenantId;
+  // Directory reference data now lives in a shared helper seeded for
+  // every tenant (see seedDirectoryReference) — call it here so seedDirectory
+  // stays self-contained for the system tenant.
+  await seedDirectoryReference(tenantId);
 
   // Starter org tree: AU (root) → Commission (main organ) → 3 sample
   // departments / offices. Safe to re-run; keyed on (tenantId, name).

@@ -23,6 +23,7 @@ import { checkHoneypot } from "~/utils/auth/honeypot.server";
 import { authSessionStorage } from "~/utils/auth/session.server";
 import { verifySessionStorage } from "~/utils/auth/verification.server";
 import { prisma } from "~/utils/db/db.server";
+import { resolvePostLoginRedirect } from "~/utils/auth/post-login-redirect.server";
 import { useIsPending } from "~/utils/misc";
 import { verify2FAChallenge } from "~/services/two-factor.server";
 import type { Route } from "./+types/2fa-verify";
@@ -118,14 +119,7 @@ export async function action({ request }: Route.ActionArgs) {
   );
   headers.append("set-cookie", await verifySessionStorage.destroySession(verifySession));
 
-  let destination = redirectTo;
-  if (!destination) {
-    const u = await prisma.user.findUnique({
-      where: { id: dbSession.userId },
-      select: { tenant: { select: { slug: true } } },
-    });
-    destination = u?.tenant?.slug ? `/${u.tenant.slug}` : "/";
-  }
+  const destination = redirectTo || (await resolvePostLoginRedirect(dbSession.userId));
 
   return redirect(safeRedirect(destination), { headers });
 }

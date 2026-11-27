@@ -172,7 +172,7 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
             </CardContent>
           </Card>
 
-          {person.email || person.phone ? (
+          {person.email || person.phone || person.officeEmail || person.officePhone ? (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-semibold">{t("people.cards.contact")}</CardTitle>
@@ -199,6 +199,27 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
                       <Badge variant="outline" className="ml-auto text-[10px]">
                         {t("people.visibility.contactPrivate")}
                       </Badge>
+                    ) : null}
+                  </div>
+                ) : null}
+                {person.officeEmail || person.officePhone ? (
+                  <div className="space-y-2 border-t pt-2">
+                    <div className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                      {t("people.cards.officeContact")}
+                    </div>
+                    {person.officeEmail ? (
+                      <div className="flex items-center gap-2">
+                        <Mail className="text-muted-foreground size-4 shrink-0" />
+                        <a href={`mailto:${person.officeEmail}`} className="hover:underline">
+                          {person.officeEmail}
+                        </a>
+                      </div>
+                    ) : null}
+                    {person.officePhone ? (
+                      <div className="flex items-center gap-2">
+                        <Phone className="text-muted-foreground size-4 shrink-0" />
+                        <span>{person.officePhone}</span>
+                      </div>
                     ) : null}
                   </div>
                 ) : null}

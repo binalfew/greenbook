@@ -11,7 +11,7 @@ import { startJobProcessor, stopJobProcessor } from "~/utils/events/job-queue.se
 import { correlationMiddleware } from "./correlation.js";
 import { logger } from "./logger.js";
 import { requestLogger } from "./request-logger.js";
-import { corsMiddleware, extractSessionUser, generalLimiter } from "./security.js";
+import { corsMiddleware, extractSessionUser, generalLimiter, searchLimiter } from "./security.js";
 import { flushRateLimitBuffer } from "./rate-limit-audit.js";
 import { onShutdown, runShutdownHooks } from "./shutdown.js";
 
@@ -47,6 +47,14 @@ app.use(
 );
 
 app.use(generalLimiter);
+
+// Tighter cap on the directory search type-ahead — mounted before the
+// general handler so it only governs the search endpoint. Both spellings are
+// listed because Express matches mount paths on segment boundaries:
+// "/api/search-people" alone does NOT cover "/api/search-people.data", the
+// URL React Router uses for fetcher/single-fetch loads, which would otherwise
+// reach the same loader unthrottled.
+app.use(["/api/search-people", "/api/search-people.data"], searchLimiter);
 
 app.use(
   createRequestHandler({

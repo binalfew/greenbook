@@ -2,33 +2,48 @@ import { Search, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Form, Link, data, redirect, useFetcher, useNavigate } from "react-router";
+import { Form, Link, data, redirect, useNavigate } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { getUserId } from "~/utils/auth/auth.server";
+import { getUserId, requireUserId } from "~/utils/auth/auth.server";
+import { hasOperatorRole } from "~/utils/auth/post-login-redirect.server";
 import { prisma } from "~/utils/db/db.server";
 import { publicListPeople } from "~/services/people.server";
-import { PUBLIC_CACHE_HEADER, getPublicContext } from "~/utils/public-directory.server";
-import { AUTOCOMPLETE_MIN_LENGTH, type Suggestion } from "~/utils/autocomplete";
+import { getPublicContext } from "~/utils/public-directory.server";
+import { AUTOCOMPLETE_MIN_LENGTH, SEARCH_PAGE_SIZE, type Suggestion } from "~/utils/autocomplete";
 import type { Route } from "./+types/index";
 
-// Public landing at `/` — the only public surface. Search across people
-// profiles (name/bio) with pagination at 20 per page. Authenticated tenant
-// users are bounced to their tenant admin dashboard so typing the bare
-// domain still lands operators in their workspace.
+// Landing at `/` — the directory search surface. Search across people
+// profiles (name/bio) and their current position/organization, paginated at
+// SEARCH_PAGE_SIZE per page. The directory serves AU staff and member states
+// only, so a login is required before any search. Authenticated tenant users
+// are bounced to their tenant admin dashboard so typing the bare domain still
+// lands operators in their workspace.
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = SEARCH_PAGE_SIZE;
+
+// Auth-gated results — private, never shared on an edge cache.
+const SEARCH_CACHE_HEADER = "private, no-store";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // Operator shortcut — authenticated tenant users skip the public page
-  // and go straight to their admin dashboard.
+  // Operator shortcut — authenticated *operators* skip the search page and go
+  // straight to their admin dashboard. Directory readers (`user` role) stay
+  // here, even though they also have a home tenant.
   const userId = await getUserId(request);
   if (userId) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { tenant: { select: { slug: true } } },
+      select: {
+        tenant: { select: { slug: true } },
+        userRoles: { select: { role: { select: { name: true } } } },
+      },
     });
-    if (user?.tenant?.slug) throw redirect(`/${user.tenant.slug}`);
+    const isOperator = hasOperatorRole(user?.userRoles.map((ur) => ur.role.name) ?? []);
+    if (isOperator && user?.tenant?.slug) throw redirect(`/${user.tenant.slug}`);
+  } else {
+    // Login required for any search. Bounce anonymous visitors to /login,
+    // preserving the query so they land back on their search after signing in.
+    await requireUserId(request);
   }
 
   const url = new URL(request.url);
@@ -38,34 +53,42 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { publicTenantIds, isEmpty } = await getPublicContext();
   if (isEmpty) {
     return data(
-      { isEmpty: true as const, people: [], q, page, totalPages: 1 },
-      { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } },
+      { isEmpty: true as const, tooShort: false, people: [], q, page, totalPages: 1 },
+      { headers: { "Cache-Control": SEARCH_CACHE_HEADER } },
     );
   }
-  // Search-driven UX: no query → show the search prompt, don't list everyone.
-  if (q.length === 0) {
+  // Search-driven UX: empty or too-short query → show the prompt, don't run a
+  // query. Searches must start with at least AUTOCOMPLETE_MIN_LENGTH chars.
+  if (q.length < AUTOCOMPLETE_MIN_LENGTH) {
     return data(
-      { isEmpty: false as const, people: [], q, page: 1, totalPages: 1 },
-      { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } },
+      {
+        isEmpty: false as const,
+        tooShort: q.length > 0,
+        people: [],
+        q,
+        page: 1,
+        totalPages: 1,
+      },
+      { headers: { "Cache-Control": SEARCH_CACHE_HEADER } },
     );
   }
   const result = await publicListPeople(publicTenantIds, { search: q, page, pageSize: PAGE_SIZE });
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
   return data(
-    { isEmpty: false as const, people: result.data, q, page, totalPages },
-    { headers: { "Cache-Control": PUBLIC_CACHE_HEADER } },
+    { isEmpty: false as const, tooShort: false, people: result.data, q, page, totalPages },
+    { headers: { "Cache-Control": SEARCH_CACHE_HEADER } },
   );
 }
 
 export function headers() {
-  return { "Cache-Control": PUBLIC_CACHE_HEADER };
+  return { "Cache-Control": SEARCH_CACHE_HEADER };
 }
 
 type PublicPerson = Route.ComponentProps["loaderData"]["people"][number];
 
 export default function PublicPeopleIndex({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation("directory-public");
-  const { isEmpty, people, q, page, totalPages } = loaderData;
+  const { isEmpty, tooShort, people, q, page, totalPages } = loaderData;
 
   if (isEmpty) {
     return (
@@ -90,6 +113,12 @@ export default function PublicPeopleIndex({ loaderData }: Route.ComponentProps) 
           icon={Search}
           title={t("landing.searchPrompt")}
           body={t("landing.searchPromptHelp")}
+        />
+      ) : tooShort ? (
+        <EmptyState
+          icon={Search}
+          title={t("landing.minLength", { count: AUTOCOMPLETE_MIN_LENGTH })}
+          body={t("landing.minLengthHelp", { count: AUTOCOMPLETE_MIN_LENGTH })}
         />
       ) : people.length === 0 ? (
         <EmptyState
@@ -212,23 +241,49 @@ function Pagination({
 // dropdown without losing input focus.
 function SearchBox({ initialQuery, placeholder }: { initialQuery: string; placeholder: string }) {
   const { t } = useTranslation("directory-public");
-  const fetcher = useFetcher<{ results: Suggestion[] }>();
   const navigate = useNavigate();
   const [value, setValue] = useState(initialQuery);
   const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounced fetch — only fire when the trimmed value is long enough.
+  //
+  // Plain `fetch` rather than `fetcher.load` on purpose: a fetcher surfaces any
+  // non-2xx as a route error and replaces the whole page with the error
+  // boundary. Suggestions are best-effort, so a 429 from `searchLimiter` or a
+  // 401 from an expired session just leaves the dropdown empty — Enter still
+  // submits the form, and the page loader handles the login redirect.
   useEffect(() => {
     const trimmed = value.trim();
-    if (trimmed.length < AUTOCOMPLETE_MIN_LENGTH) return;
-    const handle = window.setTimeout(() => {
-      fetcher.load(`/api/search-people?q=${encodeURIComponent(trimmed)}`);
+    if (trimmed.length < AUTOCOMPLETE_MIN_LENGTH) {
+      setSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search-people?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          setSuggestions([]);
+          return;
+        }
+        const body = (await res.json()) as { results?: Suggestion[] };
+        setSuggestions(body.results ?? []);
+      } catch {
+        // Aborted by the next keystroke, or offline. Clearing here is safe:
+        // a superseding request repopulates the list when it lands.
+        if (!controller.signal.aborted) setSuggestions([]);
+      }
     }, 250);
-    return () => window.clearTimeout(handle);
-    // fetcher.load identity is stable — intentionally omitted.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      window.clearTimeout(handle);
+      controller.abort();
+    };
   }, [value]);
 
   // Click outside closes the dropdown.
@@ -241,7 +296,6 @@ function SearchBox({ initialQuery, placeholder }: { initialQuery: string; placeh
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const suggestions = fetcher.data?.results ?? [];
   const showDropdown =
     open && value.trim().length >= AUTOCOMPLETE_MIN_LENGTH && suggestions.length > 0;
 

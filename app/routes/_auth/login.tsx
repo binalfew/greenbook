@@ -17,6 +17,7 @@ import type { SSOProvider } from "~/generated/prisma/client";
 import { getActiveSSOConfigurations } from "~/services/sso.server";
 import { isPasswordExpired, login, requireAnonymous } from "~/utils/auth/auth.server";
 import { writeAudit } from "~/utils/auth/audit.server";
+import { resolvePostLoginRedirect } from "~/utils/auth/post-login-redirect.server";
 import { prisma } from "~/utils/db/db.server";
 import { rememberMeSessionKey, sessionKey, unverifiedSessionIdKey } from "~/utils/auth/constants";
 import { validateCSRF } from "~/utils/auth/csrf.server";
@@ -190,11 +191,9 @@ export async function action({ request }: Route.ActionArgs) {
  * the root home page and can pick a destination from there.
  */
 async function resolveDefaultRedirect(userId: string): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { tenant: { select: { slug: true } } },
-  });
-  return user?.tenant?.slug ? `/${user.tenant.slug}` : "/";
+  // Operators land in their tenant workspace; plain directory readers (`user`
+  // role) land on the directory search at `/`.
+  return resolvePostLoginRedirect(userId);
 }
 
 export default function LoginRoute({ loaderData, actionData }: Route.ComponentProps) {

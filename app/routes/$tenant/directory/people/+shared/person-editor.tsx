@@ -18,11 +18,14 @@ import type { Route } from "../$personId_/+types/edit";
 
 type PersonLike = {
   id: string;
+  version?: number;
   firstName: string;
   lastName: string;
   honorific: string | null;
   email: string | null;
   phone: string | null;
+  officeEmail: string | null;
+  officePhone: string | null;
   bio: string | null;
   photoUrl: string | null;
   memberStateId: string | null;
@@ -95,11 +98,14 @@ export function PersonEditor({
     lastResult: actionData,
     defaultValue: {
       id: person?.id ?? "",
+      baseVersion: person?.version,
       firstName: person?.firstName ?? "",
       lastName: person?.lastName ?? "",
       honorific: person?.honorific ?? "",
       email: person?.email ?? "",
       phone: person?.phone ?? "",
+      officeEmail: person?.officeEmail ?? "",
+      officePhone: person?.officePhone ?? "",
       bio: person?.bio ?? "",
       photoUrl: person?.photoUrl ?? "",
       memberStateId: person?.memberStateId ?? "",
@@ -122,7 +128,13 @@ export function PersonEditor({
   return (
     <Form method="post" {...getFormProps(form)} className="space-y-6">
       {person?.id ? (
-        <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+        <>
+          <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+          <input
+            {...getInputProps(fields.baseVersion, { type: "hidden" })}
+            key={fields.baseVersion.key}
+          />
+        </>
       ) : null}
 
       <Card>
@@ -230,6 +242,34 @@ export function PersonEditor({
             <div className="flex items-center gap-3">
               <SwitchField meta={fields.showPhone} />
               <Label htmlFor={fields.showPhone.id}>{t("people.fields.showPhone")}</Label>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <p className="text-muted-foreground mb-3 text-xs">
+              {t("people.cards.officeContactHelp")}
+            </p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FieldRow
+                id={fields.officeEmail.id}
+                label={t("people.fields.officeEmail")}
+                errors={fields.officeEmail.errors}
+              >
+                <Input
+                  {...getInputProps(fields.officeEmail, { type: "email" })}
+                  key={fields.officeEmail.key}
+                />
+              </FieldRow>
+              <FieldRow
+                id={fields.officePhone.id}
+                label={t("people.fields.officePhone")}
+                errors={fields.officePhone.errors}
+              >
+                <Input
+                  {...getInputProps(fields.officePhone, { type: "tel" })}
+                  key={fields.officePhone.key}
+                />
+              </FieldRow>
             </div>
           </div>
         </CardContent>

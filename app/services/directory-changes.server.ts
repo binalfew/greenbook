@@ -135,6 +135,85 @@ export async function assertNoPendingConflict(
   }
 }
 
+// Serialize concurrent submits for the same entity with a transaction-scoped
+// Postgres advisory lock, closing the check-then-insert TOCTOU in
+// `assertNoPendingConflict` without a DB migration (survives `prisma db push`,
+// which the template uses). Only meaningful for UPDATE/DELETE/MOVE — a CREATE
+// has no entityId, and two creates are independent proposals, not a conflict.
+// The second submitter blocks on the lock until the first transaction commits,
+// then its re-check inside the lock sees the PENDING row and rejects.
+async function lockEntityAndAssertNoPending(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  entityType: DirectoryEntityKey,
+  entityId: string | null | undefined,
+) {
+  if (!entityId) return;
+  const key = `dirchange:${tenantId}:${entityType}:${entityId}`;
+  // `$executeRaw` (not `$queryRaw`): pg_advisory_xact_lock returns void, which
+  // $queryRaw can't deserialize. executeRaw just runs the statement.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+  const existing = await tx.changeRequest.findFirst({
+    where: { tenantId, entityType, entityId, status: "PENDING" },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new ChangeRequestError(
+      "A pending change already exists for this record. Withdraw it or wait for review.",
+      409,
+      "PENDING_REQUEST_EXISTS",
+    );
+  }
+}
+
+function extractBaseVersion(payload: unknown): number | undefined {
+  if (payload && typeof payload === "object" && "baseVersion" in payload) {
+    const v = (payload as { baseVersion?: unknown }).baseVersion;
+    if (typeof v === "number" && Number.isInteger(v)) return v;
+  }
+  return undefined;
+}
+
+// Optimistic-concurrency check: reject an edit built against a version of the
+// entity that has since moved on. Runs inside the same transaction (after the
+// advisory lock) so it sees the committed live state. A no-op when the caller
+// didn't send a baseVersion (CREATE, or a legacy form).
+async function assertVersionMatches(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  entityType: DirectoryEntityKey,
+  entityId: string,
+  baseVersion: number | undefined,
+) {
+  if (baseVersion === undefined) return;
+  const where = { id: entityId, tenantId, deletedAt: null };
+  const select = { version: true } as const;
+  let live: { version: number } | null = null;
+  switch (entityType) {
+    case "ORGANIZATION":
+      live = await tx.organization.findFirst({ where, select });
+      break;
+    case "PERSON":
+      live = await tx.person.findFirst({ where, select });
+      break;
+    case "POSITION":
+      live = await tx.position.findFirst({ where, select });
+      break;
+    case "POSITION_ASSIGNMENT":
+      live = await tx.positionAssignment.findFirst({ where, select });
+      break;
+  }
+  // `live === null` (not found / soft-deleted) is left to the applier's own
+  // NOT_FOUND handling; only a genuine version mismatch is a conflict here.
+  if (live && live.version !== baseVersion) {
+    throw new ChangeRequestError(
+      "This record was changed by someone else since you opened it. Reload and try again.",
+      409,
+      "VERSION_CONFLICT",
+    );
+  }
+}
+
 function validatePayload(
   entityType: DirectoryEntityKey,
   operation: ChangeOperationKey,
@@ -158,7 +237,6 @@ function validatePayload(
 
 export async function submitChange(input: SubmitInput, ctx: TenantServiceContext) {
   const validated = validatePayload(input.entityType, input.operation, input.payload);
-  await assertNoPendingConflict(ctx.tenantId, input.entityType, input.entityId);
 
   if (
     (input.operation === "UPDATE" || input.operation === "DELETE" || input.operation === "MOVE") &&
@@ -181,18 +259,32 @@ export async function submitChange(input: SubmitInput, ctx: TenantServiceContext
     "submitting change request",
   );
 
-  const change = await prisma.changeRequest.create({
-    data: {
-      tenantId: ctx.tenantId,
-      entityType: input.entityType,
-      entityId: input.entityId ?? null,
-      operation: input.operation,
-      payload: validated as Prisma.InputJsonValue,
-      submittedById: ctx.userId,
-      status: "PENDING",
-      approvalMode: "REVIEWED",
-    },
-    include: changeListInclude,
+  // Lock + conflict-check + insert in one transaction so two concurrent
+  // submits for the same entity can't both create a PENDING row.
+  const change = await prisma.$transaction(async (tx) => {
+    await lockEntityAndAssertNoPending(tx, ctx.tenantId, input.entityType, input.entityId);
+    if (input.entityId && (input.operation === "UPDATE" || input.operation === "MOVE")) {
+      await assertVersionMatches(
+        tx,
+        ctx.tenantId,
+        input.entityType,
+        input.entityId,
+        extractBaseVersion(validated),
+      );
+    }
+    return tx.changeRequest.create({
+      data: {
+        tenantId: ctx.tenantId,
+        entityType: input.entityType,
+        entityId: input.entityId ?? null,
+        operation: input.operation,
+        payload: validated as Prisma.InputJsonValue,
+        submittedById: ctx.userId,
+        status: "PENDING",
+        approvalMode: "REVIEWED",
+      },
+      include: changeListInclude,
+    });
   });
 
   emitDomainEvent(ctx.tenantId, "change.submitted", {
@@ -276,11 +368,26 @@ async function applyOperation(
   return applier({ ...change, payload: validated }, ctx, tx);
 }
 
-function domainEventFor(entityType: DirectoryEntityKey, operation: ChangeOperationKey): string {
+function domainEventFor(
+  entityType: DirectoryEntityKey,
+  operation: ChangeOperationKey,
+  payload?: unknown,
+): string {
   const entity = entityType === "POSITION_ASSIGNMENT" ? "position" : entityType.toLowerCase();
   if (entityType === "POSITION_ASSIGNMENT") {
     if (operation === "CREATE") return "position.assigned";
-    if (operation === "DELETE" || operation === "UPDATE") return "position.ended";
+    if (operation === "DELETE") return "position.ended";
+    if (operation === "UPDATE") {
+      // An UPDATE only "ends" the assignment when it now carries an endDate.
+      // A reopen/reassign (or a notes-only edit) is an active assignment, so
+      // don't mislabel it as `position.ended`.
+      const hasEndDate =
+        !!payload &&
+        typeof payload === "object" &&
+        "endDate" in payload &&
+        Boolean((payload as { endDate?: unknown }).endDate);
+      return hasEndDate ? "position.ended" : "position.assigned";
+    }
   }
   switch (operation) {
     case "CREATE":
@@ -319,6 +426,32 @@ export async function approveChange(
   );
 
   const result = await prisma.$transaction(async (tx) => {
+    // Claim the row FIRST with a conditional, status-guarded update. The
+    // pre-check above is outside the transaction and offers no protection
+    // against a concurrent approval (double-click, client retry, two
+    // reviewers). Two concurrent approves would otherwise both reach
+    // `applyOperation` and, for a CREATE, insert two entity rows from one
+    // request. `updateMany` takes a row lock and re-evaluates its WHERE after
+    // the winner commits, so the loser matches zero rows and rolls back
+    // before applying anything.
+    const claim = await tx.changeRequest.updateMany({
+      where: { id, tenantId: ctx.tenantId, status: "PENDING" },
+      data: {
+        status: "APPROVED",
+        reviewedById: ctx.userId,
+        reviewedAt: new Date(),
+        appliedAt: new Date(),
+        reviewerNotes: notes ?? null,
+      },
+    });
+    if (claim.count === 0) {
+      throw new ChangeRequestError(
+        "Cannot approve: the change is no longer pending",
+        409,
+        "NOT_PENDING",
+      );
+    }
+
     const entity = await applyOperation(
       tx,
       {
@@ -332,14 +465,7 @@ export async function approveChange(
     );
     const updated = await tx.changeRequest.update({
       where: { id },
-      data: {
-        status: "APPROVED",
-        reviewedById: ctx.userId,
-        reviewedAt: new Date(),
-        appliedAt: new Date(),
-        reviewerNotes: notes ?? null,
-        entityId: entity.id,
-      },
+      data: { entityId: entity.id },
       include: changeListInclude,
     });
     return { change: updated, entity };
@@ -357,6 +483,7 @@ export async function approveChange(
     domainEventFor(
       result.change.entityType as DirectoryEntityKey,
       result.change.operation as ChangeOperationKey,
+      result.change.payload,
     ),
     { id: result.change.entityId, changeId: result.change.id },
   );
@@ -410,14 +537,26 @@ export async function rejectChange(
     "rejecting change request",
   );
 
-  const updated = await prisma.changeRequest.update({
-    where: { id },
+  // Status-guarded transition so a concurrent reject/approve can't double-fire
+  // the event + submitter notification below.
+  const claim = await prisma.changeRequest.updateMany({
+    where: { id, tenantId: ctx.tenantId, status: "PENDING" },
     data: {
       status: "REJECTED",
       reviewedById: ctx.userId,
       reviewedAt: new Date(),
       reviewerNotes: notes,
     },
+  });
+  if (claim.count === 0) {
+    throw new ChangeRequestError(
+      "Cannot reject: the change is no longer pending",
+      409,
+      "NOT_PENDING",
+    );
+  }
+  const updated = await prisma.changeRequest.findFirstOrThrow({
+    where: { id },
     include: changeListInclude,
   });
 
@@ -464,9 +603,19 @@ export async function withdrawChange(id: string, ctx: TenantServiceContext) {
     throw new ChangeRequestError("Only the submitter can withdraw a change", 403, "NOT_SUBMITTER");
   }
 
-  const updated = await prisma.changeRequest.update({
-    where: { id },
+  const claim = await prisma.changeRequest.updateMany({
+    where: { id, tenantId: ctx.tenantId, status: "PENDING", submittedById: ctx.userId },
     data: { status: "WITHDRAWN", reviewedAt: new Date() },
+  });
+  if (claim.count === 0) {
+    throw new ChangeRequestError(
+      "Cannot withdraw: the change is no longer pending",
+      409,
+      "NOT_PENDING",
+    );
+  }
+  const updated = await prisma.changeRequest.findFirstOrThrow({
+    where: { id },
     include: changeListInclude,
   });
 
@@ -483,7 +632,6 @@ export async function withdrawChange(id: string, ctx: TenantServiceContext) {
 
 export async function submitAndApply(input: SubmitInput, ctx: TenantServiceContext) {
   const validated = validatePayload(input.entityType, input.operation, input.payload);
-  await assertNoPendingConflict(ctx.tenantId, input.entityType, input.entityId);
 
   if (
     (input.operation === "UPDATE" || input.operation === "DELETE" || input.operation === "MOVE") &&
@@ -504,6 +652,18 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
   );
 
   const result = await prisma.$transaction(async (tx) => {
+    // Same lock as submitChange — a manager's direct edit must not race with a
+    // focal submission (or another manager) for the same entity.
+    await lockEntityAndAssertNoPending(tx, ctx.tenantId, input.entityType, input.entityId);
+    if (input.entityId && (input.operation === "UPDATE" || input.operation === "MOVE")) {
+      await assertVersionMatches(
+        tx,
+        ctx.tenantId,
+        input.entityType,
+        input.entityId,
+        extractBaseVersion(validated),
+      );
+    }
     const entity = await applyOperation(
       tx,
       {
@@ -534,7 +694,7 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
     return { change, entity };
   });
 
-  emitDomainEvent(ctx.tenantId, domainEventFor(input.entityType, input.operation), {
+  emitDomainEvent(ctx.tenantId, domainEventFor(input.entityType, input.operation, validated), {
     id: result.change.entityId,
     changeId: result.change.id,
     selfApproved: true,
@@ -748,16 +908,23 @@ export type FieldDiff = {
   after: unknown;
 };
 
+// Payload keys that are transport metadata, not entity fields. `baseVersion`
+// is the optimistic-concurrency token; the live entity has no such column, so
+// without this it would show up as a changed field on every edit.
+const NON_DIFF_FIELDS = new Set(["baseVersion"]);
+
 export async function computeDiff(change: ChangeRequest): Promise<FieldDiff[]> {
   if (change.operation === "CREATE") {
     // No "before" — every field in the payload is a new value.
     const payload = change.payload as Record<string, unknown> | null;
     if (!payload) return [];
-    return Object.entries(payload).map(([field, after]) => ({
-      field,
-      before: null,
-      after,
-    }));
+    return Object.entries(payload)
+      .filter(([field]) => !NON_DIFF_FIELDS.has(field))
+      .map(([field, after]) => ({
+        field,
+        before: null,
+        after,
+      }));
   }
 
   if (change.operation === "DELETE") {
@@ -785,6 +952,7 @@ export async function computeDiff(change: ChangeRequest): Promise<FieldDiff[]> {
   const payload = (change.payload as Record<string, unknown>) ?? {};
   const diffs: FieldDiff[] = [];
   for (const field of Object.keys(payload)) {
+    if (NON_DIFF_FIELDS.has(field)) continue;
     const before = (live as Record<string, unknown>)[field];
     const after = payload[field];
     if (!deepEqual(before, after)) {

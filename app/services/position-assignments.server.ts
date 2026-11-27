@@ -219,6 +219,23 @@ export async function _applyUpdateAssignment(
     "applying UPDATE position assignment",
   );
 
+  if (isCurrent) {
+    // Mirror the CREATE path's auto-close: an UPDATE that (re)opens this
+    // assignment as current must close any OTHER current assignment that
+    // collides on the same position or person, or we'd end up with two
+    // `isCurrent` rows and a nondeterministic "current holder".
+    await db.positionAssignment.updateMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        isCurrent: true,
+        id: { not: id },
+        OR: [{ positionId: payload.positionId }, { personId: payload.personId }],
+      },
+      data: { isCurrent: false, endDate: startDate, version: { increment: 1 } },
+    });
+  }
+
   return db.positionAssignment.update({
     where: { id },
     data: {

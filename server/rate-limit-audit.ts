@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { emitAuditExternal, shouldWriteAuditToDb } from "~/utils/auth/audit-sink.server";
 import { prisma } from "~/utils/db/db.server";
 
 // Batched rate-limit-violation writer. Each 429 from express-rate-limit
@@ -47,6 +48,33 @@ export function logRateLimitViolation(context: ViolationContext): void {
 export function flushRateLimitBuffer(): void {
   if (buffer.length === 0) return;
   const batch = buffer.splice(0);
+
+  // Ship each violation to the external audit sink (stdout/file) so the
+  // rate-limit trail persists outside the DB alongside the rest of the audit
+  // log. Best-effort, never throws.
+  for (const ctx of batch) {
+    emitAuditExternal({
+      tenantId: null,
+      userId: ctx.userId,
+      actingAsUserId: null,
+      action: "RATE_LIMIT",
+      entityType: "RateLimit",
+      entityId: ctx.tier,
+      description: null,
+      metadata: {
+        ip: ctx.ip,
+        path: ctx.path,
+        method: ctx.method,
+        tier: ctx.tier,
+        limit: ctx.limit,
+      },
+      ipAddress: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+  }
+
+  if (!shouldWriteAuditToDb()) return;
+
   prisma.auditLog
     .createMany({
       data: batch.map((ctx) => ({

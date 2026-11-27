@@ -372,7 +372,15 @@ export async function _applySoftDeleteOrg(
   const db: Db = tx ?? prisma;
   const existing = await db.organization.findFirst({
     where: { id, tenantId, deletedAt: null },
-    select: { id: true, _count: { select: { children: { where: { deletedAt: null } } } } },
+    select: {
+      id: true,
+      _count: {
+        select: {
+          children: { where: { deletedAt: null } },
+          positions: { where: { deletedAt: null } },
+        },
+      },
+    },
   });
   if (!existing) throw new OrganizationError("Organization not found", 404, "NOT_FOUND");
   if (existing._count.children > 0) {
@@ -380,6 +388,16 @@ export async function _applySoftDeleteOrg(
       "Cannot delete an organization that has child organizations",
       400,
       "HAS_CHILDREN",
+    );
+  }
+  // A live position still points at this org via a to-one relation Prisma
+  // can't filter in public read selects, so a deleted org's name would leak
+  // onto profiles/search. Block the delete until its positions are gone.
+  if (existing._count.positions > 0) {
+    throw new OrganizationError(
+      "Cannot delete an organization that still has positions",
+      400,
+      "HAS_POSITIONS",
     );
   }
 

@@ -1,17 +1,29 @@
 import { data } from "react-router";
+import { getUserId } from "~/utils/auth/auth.server";
 import { publicListPeople } from "~/services/people.server";
-import { AUTOCOMPLETE_MIN_LENGTH, type Suggestion } from "~/utils/autocomplete";
+import { AUTOCOMPLETE_MIN_LENGTH, SEARCH_PAGE_SIZE, type Suggestion } from "~/utils/autocomplete";
 import { getPublicContext } from "~/utils/public-directory.server";
 import type { Route } from "./+types/api.search-people";
 
-// Public JSON endpoint for type-ahead search on the landing page. Mirrors
+// JSON endpoint for type-ahead search on the landing page. Mirrors
 // `publicListPeople` but capped at SUGGESTION_LIMIT so the dropdown stays
-// fast. Shorter cache TTL than detail pages — search suggestions should
-// update sooner after an edit lands.
-const SUGGESTION_LIMIT = 8;
-const AUTOCOMPLETE_CACHE_HEADER = "public, max-age=30, stale-while-revalidate=120";
+// fast. The directory is for AU staff + member states only, so this
+// endpoint requires an authenticated session (post-demo feedback).
+const SUGGESTION_LIMIT = SEARCH_PAGE_SIZE;
+// Auth-gated, so responses are private (never shared edge cache) but a short
+// per-user TTL still smooths repeated keystrokes.
+const AUTOCOMPLETE_CACHE_HEADER = "private, max-age=15";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  // Login required for any search — the directory serves AU staff and
+  // member states, not the anonymous public. A bare 401 (rather than a login
+  // redirect) lets the search box's `fetch` see a non-ok status and show no
+  // suggestions instead of parsing a login page.
+  const userId = await getUserId(request);
+  if (!userId) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
 

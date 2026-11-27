@@ -20,6 +20,7 @@ import type { Route } from "../$orgId_/+types/edit";
 
 type OrgLike = {
   id: string;
+  version?: number;
   name: string;
   acronym: string | null;
   typeId: string;
@@ -87,6 +88,7 @@ export function OrganizationEditor({
     lastResult: actionData,
     defaultValue: {
       id: org?.id ?? "",
+      baseVersion: org?.version,
       name: org?.name ?? "",
       acronym: org?.acronym ?? "",
       typeId: org?.typeId ?? "",
@@ -113,7 +115,13 @@ export function OrganizationEditor({
   return (
     <Form method="post" {...getFormProps(form)} className="space-y-6">
       {org?.id ? (
-        <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+        <>
+          <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+          <input
+            {...getInputProps(fields.baseVersion, { type: "hidden" })}
+            key={fields.baseVersion.key}
+          />
+        </>
       ) : null}
 
       <Card>

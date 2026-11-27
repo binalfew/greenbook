@@ -98,6 +98,8 @@
       "honorificPlaceholder": "Sélectionner un titre",
       "email": "E-mail",
       "phone": "Téléphone",
+      "officeEmail": "E-mail officiel",
+      "officePhone": "Téléphone officiel",
       "bio": "Biographie",
       "photoUrl": "URL de la photo",
       "memberState": "Nationalité",
@@ -110,6 +112,8 @@
     "cards": {
       "basics": "Informations",
       "contact": "Contact",
+      "officeContact": "Contact officiel",
+      "officeContactHelp": "Contact officiel optionnel pour les chefs d'unité et au-dessus — affiché publiquement en plus de l'e-mail personnel de l'UA.",
       "assignments": "Postes occupés",
       "metadata": "Métadonnées",
       "initialAssignment": "Poste initial (optionnel)",

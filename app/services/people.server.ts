@@ -138,6 +138,8 @@ function personDataFromPayload(payload: PersonPayload) {
     honorific: payload.honorific ?? null,
     email: payload.email ?? null,
     phone: payload.phone ?? null,
+    officeEmail: payload.officeEmail ?? null,
+    officePhone: payload.officePhone ?? null,
     bio: payload.bio ?? null,
     photoUrl: payload.photoUrl ?? null,
     memberStateId: payload.memberStateId ?? null,
@@ -257,6 +259,8 @@ type PublicPerson = {
   honorific: string | null;
   email: string | null;
   phone: string | null;
+  officeEmail: string | null;
+  officePhone: string | null;
   bio: string | null;
   photoUrl: string | null;
   languages: string[];
@@ -275,6 +279,8 @@ function stripPII(row: {
   honorific: string | null;
   email: string | null;
   phone: string | null;
+  officeEmail: string | null;
+  officePhone: string | null;
   bio: string | null;
   photoUrl: string | null;
   languages: string[];
@@ -296,6 +302,9 @@ function stripPII(row: {
     honorific: row.honorific,
     email: row.showEmail ? row.email : null,
     phone: row.showPhone ? row.phone : null,
+    // Official contact is not personal PII — surface it whenever present.
+    officeEmail: row.officeEmail,
+    officePhone: row.officePhone,
     bio: row.bio,
     photoUrl: row.photoUrl,
     languages: row.languages,
@@ -317,12 +326,42 @@ export async function publicListPeople(
   const skip = (page - 1) * pageSize;
   const search = normaliseSearchTerm(options.search);
 
-  const searchFilter = search
+  // Search matches the person (name/bio) OR their current post — position
+  // title and the organization it sits in — so "search by position"
+  // (post-demo feedback) surfaces the person currently holding it.
+  const searchFilter: Prisma.PersonWhereInput = search
     ? {
         OR: [
           { firstName: { contains: search, mode: "insensitive" as const } },
           { lastName: { contains: search, mode: "insensitive" as const } },
           { bio: { contains: search, mode: "insensitive" as const } },
+          {
+            assignments: {
+              some: {
+                deletedAt: null,
+                isCurrent: true,
+                position: {
+                  deletedAt: null,
+                  isActive: true,
+                  OR: [
+                    { title: { contains: search, mode: "insensitive" as const } },
+                    {
+                      // Guard the nested org against soft-deleted rows — otherwise
+                      // searching a removed organization's name would still surface
+                      // the people whose current post sits under it.
+                      organization: {
+                        deletedAt: null,
+                        OR: [
+                          { name: { contains: search, mode: "insensitive" as const } },
+                          { acronym: { contains: search, mode: "insensitive" as const } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
         ],
       }
     : {};
@@ -347,6 +386,8 @@ export async function publicListPeople(
         honorific: true,
         email: true,
         phone: true,
+        officeEmail: true,
+        officePhone: true,
         bio: true,
         photoUrl: true,
         languages: true,
@@ -354,7 +395,13 @@ export async function publicListPeople(
         showPhone: true,
         memberState: { select: { id: true, fullName: true, abbreviation: true } },
         assignments: {
-          where: { deletedAt: null, isCurrent: true },
+          // A soft-deleted or deactivated position must never surface as a
+          // current role (matches publicGetPosition's isActive convention).
+          where: {
+            deletedAt: null,
+            isCurrent: true,
+            position: { deletedAt: null, isActive: true },
+          },
           take: 10,
           orderBy: { startDate: "desc" },
           select: {
@@ -419,7 +466,12 @@ async function buildReportsChain(
   publicTenantIds: string[],
 ): Promise<PublicReportsChainEntry[]> {
   const start = await prisma.position.findFirst({
-    where: { id: startingPositionId, tenantId: { in: publicTenantIds }, deletedAt: null },
+    where: {
+      id: startingPositionId,
+      tenantId: { in: publicTenantIds },
+      deletedAt: null,
+      isActive: true,
+    },
     select: { reportsToId: true },
   });
 
@@ -435,7 +487,7 @@ async function buildReportsChain(
     seen.add(nextId);
 
     const pos = await prisma.position.findFirst({
-      where: { id: nextId, tenantId: { in: publicTenantIds }, deletedAt: null },
+      where: { id: nextId, tenantId: { in: publicTenantIds }, deletedAt: null, isActive: true },
       select: {
         id: true,
         title: true,
@@ -481,6 +533,8 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
       honorific: true,
       email: true,
       phone: true,
+      officeEmail: true,
+      officePhone: true,
       bio: true,
       photoUrl: true,
       languages: true,
@@ -488,7 +542,11 @@ export async function publicGetPerson(id: string, publicTenantIds: string[]) {
       showPhone: true,
       memberState: { select: { id: true, fullName: true, abbreviation: true } },
       assignments: {
-        where: { deletedAt: null },
+        // Exclude assignments to soft-deleted or deactivated positions from
+        // both the current role and the history timeline — a removed post
+        // shouldn't linger on a public profile (matches the isActive
+        // convention used by publicGetPosition / publicGetOrganization).
+        where: { deletedAt: null, position: { deletedAt: null, isActive: true } },
         orderBy: [{ isCurrent: "desc" }, { startDate: "desc" }],
         take: PUBLIC_PERSON_HISTORY_TAKE,
         select: {

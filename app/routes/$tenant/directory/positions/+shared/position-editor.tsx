@@ -18,6 +18,7 @@ import type { Route } from "../$positionId_/+types/edit";
 
 type PositionLike = {
   id: string;
+  version?: number;
   organizationId: string;
   typeId: string;
   title: string;
@@ -78,6 +79,7 @@ export function PositionEditor({
     lastResult: actionData,
     defaultValue: {
       id: position?.id ?? "",
+      baseVersion: position?.version,
       organizationId: position?.organizationId ?? "",
       typeId: position?.typeId ?? "",
       title: position?.title ?? "",
@@ -98,7 +100,13 @@ export function PositionEditor({
   return (
     <Form method="post" {...getFormProps(form)} className="space-y-6">
       {position?.id ? (
-        <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+        <>
+          <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />
+          <input
+            {...getInputProps(fields.baseVersion, { type: "hidden" })}
+            key={fields.baseVersion.key}
+          />
+        </>
       ) : null}
 
       <Card>

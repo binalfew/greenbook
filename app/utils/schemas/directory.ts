@@ -40,6 +40,13 @@ const isoDate = () =>
       message: "Invalid date",
     });
 
+// Optimistic-concurrency token: the entity `version` at the moment the edit
+// form was rendered. Carried through submit → approve so a stale edit (one
+// built against an older version that has since been superseded) is rejected
+// rather than silently clobbering the newer state. Optional so CREATE and
+// legacy callers that don't send it still work.
+const optionalVersion = () => z.coerce.number().int().min(0).optional();
+
 export const organizationPayloadSchema = z.object({
   name: z
     .string({ error: "Name is required" })
@@ -58,6 +65,7 @@ export const organizationPayloadSchema = z.object({
   phone: nullableString(50),
   address: nullableString(1000),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  baseVersion: optionalVersion(),
 });
 export type OrganizationPayload = z.infer<typeof organizationPayloadSchema>;
 
@@ -81,6 +89,8 @@ export const personPayloadSchema = z.object({
   honorific: nullableString(50),
   email: nullableString(255),
   phone: nullableString(50),
+  officeEmail: nullableString(255),
+  officePhone: nullableString(50),
   bio: nullableString(10_000),
   photoUrl: nullableString(500),
   memberStateId: nullableCuid(),
@@ -88,6 +98,7 @@ export const personPayloadSchema = z.object({
   showEmail: z.coerce.boolean().default(false),
   showPhone: z.coerce.boolean().default(false),
   initialAssignment: initialAssignmentSchema.optional(),
+  baseVersion: optionalVersion(),
 });
 export type PersonPayload = z.infer<typeof personPayloadSchema>;
 
@@ -101,6 +112,7 @@ export const positionPayloadSchema = z.object({
   description: nullableString(10_000),
   isActive: z.coerce.boolean().default(true),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  baseVersion: optionalVersion(),
 });
 export type PositionPayload = z.infer<typeof positionPayloadSchema>;
 
@@ -130,6 +142,7 @@ export type DeletePayload = z.infer<typeof deletePayloadSchema>;
 // MOVE is a specialized Organization UPDATE — only parentId changes.
 export const movePayloadSchema = z.object({
   parentId: nullableCuid(),
+  baseVersion: optionalVersion(),
 });
 export type MovePayload = z.infer<typeof movePayloadSchema>;
 
@@ -204,6 +217,7 @@ export const organizationFormSchema = z.object({
   phone: formText(50),
   address: formText(1000),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  baseVersion: optionalVersion(),
 });
 export type OrganizationFormInput = z.infer<typeof organizationFormSchema>;
 
@@ -214,6 +228,8 @@ export const personFormSchema = z.object({
   honorific: formText(50),
   email: formText(255),
   phone: formText(50),
+  officeEmail: formText(255),
+  officePhone: formText(50),
   bio: formText(10_000),
   photoUrl: formText(500),
   memberStateId: z.string().optional(),
@@ -226,6 +242,7 @@ export const personFormSchema = z.object({
   initialPositionId: z.string().optional(),
   initialStartDate: z.string().optional(),
   initialNotes: formText(2000),
+  baseVersion: optionalVersion(),
 });
 export type PersonFormInput = z.infer<typeof personFormSchema>;
 
@@ -238,6 +255,7 @@ export const positionFormSchema = z.object({
   description: formText(10_000),
   isActive: z.coerce.boolean().default(true),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  baseVersion: optionalVersion(),
 });
 export type PositionFormInput = z.infer<typeof positionFormSchema>;
 

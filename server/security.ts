@@ -108,6 +108,23 @@ export const mutationLimiter = rateLimit({
   validate: { keyGeneratorIpFallback: false },
 });
 
+// Search limiter — the directory search is the most abusable read path
+// (each keystroke can drive a query), so it gets a tighter per-minute cap
+// than general browsing. Keyed per-user since search now requires login.
+// 1-minute window, 15 requests by default; tune via env for stricter tiers.
+const SEARCH_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_SEARCH_WINDOW_MS) || 60_000;
+const SEARCH_LIMIT_MAX = Number(process.env.RATE_LIMIT_SEARCH_MAX) || 15;
+export const searchLimiter = rateLimit({
+  windowMs: SEARCH_LIMIT_WINDOW_MS,
+  limit: SEARCH_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: createKeyGenerator(),
+  skip: skipHealthCheck,
+  handler: createRateLimitHandler("search", SEARCH_LIMIT_MAX),
+  validate: { keyGeneratorIpFallback: false },
+});
+
 // Tight limiter for /login, /signup, /forgot-password, etc. Apps mount
 // this on their auth routes explicitly; it's not applied globally.
 export const authLimiter = rateLimit({

@@ -13,7 +13,7 @@ import {
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { approveChange } from "~/services/directory-changes.server";
-import { requireReviewContext } from "~/utils/directory-access.server";
+import { requireApproveContext, requireReviewContext } from "~/utils/directory-access.server";
 import type { Route } from "./+types/$changeId.approve";
 
 export const handle = { breadcrumb: "Approve" };
@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const { ctx } = await requireReviewContext(request);
+  const { ctx } = await requireApproveContext(request);
   const formData = await request.formData();
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
   await approveChange(params.changeId, { notes }, ctx);

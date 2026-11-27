@@ -698,6 +698,10 @@ model Person {
   honorific     String?  @db.VarChar(50)
   email         String?  @db.VarChar(255)
   phone         String?  @db.VarChar(50)
+  // Official / additional contact — surfaced publicly whenever present
+  // (unlike personal email/phone, which are gated by showEmail/showPhone).
+  officeEmail   String?  @db.VarChar(255)
+  officePhone   String?  @db.VarChar(50)
   bio           String?  @db.Text
   photoUrl      String?  @db.VarChar(500)
   memberStateId String?

@@ -15,7 +15,7 @@ import {
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { rejectChange } from "~/services/directory-changes.server";
-import { requireReviewContext } from "~/utils/directory-access.server";
+import { requireRejectContext, requireReviewContext } from "~/utils/directory-access.server";
 import { rejectChangeSchema } from "~/utils/schemas/directory";
 import type { Route } from "./+types/$changeId.reject";
 
@@ -27,7 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const { ctx } = await requireReviewContext(request);
+  const { ctx } = await requireRejectContext(request);
   const submission = parseWithZod(await request.formData(), { schema: rejectChangeSchema });
   if (submission.status !== "success") {
     return data(submission.reply(), {

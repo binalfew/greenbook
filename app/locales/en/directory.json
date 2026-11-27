@@ -98,6 +98,8 @@
       "honorificPlaceholder": "Select a title",
       "email": "Email",
       "phone": "Phone",
+      "officeEmail": "Official email",
+      "officePhone": "Official phone",
       "bio": "Biography",
       "photoUrl": "Photo URL",
       "memberState": "Nationality",
@@ -110,6 +112,8 @@
     "cards": {
       "basics": "Basics",
       "contact": "Contact",
+      "officeContact": "Official contact",
+      "officeContactHelp": "Optional official contact for heads of unit and above — shown publicly in addition to the personal AU email.",
       "assignments": "Positions held",
       "metadata": "Metadata",
       "initialAssignment": "Initial position (optional)",

@@ -19,8 +19,12 @@ export type DirectoryAccess = {
   canDirect: boolean;
   /** User can create a ChangeRequest via `submitChange` (focal-person path). */
   canSubmit: boolean;
-  /** User can review others' change requests. */
+  /** User can review (read) others' change requests. */
   canReview: boolean;
+  /** User can approve pending change requests. */
+  canApprove: boolean;
+  /** User can reject pending change requests. */
+  canReject: boolean;
 };
 
 export async function requireDirectoryAccess(
@@ -31,7 +35,9 @@ export async function requireDirectoryAccess(
   const canDirect = options.write ? hasPermission(user, options.write, "write") : false;
   const canSubmit = hasPermission(user, "directory-change", "submit");
   const canReview = hasPermission(user, "directory-change", "read-all");
-  return { user, tenantId, canDirect, canSubmit, canReview };
+  const canApprove = hasPermission(user, "directory-change", "approve");
+  const canReject = hasPermission(user, "directory-change", "reject");
+  return { user, tenantId, canDirect, canSubmit, canReview, canApprove, canReject };
 }
 
 /**
@@ -71,6 +77,33 @@ export async function requireSubmitContext(
 ): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
   const access = await requireDirectoryAccess(request);
   if (!access.canSubmit) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  return { ...access, ctx };
+}
+
+// Approve/reject actions gate on the dedicated `directory-change:approve` /
+// `:reject` permissions — not merely `read-all`. Previously both actions used
+// `requireReviewContext` (read-all), so any role that could *view* the queue
+// could also mutate it, and the granular approve/reject permissions went
+// unenforced.
+export async function requireApproveContext(
+  request: Request,
+): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
+  const access = await requireDirectoryAccess(request);
+  if (!access.canApprove) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  return { ...access, ctx };
+}
+
+export async function requireRejectContext(
+  request: Request,
+): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
+  const access = await requireDirectoryAccess(request);
+  if (!access.canReject) {
     throw new Response("Forbidden", { status: 403 });
   }
   const ctx = buildServiceContext(request, access.user, access.tenantId);
