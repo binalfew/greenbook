@@ -24,6 +24,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     entityId: hasId ? id : undefined,
     payload,
   });
+  if (outcome.conflict) {
+    return data(submission.reply({ formErrors: [outcome.conflict.message] }), { status: 409 });
+  }
 
   // SELF_APPROVED lands on the entity; a saved draft sends the author to
   // their drafts, where it can be submitted alone or with others.

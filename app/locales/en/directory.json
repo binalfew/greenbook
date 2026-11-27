@@ -314,6 +314,15 @@
     "updatedPublished": "Updated and published",
     "deletedPublished": "Deleted"
   },
+  "conflicts": {
+    "PENDING_REQUEST_EXISTS": "This record already has a change waiting for review. It can be edited again once that change is approved, rejected or withdrawn.",
+    "DRAFT_EXISTS": "You already have a draft for this record. Edit, submit or discard that draft first.",
+    "VERSION_CONFLICT": "This record was changed by someone else after you opened it. Reload the page and try again.",
+    "HAS_ACTIVE_ASSIGNMENTS": "This record still has a current assignment. End the assignment first, then delete.",
+    "REFERENCED_RECORD_NOT_PUBLISHED": "This change refers to a record that has since been deleted. Reject it or ask for a correction.",
+    "NOT_PENDING": "This change is no longer waiting for review. Reload the page to see its current status.",
+    "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review."
+  },
   "status": {
     "published": "Published",
     "pendingYours": "Pending your review",

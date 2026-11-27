@@ -8,6 +8,7 @@ import {
   getTextareaProps,
   useForm,
 } from "~/components/form";
+import { FormError } from "~/components/directory/form-error";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -103,6 +104,7 @@ export function PositionEditor({
 
   return (
     <Form method="post" {...getFormProps(form)} className="space-y-6">
+      <FormError message={form.errors?.[0]} />
       {position?.id ? (
         <>
           <input {...getInputProps(fields.id, { type: "hidden" })} key={fields.id.key} />

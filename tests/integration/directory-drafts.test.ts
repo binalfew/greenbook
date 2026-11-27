@@ -599,9 +599,16 @@ describe("drafts: submitting", () => {
         params: { tenant: a.slug, orgId: org.id },
         context: {},
       } as never),
-    ).catch((err) => err);
+    );
 
-    expect(second).toMatchObject({ code: "DRAFT_EXISTS", status: 409 });
+    // An ordinary conflict: a message on the dialog, not a server error.
+    expect(second).toMatchObject({
+      init: { status: 409 },
+      data: {
+        formError:
+          "You already have a draft for this record. Edit, submit or discard that draft first.",
+      },
+    });
     expect(
       await prisma.changeRequest.count({ where: { tenantId: a.tenantId, status: "DRAFT" } }),
     ).toBe(1);

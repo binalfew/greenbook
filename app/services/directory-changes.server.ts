@@ -117,6 +117,21 @@ export type ChangeListRow = ChangeRequest & {
 
 // ─── Guards ─────────────────────────────────────────────────────────────
 
+// The change that currently blocks a new edit or delete of this record, if
+// any. Detail pages use it to show the pending badge and to disable Edit and
+// Delete, so its notion of "blocking" must stay in step with the submit guard
+// (`lockEntityAndAssertNoPending`) below.
+export async function findPendingChange(
+  tenantId: string,
+  entityType: DirectoryEntityKey,
+  entityId: string,
+) {
+  return prisma.changeRequest.findFirst({
+    where: { tenantId, entityType, entityId, status: "PENDING" },
+    select: { id: true, submittedById: true, submittedAt: true },
+  });
+}
+
 export async function assertNoPendingConflict(
   tenantId: string,
   entityType: DirectoryEntityKey,
@@ -309,10 +324,10 @@ export async function submitChange(input: SubmitInput, ctx: TenantServiceContext
 
 /**
  * Create a draft, or — when `draftId` is given — replace the payload of the
- * caller's own existing draft. A draft never blocks other users; the only
- * open-change rule applied here is that an author cannot hold two drafts for
- * the same record (`DRAFT_EXISTS`). The stale-edit and pending-conflict
- * checks run later, in `submitDrafts`.
+ * caller's own existing draft. A draft never blocks other users. Refused when
+ * the record already has a change in review (`PENDING_REQUEST_EXISTS`) or the
+ * author already holds a draft for it (`DRAFT_EXISTS`). The stale-edit check
+ * and the binding pending-conflict check run later, in `submitDrafts`.
  */
 export async function saveDraft(
   input: SubmitInput,
@@ -331,6 +346,11 @@ export async function saveDraft(
     throw new ChangeRequestError("CREATE must not include entityId", 400, "UNEXPECTED_ENTITY_ID");
   }
   const entityId = input.entityId ?? null;
+
+  // A record with a change in review is locked, so say so now instead of
+  // letting the author write a draft that cannot be submitted. Advisory only:
+  // `submitDrafts` repeats the check under the entity lock.
+  await assertNoPendingConflict(ctx.tenantId, input.entityType, entityId);
 
   return prisma.$transaction(async (tx) => {
     if (options.draftId) {

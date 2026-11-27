@@ -3,6 +3,7 @@ import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
+import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -20,10 +21,10 @@ async function arrange() {
   const tenant = await prisma.tenant.create({ data: buildTenant() });
 
   const focalRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "focal", scope: "TENANT" },
+    data: { name: "focal", scope: "TENANT" },
   });
   const managerRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "manager", scope: "TENANT" },
+    data: { name: "manager", scope: "TENANT" },
   });
 
   async function grant(roleId: string, resource: string, action: string) {
@@ -76,6 +77,7 @@ async function arrange() {
 
   return {
     tenantId: tenant.id,
+    slug: tenant.slug,
     org,
     orgType,
     focalCookie: await createSessionCookie(prisma, focal.id),
@@ -96,26 +98,36 @@ async function diffAfterEdit(a: Arranged, overrides: Record<string, string>) {
     sortOrder: "0",
     ...overrides,
   });
-  const submit = new Request("http://localhost/t/directory/organizations/x/edit", {
+  const submit = new Request(`http://localhost/${a.slug}/directory/organizations/x/edit`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie: a.focalCookie },
     body: form.toString(),
   });
   const response = await organizationEditorAction({
     request: submit,
-    params: { tenant: "t" },
+    params: { tenant: a.slug },
     context: {},
   } as never);
   expect((response as Response).status).toBe(302);
 
+  // The save is a draft; the focal person sends it for review.
   const change = await prisma.changeRequest.findFirstOrThrow({
-    where: { tenantId: a.tenantId, entityId: a.org.id, status: "PENDING" },
+    where: { tenantId: a.tenantId, entityId: a.org.id, status: "DRAFT" },
   });
+  await submitDraftsAction({
+    request: new Request(`http://localhost/${a.slug}/directory/approvals/submit-drafts`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: a.focalCookie },
+      body: new URLSearchParams({ "ids[]": change.id }).toString(),
+    }),
+    params: { tenant: a.slug },
+    context: {},
+  } as never);
   const detail = (await changeDetailLoader({
-    request: new Request("http://localhost/t/directory/approvals/x", {
+    request: new Request(`http://localhost/${a.slug}/directory/approvals/x`, {
       headers: { cookie: a.managerCookie },
     }),
-    params: { tenant: "t", changeId: change.id },
+    params: { tenant: a.slug, changeId: change.id },
     context: {},
   } as never)) as { data: { diffs: { field: string; before: unknown; after: unknown }[] } };
   return detail.data.diffs;
