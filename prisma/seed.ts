@@ -2,7 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
 import { pathToFileURL } from "node:url";
 import { PrismaClient } from "../app/generated/prisma/client";
-import { addTenantToFlag } from "../app/utils/config/tenant-flag-membership.server";
+import { addTenantToNewTenantFlags } from "../app/utils/config/tenant-flag-membership.server";
 import { detachRolesFromTenants } from "./seed-role-tenancy";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
@@ -445,8 +445,7 @@ export async function runSeed() {
   // directory + public directory out of the box. This only ever adds: tenants
   // opted in by hand stay on the list.
   for (const tenantId of new Set([tenant.id, workingTenant.id])) {
-    await addTenantToFlag(prisma, "FF_DIRECTORY", tenantId);
-    await addTenantToFlag(prisma, "FF_PUBLIC_DIRECTORY", tenantId);
+    await addTenantToNewTenantFlags(prisma, tenantId);
   }
 
   // Seed default reference data for the system tenant.
