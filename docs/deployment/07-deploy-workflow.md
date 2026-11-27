@@ -1290,7 +1290,7 @@ $ docker run --rm --env-file /etc/greenbook.env \
 # Expected: tenants >= 1, roles >= 4, users >= 4 (admin/manager/focal/user demos).
 ```
 
-The seed script is idempotent in the sense that re-running it overwrites the demo data (by design — see `wipeDirectoryData` in seed.ts). **Do not re-run seed against a production DB with real user edits** unless you're intentionally resetting demo content.
+The seed script is safe to re-run on a database that holds data: it leaves existing directory records and reference data alone, and it only adds tenants to a feature flag's enabled list. The starter organizations, positions and people are created only in a tenant that has no directory records. A re-run still restores the permissions of the four canonical roles, re-creates any missing demo account, and moves the demo accounts back to their seeded tenant.
 
 > **⚠ Harden the seeded accounts before anyone else gets the URL**
 >
