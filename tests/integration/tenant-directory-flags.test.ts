@@ -10,8 +10,8 @@ import {
 } from "~/routes/$tenant/tenants/$tenantId/features";
 import { action as newTenantAction } from "~/routes/$tenant/tenants/new";
 import { clearPublicTenantIdsCache, getPublicTenantIds } from "~/services/public-directory.server";
-import { csrf } from "~/utils/auth/csrf.server";
 import { clearFlagCache, isFeatureEnabled } from "~/utils/config/feature-flags.server";
+import { get, post } from "./helpers/requests";
 import { createSessionCookie } from "./helpers/session";
 
 // A tenant created through the UI is opted into the directory and into
@@ -70,22 +70,6 @@ async function arrange() {
   return { existing, adminCookie: await createSessionCookie(prisma, admin.id), addManager };
 }
 
-function get(cookie: string, path: string): Request {
-  return new Request(`http://localhost${path}`, { headers: { cookie } });
-}
-
-async function post(path: string, cookie: string, body: Record<string, string>): Promise<Request> {
-  const [token, csrfCookie] = await csrf.commitToken();
-  return new Request(`http://localhost${path}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      cookie: `${cookie}; ${csrfCookie!.split(";")[0]}`,
-    },
-    body: new URLSearchParams({ ...body, csrf: token }).toString(),
-  });
-}
-
 /** Run a loader/action and return its HTTP status, whether returned or thrown. */
 async function statusOf(run: () => Promise<unknown>): Promise<number> {
   const result = await run().catch((thrown) => thrown);
@@ -126,7 +110,7 @@ async function setTenantFlag(cookie: string, tenantId: string, flagKey: string, 
 function openDirectory(cookie: string, slug: string) {
   return statusOf(() =>
     directoryLayoutLoader({
-      request: get(cookie, `/${slug}/directory`),
+      request: get(`/${slug}/directory`, cookie),
       params: { tenant: slug },
       context: {},
     } as never),
@@ -135,7 +119,7 @@ function openDirectory(cookie: string, slug: string) {
 
 async function navFeatures(cookie: string, slug: string) {
   const result = (await tenantLayoutLoader({
-    request: get(cookie, `/${slug}`),
+    request: get(`/${slug}`, cookie),
     params: { tenant: slug },
     context: {},
   } as never)) as unknown as { data: { enabledFeatures: Record<string, boolean> } };
@@ -186,7 +170,7 @@ describe("the global admin changes a tenant's features", () => {
 
   async function listedFlags(cookie: string, tenantId: string) {
     const result = (await tenantFeaturesLoader({
-      request: get(cookie, `/system/tenants/${tenantId}/features`),
+      request: get(`/system/tenants/${tenantId}/features`, cookie),
       params: { tenant: "system", tenantId },
       context: {},
     } as never)) as unknown as FeaturesData;
@@ -249,7 +233,7 @@ describe("the global admin changes a tenant's features", () => {
     expect(
       await statusOf(() =>
         tenantFeaturesLoader({
-          request: get(managerCookie, `/medical/tenants/${tenant.id}/features`),
+          request: get(`/medical/tenants/${tenant.id}/features`, managerCookie),
           params: { tenant: "medical", tenantId: tenant.id },
           context: {},
         } as never),

@@ -9,8 +9,8 @@ import { action as userRolesAction } from "~/routes/$tenant/settings/security/us
 import { action as newUserAction } from "~/routes/$tenant/settings/security/users/new";
 import { action as tenantFeaturesAction } from "~/routes/$tenant/tenants/$tenantId/features";
 import { clearPublicTenantIdsCache, getPublicTenantIds } from "~/services/public-directory.server";
-import { csrf } from "~/utils/auth/csrf.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { get, post } from "./helpers/requests";
 import { createSessionCookie } from "./helpers/session";
 
 // Ticket #24: the system tenant is the global admin's home and nothing else.
@@ -66,23 +66,6 @@ async function arrange() {
     mkUser,
     adminCookie: await createSessionCookie(prisma, admin.id),
   };
-}
-
-function get(cookie: string, path: string): Request {
-  return new Request(`http://localhost${path}`, { headers: { cookie } });
-}
-
-async function post(path: string, cookie: string, fields: [string, string][]): Promise<Request> {
-  const [token, csrfCookie] = await csrf.commitToken();
-  const body = new URLSearchParams([...fields, ["csrf", token]]);
-  return new Request(`http://localhost${path}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      cookie: `${cookie}; ${csrfCookie!.split(";")[0]}`,
-    },
-    body: body.toString(),
-  });
 }
 
 type Outcome = { status: number; body: string };
@@ -222,7 +205,7 @@ describe("the system tenant has no directory", () => {
 
   async function navFeatures(cookie: string, slug: string) {
     const result = (await tenantLayoutLoader({
-      request: get(cookie, `/${slug}`),
+      request: get(`/${slug}`, cookie),
       params: { tenant: slug },
       context: {},
     } as never)) as unknown as { data: { enabledFeatures: Record<string, boolean> } };
@@ -232,7 +215,7 @@ describe("the system tenant has no directory", () => {
   function openDirectory(cookie: string, slug: string) {
     return outcome(() =>
       directoryLayoutLoader({
-        request: get(cookie, `/${slug}/directory`),
+        request: get(`/${slug}/directory`, cookie),
         params: { tenant: slug },
         context: {},
       } as never),
