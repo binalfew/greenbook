@@ -19,7 +19,8 @@ beforeEach(() => {
 
 async function arrange() {
   const status = await seedActiveUserStatus(prisma);
-  const tenant = await prisma.tenant.create({ data: buildTenant() });
+  // The request helpers below address the acting tenant as /system/...
+  const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "system" }) });
   const passwordHash = await hash("test-password", 4);
 
   async function grant(roleId: string, resource: string, action: string) {
@@ -36,13 +37,13 @@ async function arrange() {
   const resources = ["organization", "person", "position", "position-assignment"];
 
   const focalRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "focal", scope: "TENANT" },
+    data: { name: "focal", scope: "TENANT" },
   });
   for (const resource of resources) await grant(focalRole.id, resource, "read");
   await grant(focalRole.id, "directory-change", "submit");
 
   const managerRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "manager", scope: "TENANT" },
+    data: { name: "manager", scope: "TENANT" },
   });
   for (const resource of resources) {
     for (const action of ["read", "write", "delete"]) await grant(managerRole.id, resource, action);
