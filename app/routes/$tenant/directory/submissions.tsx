@@ -1,16 +1,18 @@
-import { Inbox } from "lucide-react";
+import { Inbox, Send } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { data } from "react-router";
+import { data, useFetcher } from "react-router";
 import { useChangeColumns } from "~/components/directory/change-row-columns";
 import { DataTable } from "~/components/data-table/data-table";
 import type { FilterDef, PaginationMeta } from "~/components/data-table/data-table-types";
+import { Button } from "~/components/ui/button";
 import { listMyChanges } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import type { Route } from "./+types/submissions";
 
 export const handle = { breadcrumb: "Submissions" };
 
-const STATUS_VALUES = ["PENDING", "APPROVED", "REJECTED", "WITHDRAWN"] as const;
+const STATUS_VALUES = ["DRAFT", "PENDING", "APPROVED", "REJECTED", "WITHDRAWN"] as const;
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { user, tenantId, canSubmit } = await requireDirectoryAccess(request);
@@ -47,6 +49,20 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
   const { changes, pagination } = loaderData;
   const base = `/${params.tenant}/directory/approvals`;
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const submitFetcher = useFetcher<{ summary: string }>();
+
+  // Selection is page-local: clear it whenever the user paginates so a stale
+  // id doesn't survive into the next submit.
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [pagination.page, pagination.pageSize]);
+
+  // Only drafts can be submitted; other selected rows are left alone.
+  const draftIds = changes
+    .filter((c) => c.status === "DRAFT" && selectedIds.includes(c.id))
+    .map((c) => c.id);
+
   const columns = useChangeColumns(base, [
     "entity",
     "operation",
@@ -78,8 +94,23 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
         data={changes}
         columns={columns}
         rowKey="id"
+        selectable
+        onSelectionChange={setSelectedIds}
         searchConfig={{ placeholder: t("changes.searchPlaceholder") }}
         filters={filters}
+        toolbarExtra={
+          draftIds.length > 0 ? (
+            <submitFetcher.Form method="post" action={`${base}/submit-drafts`}>
+              {draftIds.map((id) => (
+                <input key={id} type="hidden" name="ids[]" value={id} />
+              ))}
+              <Button type="submit" size="sm" disabled={submitFetcher.state !== "idle"}>
+                <Send className="mr-1 size-4" />
+                {t("changes.actions.submitSelected", { count: draftIds.length })}
+              </Button>
+            </submitFetcher.Form>
+          ) : null
+        }
         pagination={pagination}
         emptyState={{
           icon: Inbox,
@@ -87,6 +118,12 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
           description: t("changes.emptyMineDescription"),
         }}
       />
+
+      {submitFetcher.data?.summary ? (
+        <p role="status" className="text-sm">
+          {submitFetcher.data.summary}
+        </p>
+      ) : null}
     </div>
   );
 }

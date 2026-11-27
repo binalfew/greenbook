@@ -36,6 +36,8 @@ type PersonLike = {
 
 export interface PersonEditorProps {
   person?: PersonLike;
+  /** Saved draft values to resume; they win over the published record's. */
+  draftValues?: Record<string, unknown>;
   memberStates: Array<{ id: string; fullName: string; abbreviation: string }>;
   /** Active titles (Mr., Mrs., Dr., …) for the honorific dropdown. */
   titles: Array<{ id: string; name: string }>;
@@ -83,6 +85,7 @@ function FieldRow({
 
 export function PersonEditor({
   person,
+  draftValues,
   memberStates,
   titles,
   positions,
@@ -115,6 +118,7 @@ export function PersonEditor({
       initialPositionId: "",
       initialStartDate: isCreate ? new Date().toISOString().slice(0, 10) : "",
       initialNotes: "",
+      ...draftValues,
     },
   });
 

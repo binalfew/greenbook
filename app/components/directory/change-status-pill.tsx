@@ -7,6 +7,7 @@ import type { ChangeStatus } from "~/generated/prisma/client.js";
 // treatment that matches the entity-level pending badge.
 
 const STATUS_CLASS: Record<ChangeStatus, string> = {
+  DRAFT: "",
   PENDING: "border-transparent bg-amber-600 text-white hover:bg-amber-600",
   APPROVED: "border-transparent bg-emerald-600 text-white hover:bg-emerald-600",
   REJECTED: "border-transparent bg-rose-600 text-white hover:bg-rose-600",
@@ -16,7 +17,7 @@ const STATUS_CLASS: Record<ChangeStatus, string> = {
 export function ChangeStatusPill({ status }: { status: ChangeStatus }) {
   const { t } = useTranslation("directory");
   const className = STATUS_CLASS[status];
-  if (status === "WITHDRAWN") {
+  if (status === "WITHDRAWN" || status === "DRAFT") {
     return <Badge variant="outline">{t(`changes.statusLabel.${status}`)}</Badge>;
   }
   return (

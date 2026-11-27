@@ -1,15 +1,20 @@
-import { ArrowLeft, Check, ExternalLink, Undo2, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Pencil, Send, Trash2, Undo2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link, Outlet, data } from "react-router";
+import { Link, Outlet, data, useFetcher } from "react-router";
 import { ChangeDiff } from "~/components/directory/change-diff";
 import { ChangeStatusPill } from "~/components/directory/change-status-pill";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
-import { computeDiff, getChange } from "~/services/directory-changes.server";
+import {
+  ChangeRequestError,
+  computeDiff,
+  getChange,
+  type BatchResult,
+} from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
-import { directoryEntitySegment } from "~/utils/directory-routes";
+import { directoryEntitySegment, draftEditPath } from "~/utils/directory-routes";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$changeId._layout";
 
@@ -21,7 +26,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw new Response("Forbidden", { status: 403 });
   }
 
-  const change = await getChange(params.changeId, tenantId);
+  // Someone else's draft reads as not-found, same as a missing id.
+  const change = await getChange(params.changeId, tenantId, user.id).catch((error) => {
+    if (error instanceof ChangeRequestError && error.code === "NOT_FOUND") {
+      throw new Response("Not Found", { status: 404 });
+    }
+    throw error;
+  });
 
   // Users without review access should only see their own submissions.
   if (!canReview && change.submittedById !== user.id) {
@@ -43,6 +54,14 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
 
   const isPending = change.status === "PENDING";
   const isMine = change.submittedById === currentUserId;
+  // The loader only ever returns a draft to its author.
+  const isDraft = change.status === "DRAFT";
+  const draftEditHref = isDraft ? draftEditPath(params.tenant, change) : null;
+  const submitFetcher = useFetcher<{ result: BatchResult | null; summary: string }>();
+  const submitFailure = submitFetcher.data
+    ? (submitFetcher.data.result?.failed[0]?.message ??
+      (submitFetcher.data.result ? null : submitFetcher.data.summary))
+    : null;
   const submitterName =
     `${change.submittedBy.firstName} ${change.submittedBy.lastName}`.trim() ||
     change.submittedBy.email;
@@ -93,8 +112,39 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
               </Link>
             </Button>
           ) : null}
+          {isDraft ? (
+            <>
+              {draftEditHref ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link to={draftEditHref}>
+                    <Pencil className="mr-1 size-4" />
+                    {t("changes.actions.editDraft")}
+                  </Link>
+                </Button>
+              ) : null}
+              <Button asChild size="sm" variant="outline">
+                <Link to={`${base}/${change.id}/discard`}>
+                  <Trash2 className="mr-1 size-4" />
+                  {t("changes.actions.discard")}
+                </Link>
+              </Button>
+              <submitFetcher.Form method="post" action={`${base}/submit-drafts`}>
+                <input type="hidden" name="ids[]" value={change.id} />
+                <Button type="submit" size="sm" disabled={submitFetcher.state !== "idle"}>
+                  <Send className="mr-1 size-4" />
+                  {t("changes.actions.submitDraft")}
+                </Button>
+              </submitFetcher.Form>
+            </>
+          ) : null}
         </div>
       </div>
+
+      {submitFailure ? (
+        <p role="alert" className="text-destructive text-sm">
+          {submitFailure}
+        </p>
+      ) : null}
 
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">

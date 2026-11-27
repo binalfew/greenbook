@@ -3,6 +3,7 @@ import { data } from "react-router";
 import { getPerson } from "~/services/people.server";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
+import { loadEditorDraft } from "~/utils/directory-submit.server";
 import { PersonEditor } from "../+shared/person-editor";
 import type { Route } from "./+types/edit";
 
@@ -11,7 +12,9 @@ export { action } from "../+shared/person-editor.server";
 export const handle = { breadcrumb: "Edit" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "person");
+  const access = await requireDirectoryWriteAccess(request, "person");
+  const { tenantId, canDirect } = access;
+  const draft = await loadEditorDraft(request, access, "PERSON", params.personId);
 
   const [person, memberStates, titles] = await Promise.all([
     getPerson(params.personId, tenantId),
@@ -27,7 +30,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }),
   ]);
 
-  return data({ person, memberStates, titles, canDirect });
+  return data({ person, memberStates, titles, canDirect, draft });
 }
 
 export default function EditPerson({ loaderData, params, actionData }: Route.ComponentProps) {
@@ -43,6 +46,7 @@ export default function EditPerson({ loaderData, params, actionData }: Route.Com
       </header>
       <PersonEditor
         person={person}
+        draftValues={loaderData.draft?.values}
         memberStates={memberStates}
         titles={titles}
         canDirectApply={canDirect}

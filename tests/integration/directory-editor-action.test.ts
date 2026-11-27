@@ -122,7 +122,7 @@ function buildRequest(cookie: string, body: Record<string, string>): Request {
 }
 
 describe("organization-editor action (route-level)", () => {
-  it("focal person POST lands as PENDING ChangeRequest, no org created", async () => {
+  it("focal person POST lands as a DRAFT ChangeRequest, no org created", async () => {
     const a = await arrange();
     const request = buildRequest(a.focalSession, {
       name: "Proposed Org",
@@ -145,13 +145,13 @@ describe("organization-editor action (route-level)", () => {
     });
     expect(orgs).toBe(0);
 
-    const pending = await prisma.changeRequest.findFirst({
-      where: { tenantId: a.tenantId, status: "PENDING" },
+    const draft = await prisma.changeRequest.findFirst({
+      where: { tenantId: a.tenantId, status: "DRAFT" },
     });
-    expect(pending).toBeTruthy();
-    expect(pending?.approvalMode).toBe("REVIEWED");
-    expect(pending?.entityType).toBe("ORGANIZATION");
-    expect(pending?.operation).toBe("CREATE");
+    expect(draft).toBeTruthy();
+    expect(draft?.approvalMode).toBe("REVIEWED");
+    expect(draft?.entityType).toBe("ORGANIZATION");
+    expect(draft?.operation).toBe("CREATE");
   });
 
   it("manager POST self-approves and creates the org immediately", async () => {

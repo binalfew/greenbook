@@ -1,6 +1,7 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
+import { draftsPath } from "~/utils/directory-routes";
 import { dispatchDirectoryChange } from "~/utils/directory-submit.server";
 import { organizationFormSchema } from "~/utils/schemas/directory";
 
@@ -24,11 +25,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     payload,
   });
 
-  // SELF_APPROVED lands on the entity; REVIEWED sends the user to the list
-  // with a ?submitted=1 banner since the entity doesn't exist yet.
+  // SELF_APPROVED lands on the entity; a saved draft sends the author to
+  // their drafts, where it can be submitted alone or with others.
   const base = `/${params.tenant}/directory/organizations`;
   if (outcome.mode === "SELF_APPROVED" && outcome.change.entityId) {
     return redirect(`${base}/${outcome.change.entityId}`);
   }
+  if (outcome.mode === "DRAFT") return redirect(draftsPath(String(params.tenant)));
   return redirect(`${base}?submitted=1`);
 }

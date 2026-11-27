@@ -3,6 +3,7 @@ import { data } from "react-router";
 import { getOrganization } from "~/services/organizations.server";
 import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
+import { loadEditorDraft } from "~/utils/directory-submit.server";
 import { OrganizationEditor } from "../+shared/organization-editor";
 import type { Route } from "./+types/edit";
 
@@ -11,7 +12,9 @@ export { action } from "../+shared/organization-editor.server";
 export const handle = { breadcrumb: "Edit" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { tenantId, canDirect } = await requireDirectoryWriteAccess(request, "organization");
+  const access = await requireDirectoryWriteAccess(request, "organization");
+  const { tenantId, canDirect } = access;
+  const draft = await loadEditorDraft(request, access, "ORGANIZATION", params.orgId);
 
   const [org, types, parents] = await Promise.all([
     getOrganization(params.orgId, tenantId),
@@ -28,13 +31,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }),
   ]);
 
-  return data({ org, types, parents, canDirect });
+  return data({ org, types, parents, canDirect, draft });
 }
 
 export default function EditOrganization({ loaderData, params, actionData }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const base = `/${params.tenant}/directory/organizations`;
-  const { org, types, parents, canDirect } = loaderData;
+  const { org, types, parents, canDirect, draft } = loaderData;
 
   return (
     <div className="space-y-4">
@@ -44,6 +47,7 @@ export default function EditOrganization({ loaderData, params, actionData }: Rou
       </header>
       <OrganizationEditor
         org={org}
+        draftValues={draft?.values}
         types={types}
         parents={parents}
         canDirectApply={canDirect}

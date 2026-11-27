@@ -38,6 +38,8 @@ type OrgLike = {
 
 export interface OrganizationEditorProps {
   org?: OrgLike;
+  /** Saved draft values to resume; they win over the published record's. */
+  draftValues?: Record<string, unknown>;
   types: Array<{ id: string; name: string; code: string; level: number }>;
   parents: Array<{ id: string; name: string; acronym: string | null }>;
   canDirectApply: boolean;
@@ -75,6 +77,7 @@ function FieldRow({
 
 export function OrganizationEditor({
   org,
+  draftValues,
   types,
   parents,
   canDirectApply,
@@ -102,6 +105,7 @@ export function OrganizationEditor({
       phone: org?.phone ?? "",
       address: org?.address ?? "",
       sortOrder: org?.sortOrder ?? 0,
+      ...draftValues,
     },
   });
 
