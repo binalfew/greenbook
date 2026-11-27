@@ -299,3 +299,17 @@ Demo users: `admin@africanunion.org / admin123`, `manager@africanunion.org / man
 - **Tree DnD rollback on backend failure** — optimistic cache update is not reverted when `/api/organizations/move` returns `{ ok: false }`. User sees an error toast and can re-drag.
 - **No sample people/positions in seed** — seed ships starter orgs + types + regions + member states only. Populate via the UI.
 - **No notification chrome on the directory search surface** — notifications fire but the bell/inbox UI only lives on tenant layouts. Users on `/` and `/people/*` are now logged in but still see no bell; operators get it once they're in their tenant workspace, and plain `user`-role readers receive no workflow notifications anyway.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues on `binalfew/greenbook`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` at the repo root and ADRs under `docs/adr/`. See `docs/agents/domain.md`.
