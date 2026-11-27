@@ -19,7 +19,7 @@ Codes are stored upper-case. Creating or renaming a row to a code that is alread
 - `requireReferenceDataRead(request)` — for list pages; returns `{ user, canEdit }`, where `canEdit` is true for the global admin only.
 - `requireReferenceDataAdmin(request)` — for new / edit / delete routes; refuses anyone who is not the global admin.
 
-The `reference-data:{read,write,delete}` permissions are seeded, and the `admin` role holds them like every other permission.
+Only `reference-data:read` is seeded. Changes are gated on the global admin role, not on a permission; the seed removes `reference-data:{write,delete}` from a database that still has them.
 
 ## Seed
 

@@ -28,20 +28,29 @@ export async function addTenantToFlag(db: FlagDb, flagKey: string, tenantId: str
   if (changed === 0) await assertFlagExists(db, flagKey);
 }
 
-/** Take the tenant off the flag's enabled list. No effect if it is not there. */
-export async function removeTenantFromFlag(db: FlagDb, flagKey: string, tenantId: string) {
+/**
+ * Take the tenant off the flag's enabled list. No effect if it is not there.
+ * Returns whether it was.
+ */
+export async function removeTenantFromFlag(
+  db: FlagDb,
+  flagKey: string,
+  tenantId: string,
+): Promise<boolean> {
   const changed = await db.$executeRaw`
     UPDATE "FeatureFlag"
     SET "enabledForTenants" = array_remove("enabledForTenants", ${tenantId}), "updatedAt" = now()
     WHERE "key" = ${flagKey} AND ${tenantId} = ANY("enabledForTenants")`;
   if (changed === 0) await assertFlagExists(db, flagKey);
+  return changed > 0;
 }
 
 /**
  * The tenant-scoped flags every working tenant is opted into when it is
  * provisioned: the directory itself, cross-tenant search, and the bell and
  * inbox its workflow notifications are read in. A flag added here reaches
- * tenants created in the UI and by the seed alike.
+ * tenants created in the UI and by the seed alike. The system tenant is the
+ * global admin's home only and is on none of them.
  */
 export const NEW_TENANT_FLAGS = [
   "FF_DIRECTORY",
