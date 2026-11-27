@@ -49,6 +49,9 @@ export async function action({ request }: Route.ActionArgs) {
       entityId: organizationId,
       payload: { parentId },
     });
+    if (outcome.conflict) {
+      return data({ ok: false, error: outcome.conflict.message }, { status: 409 });
+    }
     return data({ ok: true, changeId: outcome.change.id, mode: outcome.mode });
   } catch (err) {
     if (err instanceof Response) throw err;

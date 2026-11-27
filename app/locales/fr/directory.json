@@ -303,6 +303,14 @@
     "updatedPublished": "Mis à jour et publié",
     "deletedPublished": "Supprimé"
   },
+  "conflicts": {
+    "PENDING_REQUEST_EXISTS": "Cette fiche a déjà une modification en attente de revue. Elle pourra être modifiée à nouveau une fois cette modification approuvée, rejetée ou retirée.",
+    "VERSION_CONFLICT": "Cette fiche a été modifiée par quelqu'un d'autre après son ouverture. Rechargez la page et réessayez.",
+    "HAS_ACTIVE_ASSIGNMENTS": "Cette fiche a encore une affectation en cours. Mettez d'abord fin à l'affectation, puis supprimez.",
+    "REFERENCED_RECORD_NOT_PUBLISHED": "Cette modification renvoie à une fiche qui a depuis été supprimée. Rejetez-la ou demandez une correction.",
+    "NOT_PENDING": "Cette modification n'est plus en attente de revue. Rechargez la page pour voir son statut actuel.",
+    "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue."
+  },
   "status": {
     "published": "Publié",
     "pendingYours": "En attente de votre revue",
