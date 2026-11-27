@@ -21,6 +21,18 @@ export type ColumnKey =
   | "reviewedAt"
   | "status";
 
+// The name of the record a change is about, read from what was proposed.
+// Deletes and moves propose no name, so those rows show only the entity type.
+function recordName(row: ChangeRow): string | null {
+  const payload = row.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const text = (key: string) => {
+    const value = payload[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  return text("name") || text("title") || `${text("firstName")} ${text("lastName")}`.trim() || null;
+}
+
 export function useChangeColumns(base: string, keys: ColumnKey[]): ColumnDef<ChangeRow>[] {
   const { t } = useTranslation("directory");
 
@@ -28,16 +40,26 @@ export function useChangeColumns(base: string, keys: ColumnKey[]): ColumnDef<Cha
     entity: {
       id: "entity",
       header: t("changes.columns.entity"),
-      cell: (row) => (
-        <div className="min-w-0">
-          <Link to={`${base}/${row.id}`} className="font-medium underline-offset-4 hover:underline">
-            {t(`changes.entityLabel.${row.entityType}`)}
-          </Link>
-          {row.entityId ? (
-            <div className="text-muted-foreground truncate text-[10px]">{row.entityId}</div>
-          ) : null}
-        </div>
-      ),
+      cell: (row) => {
+        const name = recordName(row);
+        return (
+          <div className="min-w-0">
+            <Link
+              to={`${base}/${row.id}`}
+              className="font-medium underline-offset-4 hover:underline"
+            >
+              {name ?? t(`changes.entityLabel.${row.entityType}`)}
+            </Link>
+            {name ? (
+              <div className="text-muted-foreground truncate text-xs">
+                {t(`changes.entityLabel.${row.entityType}`)}
+              </div>
+            ) : row.entityId ? (
+              <div className="text-muted-foreground truncate text-[10px]">{row.entityId}</div>
+            ) : null}
+          </div>
+        );
+      },
     },
     operation: {
       id: "operation",

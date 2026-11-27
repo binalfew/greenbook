@@ -212,6 +212,8 @@
     "emptyPending": "Aucune demande en attente.",
     "emptyPendingDescription": "Les soumissions des points focaux apparaîtront ici pour revue.",
     "emptyMine": "Aucun brouillon ni soumission.",
+    "emptyMineFiltered": "Aucun résultat pour ce filtre.",
+    "emptyMineFilteredDescription": "Effacez le filtre pour voir tous vos brouillons et soumissions.",
     "emptyMineDescription": "Lorsque vous modifiez un enregistrement, votre brouillon apparaîtra ici, prêt à être soumis.",
     "emptyHistory": "Aucun historique.",
     "emptyHistoryDescription": "Les soumissions approuvées, rejetées et retirées apparaîtront ici.",

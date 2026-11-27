@@ -173,7 +173,7 @@ describe("directory workflow notifications and audit trail", () => {
     expect(notifications[0]).toMatchObject({
       userId: a.managerId,
       type: "directory.change.submitted",
-      message: "Fatou Focal submitted a CREATE for ORGANIZATION",
+      message: "Fatou Focal asked to add an organization",
       read: false,
     });
     expect(notifications[0].data).toMatchObject({ changeId });
@@ -228,7 +228,7 @@ describe("directory workflow notifications and audit trail", () => {
     expect(toSubmitter).toHaveLength(1);
     expect(toSubmitter[0]).toMatchObject({
       type: "directory.change.approved",
-      message: "Musa Manager approved your CREATE for ORGANIZATION",
+      message: "Musa Manager approved your request to add an organization",
     });
     expect(toSubmitter[0].data).toMatchObject({ changeId, outcome: "APPROVED" });
 
@@ -261,7 +261,7 @@ describe("directory workflow notifications and audit trail", () => {
     expect(toSubmitter[0]).toMatchObject({
       type: "directory.change.rejected",
       message:
-        "Musa Manager rejected your CREATE for ORGANIZATION: Duplicate of an existing office",
+        "Musa Manager rejected your request to add an organization: Duplicate of an existing office",
     });
     expect(toSubmitter[0].data).toMatchObject({ changeId, outcome: "REJECTED" });
 

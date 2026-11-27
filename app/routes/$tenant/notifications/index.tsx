@@ -67,8 +67,8 @@ export default function NotificationsIndex({ loaderData, params }: Route.Compone
       id: "type",
       header: t("type"),
       cell: (row) => (
-        <Badge variant="secondary" className="font-mono text-xs">
-          {row.type}
+        <Badge variant="secondary" className="text-xs">
+          {t(`types.${row.type.replaceAll(".", "_")}`, { defaultValue: row.type })}
         </Badge>
       ),
       hideOnMobile: true,

@@ -17,5 +17,10 @@
   "type": "Type",
   "filterByStatus": "Filtrer par statut",
   "filterByType": "Filtrer par type",
-  "noRecent": "Aucune notification récente"
+  "noRecent": "Aucune notification récente",
+  "types": {
+    "directory_change_submitted": "Modification à examiner",
+    "directory_change_approved": "Modification approuvée",
+    "directory_change_rejected": "Modification rejetée"
+  }
 }

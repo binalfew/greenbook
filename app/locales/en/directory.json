@@ -212,6 +212,8 @@
     "emptyPending": "No pending change requests.",
     "emptyPendingDescription": "Focal persons' submissions will appear here for review.",
     "emptyMine": "No drafts or submissions yet.",
+    "emptyMineFiltered": "Nothing matches this filter.",
+    "emptyMineFilteredDescription": "Clear the filter to see all your drafts and submissions.",
     "emptyMineDescription": "When you edit a record, your draft will appear here, ready to submit.",
     "emptyHistory": "No change history yet.",
     "emptyHistoryDescription": "Approved, rejected, and withdrawn submissions will appear here.",

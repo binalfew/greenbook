@@ -96,6 +96,9 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const slugInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // True while the slug is being filled in from the name, so that write is
+  // not mistaken for the admin typing a slug of their own.
+  const generatingSlugRef = useRef(false);
   const [slugPreview, setSlugPreview] = useState("");
 
   const { form, fields } = useForm(createTenantSchema, {
@@ -115,9 +118,19 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
           "value",
         )?.set;
         nativeInputValueSetter?.call(slugInputRef.current, generated);
+        generatingSlugRef.current = true;
         slugInputRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+        generatingSlugRef.current = false;
       }
     }, 300);
+  }
+
+  function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (generatingSlugRef.current) return;
+    // A slug typed by hand wins over one still waiting to be generated.
+    clearTimeout(debounceRef.current);
+    setSlugManuallyEdited(true);
+    setSlugPreview(e.target.value);
   }
 
   useEffect(() => {
@@ -166,7 +179,7 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
                 key={fields.slug.key}
                 ref={slugInputRef}
                 placeholder="e.g. acme-corp"
-                onChange={() => setSlugManuallyEdited(true)}
+                onChange={handleSlugChange}
               />
               {fields.slug.errors && <FieldError>{fields.slug.errors}</FieldError>}
               <p className="text-muted-foreground mt-1 text-xs">

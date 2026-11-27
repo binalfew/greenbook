@@ -23,6 +23,26 @@ type ChangeNotificationSeed = {
 
 type Actor = { id: string; firstName: string | null; lastName: string | null };
 
+// "add a person", "move an organization": what a change asks for, in words.
+const REQUEST_VERB: Record<string, string> = {
+  CREATE: "add",
+  UPDATE: "update",
+  DELETE: "remove",
+  MOVE: "move",
+};
+const ENTITY_NOUN: Record<string, string> = {
+  ORGANIZATION: "an organization",
+  PERSON: "a person",
+  POSITION: "a position",
+  POSITION_ASSIGNMENT: "an assignment",
+};
+
+function describeRequest(change: { operation: string; entityType: string }): string {
+  const verb = REQUEST_VERB[change.operation] ?? change.operation.toLowerCase();
+  const noun = ENTITY_NOUN[change.entityType] ?? "a record";
+  return `${verb} ${noun}`;
+}
+
 function displayName(user: Actor | null | undefined, fallback: string): string {
   if (!user) return fallback;
   return [user.firstName, user.lastName].filter(Boolean).join(" ") || fallback;
@@ -69,7 +89,7 @@ export async function notifyManagersOfSubmissions(
     const single = changes.length === 1;
     const title = single ? "New directory change to review" : "New directory changes to review";
     const message = single
-      ? `${submitterName} submitted a ${change.operation} for ${change.entityType}`
+      ? `${submitterName} asked to ${describeRequest(change)}`
       : `${submitterName} submitted ${changes.length} directory changes for review`;
     const data = single
       ? { changeId: change.id, entityType: change.entityType, operation: change.operation }
@@ -111,7 +131,7 @@ export async function notifySubmitterOfDecision(
       outcome === "APPROVED"
         ? "Your directory change was approved"
         : "Your directory change was rejected";
-    const baseMessage = `${reviewerName} ${verb} your ${change.operation} for ${change.entityType}`;
+    const baseMessage = `${reviewerName} ${verb} your request to ${describeRequest(change)}`;
     const message = notes ? `${baseMessage}: ${notes}` : baseMessage;
 
     await createNotification({

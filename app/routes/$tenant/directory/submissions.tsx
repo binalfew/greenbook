@@ -1,7 +1,7 @@
 import { Inbox, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { data, useFetcher } from "react-router";
+import { data, useFetcher, useSearchParams } from "react-router";
 import { BatchOutcome } from "~/components/directory/batch-outcome";
 import { useChangeColumns } from "~/components/directory/change-row-columns";
 import { SubmittedNotice } from "~/components/directory/submitted-notice";
@@ -52,6 +52,9 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
   const { t } = useTranslation("directory");
   const { changes, pagination } = loaderData;
   const base = approvalsPath(params.tenant);
+
+  const [searchParams] = useSearchParams();
+  const filtered = Boolean(searchParams.get("status") || searchParams.get("q"));
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const submitFetcher = useFetcher<typeof submitDraftsAction>();
@@ -120,8 +123,10 @@ export default function MyChanges({ loaderData, params }: Route.ComponentProps) 
         pagination={pagination}
         emptyState={{
           icon: Inbox,
-          title: t("changes.emptyMine"),
-          description: t("changes.emptyMineDescription"),
+          title: filtered ? t("changes.emptyMineFiltered") : t("changes.emptyMine"),
+          description: filtered
+            ? t("changes.emptyMineFilteredDescription")
+            : t("changes.emptyMineDescription"),
         }}
       />
 

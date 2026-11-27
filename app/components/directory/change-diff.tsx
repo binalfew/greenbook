@@ -51,12 +51,31 @@ function PhotoValue({ id }: { id: unknown }) {
   );
 }
 
+// Diff rows carry raw column names. The editors already have a label for
+// almost all of them, so reuse those; anything unknown is spelled out.
+const FIELD_ALIASES: Record<string, string> = { parentId: "parent", reportsToId: "reportsTo" };
+const FIELD_GROUPS = ["people", "organizations", "positions", "assignments"] as const;
+
+function useFieldLabel() {
+  const { t, i18n } = useTranslation("directory");
+  return (field: string) => {
+    const name = FIELD_ALIASES[field] ?? field.replace(/Id$/, "");
+    for (const group of FIELD_GROUPS) {
+      const key = `${group}.fields.${name}`;
+      if (i18n.exists(key, { ns: "directory" })) return t(key);
+    }
+    const words = field.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  };
+}
+
 function DiffValue({ field, value }: { field: string; value: unknown }) {
   return field === "photoId" ? <PhotoValue id={value} /> : renderValue(value);
 }
 
 export function ChangeDiff({ diffs }: { diffs: FieldDiff[] }) {
   const { t } = useTranslation("directory");
+  const fieldLabel = useFieldLabel();
 
   if (diffs.length === 0) {
     return <p className="text-muted-foreground text-sm">{t("changes.beforeAfter.empty")}</p>;
@@ -69,9 +88,7 @@ export function ChangeDiff({ diffs }: { diffs: FieldDiff[] }) {
           key={d.field}
           className="grid grid-cols-1 gap-2 py-3 text-sm md:grid-cols-[8rem_1fr_1fr]"
         >
-          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            {d.field}
-          </dt>
+          <dt className="text-muted-foreground text-xs font-medium">{fieldLabel(d.field)}</dt>
           <dd className="text-muted-foreground line-through decoration-rose-500">
             <DiffValue field={d.field} value={d.before} />
           </dd>
