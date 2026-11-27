@@ -136,7 +136,7 @@ npm run format               # Prettier
 
 # Database
 npm run docker:up            # Start the dev and test Postgres containers
-npm run db:push              # Sync schema to DB (no migration files)
+npm run db:push              # Sync schema to DB (no migration files); first removes duplicate user-role rows
 npm run db:seed              # Re-runnable seed
 npm run db:studio            # Prisma Studio GUI
 

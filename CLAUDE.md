@@ -46,7 +46,7 @@ npm run format           # Prettier format all files
 ```bash
 npm run docker:up        # Start PostgreSQL (dev + test containers; host ports from DB_PORT / DB_TEST_PORT)
 npm run docker:down      # Stop containers
-npm run db:push          # Sync Prisma schema to DB (template workflow — no migration files)
+npm run db:push          # Remove duplicate user-role rows (upgrade step), then sync Prisma schema to DB
 npm run db:seed          # Seed roles, permissions, feature flags, reference data, demo users
 npm run db:studio        # Prisma Studio GUI
 ```
