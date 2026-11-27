@@ -5,6 +5,7 @@ import { prisma } from "../setup/integration-setup";
 
 import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
 import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
+import { action as withdrawAction } from "~/routes/$tenant/directory/approvals/$changeId.withdraw";
 import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
@@ -121,6 +122,15 @@ async function run(fn: () => Promise<unknown>): Promise<unknown> {
 
 type Arranged = Awaited<ReturnType<typeof arrange>>;
 
+/** The audit trail of one change request, oldest first. */
+async function auditTrail(a: Arranged, changeId: string) {
+  const entries = await prisma.auditLog.findMany({
+    where: { tenantId: a.tenantId, entityType: "ChangeRequest", entityId: changeId },
+    orderBy: { createdAt: "asc" },
+  });
+  return entries.map((e) => ({ action: e.action, userId: e.userId }));
+}
+
 async function submitAsFocal(a: Arranged): Promise<string> {
   await run(() =>
     organizationEditorAction({
@@ -169,6 +179,33 @@ describe("directory workflow notifications and audit trail", () => {
     expect(notifications[0].data).toMatchObject({ changeId });
   });
 
+  it("submitting a change writes an audit entry", async () => {
+    const a = await arrange();
+
+    const changeId = await submitAsFocal(a);
+
+    expect(await auditTrail(a, changeId)).toEqual([{ action: "SUBMIT_CHANGE", userId: a.focalId }]);
+  });
+
+  it("withdrawing a change writes an audit entry", async () => {
+    const a = await arrange();
+    const changeId = await submitAsFocal(a);
+
+    const response = await run(() =>
+      withdrawAction({
+        request: post(`/${a.slug}/directory/approvals/${changeId}/withdraw`, a.focalSession, {}),
+        params: { tenant: a.slug, changeId },
+        context: {},
+      } as Parameters<typeof withdrawAction>[0]),
+    );
+    expect((response as Response).status).toBe(302);
+
+    expect(await auditTrail(a, changeId)).toEqual([
+      { action: "SUBMIT_CHANGE", userId: a.focalId },
+      { action: "WITHDRAW_CHANGE", userId: a.focalId },
+    ]);
+  });
+
   it("approving a change notifies the submitter and writes an audit entry", async () => {
     const a = await arrange();
     const changeId = await submitAsFocal(a);
@@ -195,11 +232,10 @@ describe("directory workflow notifications and audit trail", () => {
     });
     expect(toSubmitter[0].data).toMatchObject({ changeId, outcome: "APPROVED" });
 
-    const audit = await prisma.auditLog.findMany({
-      where: { tenantId: a.tenantId, entityType: "ChangeRequest", entityId: changeId },
-    });
-    expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ action: "APPROVE_CHANGE", userId: a.managerId });
+    expect(await auditTrail(a, changeId)).toEqual([
+      { action: "SUBMIT_CHANGE", userId: a.focalId },
+      { action: "APPROVE_CHANGE", userId: a.managerId },
+    ]);
   });
 
   it("rejecting a change notifies the submitter with the reason and writes an audit entry", async () => {
@@ -229,10 +265,9 @@ describe("directory workflow notifications and audit trail", () => {
     });
     expect(toSubmitter[0].data).toMatchObject({ changeId, outcome: "REJECTED" });
 
-    const audit = await prisma.auditLog.findMany({
-      where: { tenantId: a.tenantId, entityType: "ChangeRequest", entityId: changeId },
-    });
-    expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ action: "REJECT_CHANGE", userId: a.managerId });
+    expect(await auditTrail(a, changeId)).toEqual([
+      { action: "SUBMIT_CHANGE", userId: a.focalId },
+      { action: "REJECT_CHANGE", userId: a.managerId },
+    ]);
   });
 });

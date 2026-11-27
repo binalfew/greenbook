@@ -30,6 +30,16 @@ export function personPhotoPath(tenantSlug: string, photoId: string): string {
 // `dispatchDirectoryChange`, which re-saves that draft instead of creating one.
 export const DRAFT_PARAM = "draft";
 
+/** The approvals queue; batch actions and change requests live under it. */
+export function approvalsPath(tenantSlug: string): string {
+  return `/${tenantSlug}/directory/approvals`;
+}
+
+/** The detail page of one change request; its dialogs are `<path>/<verb>`. */
+export function changePath(tenantSlug: string, changeId: string): string {
+  return `${approvalsPath(tenantSlug)}/${changeId}`;
+}
+
 /** The author's own submissions list (drafts and everything they sent for review). */
 export function submissionsPath(tenantSlug: string): string {
   return `/${tenantSlug}/directory/submissions`;

@@ -25,8 +25,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "feature-flag", action: "read", module: "system", description: "Read feature flags" },
   { resource: "feature-flag", action: "write", module: "system", description: "Manage feature flags" },
   { resource: "reference-data", action: "read", module: "data", description: "Read reference data" },
-  { resource: "reference-data", action: "write", module: "data", description: "Manage reference data" },
-  { resource: "reference-data", action: "delete", module: "data", description: "Delete reference data" },
   { resource: "audit-log", action: "read", module: "audit", description: "Read audit logs" },
   { resource: "sso", action: "read", module: "auth", description: "Read SSO configurations" },
   { resource: "sso", action: "write", module: "auth", description: "Manage SSO configurations" },
@@ -141,12 +139,14 @@ export async function runSeed() {
   await prisma.verification.deleteMany({ where: { type: { in: ["2fa", "2fa-verify"] } } });
 
   // Permissions nothing checks (#20): tenant, permission and role management
-  // are gated on the global admin role, not on a permission. Safe to re-run.
+  // and changes to reference data are gated on the global admin role, not on
+  // a permission. Safe to re-run.
   await prisma.permission.deleteMany({
     where: {
       OR: [
         { resource: { in: ["tenant", "permission", "notification", "saved-view"] } },
         { resource: "role", action: { in: ["create", "update", "delete"] } },
+        { resource: "reference-data", action: { in: ["write", "delete"] } },
       ],
     },
   });
@@ -307,6 +307,9 @@ export async function runSeed() {
     }
   }
 
+  console.log("Seeding default feature flags...");
+  await seedFeatureFlags();
+
   // The `system` tenant is the platform admin's home and nothing else: no
   // directory, no focal persons, no managers. The directory demo lives in a
   // separate working tenant — `misd` where it has been provisioned by hand,
@@ -348,8 +351,99 @@ export async function runSeed() {
     },
   });
 
-  // Seed default feature flags
-  console.log("Seeding default feature flags...");
+  // One-time data move (#24): the system tenant used to hold the directory.
+  // Hand its records, its focal persons and managers and its place on the
+  // tenant flags to the demo tenant. Once done there is nothing left to move.
+  const directoryFlag = await prisma.featureFlag.findUniqueOrThrow({
+    where: { key: "FF_DIRECTORY" },
+  });
+  const systemHeldDirectory = directoryFlag.enabledForTenants.includes(tenant.id);
+  const movedOutOfSystem = await emptySystemTenantDirectory(prisma, tenant.id, workingTenant.id);
+  if (movedOutOfSystem > 0) {
+    console.log(
+      `Moved ${movedOutOfSystem} directory record(s) and user(s) from "${tenant.slug}" to "${workingTenant.slug}".`,
+    );
+  }
+
+  // One-time data move (#10), tied to the hand-over above so it cannot run
+  // twice: a database from before it had workflow notifications on for no
+  // tenant, so nobody they were addressed to saw the bell. Every tenant that
+  // uses the directory is opted in. Later runs leave the list to the admins.
+  if (systemHeldDirectory) await optDirectoryTenantsIntoNotifications();
+
+  // Data move (#6): reference data used to be stored once per tenant. Collapse
+  // those copies into the one shared set before seeding it. Idempotent.
+  const mergedReferenceRows = await mergeDuplicateReferenceData(prisma);
+  if (mergedReferenceRows > 0) {
+    console.log(`Merged ${mergedReferenceRows} per-tenant reference row(s) into the shared set.`);
+  }
+
+  // Seed the shared reference data: titles, org types, position types,
+  // regions, member states. One set, read by every tenant, so a tenant
+  // created later needs nothing seeded for it.
+  console.log("Seeding shared reference data...");
+  await seedTitles();
+  await seedDirectoryReference();
+
+  // Seed the demo tenant's directory baseline (starter org tree, positions,
+  // people) and its demo focal person and manager.
+  console.log("Seeding directory baseline...");
+  await seedDirectory(workingTenant.id, {
+    activeStatusId: activeStatus.id,
+    focalRoleId: focalRole.id,
+    managerRoleId: managerRole.id,
+  });
+
+  console.log("✅ Seeding completed!");
+  console.log("🔑 Users created:");
+  console.log("   Admin:        admin@africanunion.org / admin123");
+  console.log("   User:         user@africanunion.org / user123");
+  console.log("   Focal person: focal@africanunion.org / focal123");
+  console.log("   Manager:      manager@africanunion.org / manager123");
+}
+
+/**
+ * The working tenant the demo runs in: `misd` if it exists, otherwise `demo`,
+ * created on first run and left alone afterwards.
+ */
+async function resolveDemoTenant(): Promise<{ id: string; slug: string }> {
+  const select = { id: true, slug: true };
+  const existing =
+    (await prisma.tenant.findFirst({ where: { slug: "misd", deletedAt: null }, select })) ??
+    (await prisma.tenant.findFirst({ where: { slug: "demo", deletedAt: null }, select }));
+  if (existing) return existing;
+
+  // Opted into the new-tenant flags as it is created, like a tenant made in
+  // the UI (`createTenant` in app/services/tenants.server.ts), and never
+  // again: what an admin turns off for it afterwards stays off.
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.tenant.create({
+      data: {
+        name: "Demo Directorate",
+        slug: "demo",
+        email: "demo@africanunion.org",
+        phone: "+251 11 551 7700",
+        city: "Addis Ababa",
+        state: "Addis Ababa",
+        address: "Roosevelt Street (Old Airport Area), P.O. Box 3243, Addis Ababa, Ethiopia",
+        brandTheme: "auc",
+      },
+      select,
+    });
+    await addTenantToNewTenantFlags(tx, created.id);
+    return created;
+  });
+}
+
+/**
+ * The flags the app checks. Create-only, so a flag's settings and enabled
+ * lists are never rewritten; flags nothing checks are removed.
+ *
+ * Tenant-scoped flags are off for a tenant until it is on `enabledForTenants`
+ * (see evaluateFlag in feature-flags.server.ts); their `enabled` boolean is
+ * ignored. Tenants get on that list when they are created.
+ */
+async function seedFeatureFlags() {
   const DEFAULT_FLAGS = [
     {
       key: "FF_NOTIFICATIONS",
@@ -393,95 +487,19 @@ export async function runSeed() {
   await prisma.featureFlag.deleteMany({
     where: { key: { notIn: DEFAULT_FLAGS.map((f) => f.key) } },
   });
-
-  // Data move: workflow notifications used to be on for no tenant, so nobody
-  // they were addressed to saw the bell. While that is still the case, every
-  // tenant that uses the directory is opted in. Once any tenant is on the
-  // list this does nothing, so a later opt-out by hand is kept.
-  const notificationsFlag = await prisma.featureFlag.findUniqueOrThrow({
-    where: { key: "FF_NOTIFICATIONS" },
-  });
-  if (notificationsFlag.enabledForTenants.length === 0) {
-    const directoryFlag = await prisma.featureFlag.findUniqueOrThrow({
-      where: { key: "FF_DIRECTORY" },
-    });
-    for (const tenantId of directoryFlag.enabledForTenants) {
-      await addTenantToFlag(prisma, "FF_NOTIFICATIONS", tenantId);
-    }
-  }
-
-  // Tenant-scoped flags with `enabled: true` are off by default until a
-  // tenant is explicitly added to `enabledForTenants` (see evaluateFlag in
-  // feature-flags.server.ts); the `enabled` boolean is ignored. Opt the demo
-  // tenant in, as tenant creation does for a tenant made in the UI, so the
-  // demo users can reach the directory out of the box. This only ever adds:
-  // tenants opted in by hand stay on the list.
-  await addTenantToNewTenantFlags(prisma, workingTenant.id);
-
-  // Data move (#24): the system tenant used to hold the directory. Hand its
-  // records, its focal persons and managers and its place on the directory
-  // flags to the demo tenant. Idempotent.
-  const movedOutOfSystem = await emptySystemTenantDirectory(prisma, tenant.id, workingTenant.id);
-  if (movedOutOfSystem > 0) {
-    console.log(
-      `Moved ${movedOutOfSystem} directory record(s) and user(s) from "${tenant.slug}" to "${workingTenant.slug}".`,
-    );
-  }
-
-  // Data move (#6): reference data used to be stored once per tenant. Collapse
-  // those copies into the one shared set before seeding it. Idempotent.
-  const mergedReferenceRows = await mergeDuplicateReferenceData(prisma);
-  if (mergedReferenceRows > 0) {
-    console.log(`Merged ${mergedReferenceRows} per-tenant reference row(s) into the shared set.`);
-  }
-
-  // Seed the shared reference data: titles, org types, position types,
-  // regions, member states. One set, read by every tenant, so a tenant
-  // created later needs nothing seeded for it.
-  console.log("Seeding shared reference data...");
-  await seedTitles();
-  await seedDirectoryReference();
-
-  // Seed the demo tenant's directory baseline (starter org tree, positions,
-  // people) and its demo focal person and manager.
-  console.log("Seeding directory baseline...");
-  await seedDirectory(workingTenant.id, {
-    activeStatusId: activeStatus.id,
-    focalRoleId: focalRole.id,
-    managerRoleId: managerRole.id,
-  });
-
-  console.log("✅ Seeding completed!");
-  console.log("🔑 Users created:");
-  console.log("   Admin:        admin@africanunion.org / admin123");
-  console.log("   User:         user@africanunion.org / user123");
-  console.log("   Focal person: focal@africanunion.org / focal123");
-  console.log("   Manager:      manager@africanunion.org / manager123");
 }
 
-/**
- * The working tenant the demo runs in: `misd` if it exists, otherwise `demo`,
- * created on first run and left alone afterwards.
- */
-async function resolveDemoTenant(): Promise<{ id: string; slug: string }> {
-  const select = { id: true, slug: true };
-  const existing =
-    (await prisma.tenant.findFirst({ where: { slug: "misd", deletedAt: null }, select })) ??
-    (await prisma.tenant.findFirst({ where: { slug: "demo", deletedAt: null }, select }));
-  if (existing) return existing;
-  return prisma.tenant.create({
-    data: {
-      name: "Demo Directorate",
-      slug: "demo",
-      email: "demo@africanunion.org",
-      phone: "+251 11 551 7700",
-      city: "Addis Ababa",
-      state: "Addis Ababa",
-      address: "Roosevelt Street (Old Airport Area), P.O. Box 3243, Addis Ababa, Ethiopia",
-      brandTheme: "auc",
-    },
-    select,
+/** Opt every tenant on FF_DIRECTORY into FF_NOTIFICATIONS, if no tenant has them yet. */
+async function optDirectoryTenantsIntoNotifications() {
+  const flags = await prisma.featureFlag.findMany({
+    where: { key: { in: ["FF_DIRECTORY", "FF_NOTIFICATIONS"] } },
+    select: { key: true, enabledForTenants: true },
   });
+  const tenantsOn = (key: string) => flags.find((f) => f.key === key)?.enabledForTenants ?? [];
+  if (tenantsOn("FF_NOTIFICATIONS").length > 0) return;
+  for (const tenantId of tenantsOn("FF_DIRECTORY")) {
+    await addTenantToFlag(prisma, "FF_NOTIFICATIONS", tenantId);
+  }
 }
 
 /** True when no row of the shared table holds this code yet, deleted rows included. */

@@ -45,6 +45,9 @@ describe("running the seed", () => {
       "user",
     ]);
     expect(permissions.filter((p) => p.resource === "role").map((p) => p.action)).toEqual(["read"]);
+    expect(permissions.filter((p) => p.resource === "reference-data").map((p) => p.action)).toEqual(
+      ["read"],
+    );
   });
 
   it("removes unused permissions from an existing database and keeps the others", async () => {
@@ -57,6 +60,8 @@ describe("running the seed", () => {
       ["notification", "read"],
       ["saved-view", "write"],
       ["report", "read"],
+      ["reference-data", "write"],
+      ["reference-data", "delete"],
     ]) {
       await prisma.permission.create({
         data: {
@@ -75,6 +80,7 @@ describe("running the seed", () => {
         OR: [
           { resource: { in: ["tenant", "permission", "notification", "saved-view", "report"] } },
           { resource: "role", action: { not: "read" } },
+          { resource: "reference-data", action: { not: "read" } },
         ],
       },
     });

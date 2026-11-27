@@ -62,8 +62,8 @@ async function arrange() {
   };
 }
 
-function get(cookie: string): Request {
-  return new Request("http://localhost/t/settings/security/x", { headers: { cookie } });
+function get(cookie: string, tenant = "t"): Request {
+  return new Request(`http://localhost/${tenant}/settings/security/x`, { headers: { cookie } });
 }
 
 async function post(cookie: string, fields: [string, string][]) {
@@ -119,10 +119,14 @@ describe("a tenant-scope role created by an admin", () => {
     const a = await arrange();
     await createRoleAs(a.adminCookie, "editor", "TENANT");
 
-    const newUser = await newUserLoader(args(get(a.managerCookie)));
+    const newUser = await newUserLoader(
+      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
+    );
     expect(names(newUser.data.roles)).toEqual(["editor", "focal", "manager"]);
 
-    const invite = await inviteLoader(args(get(a.managerCookie)));
+    const invite = await inviteLoader(
+      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
+    );
     expect(names(invite.data.roles)).toEqual(["editor", "focal", "manager"]);
 
     const userRoles = await userRolesLoader(args(get(a.managerCookie), { userId: a.colleague.id }));
@@ -175,7 +179,9 @@ describe("roles stored against a tenant the old way", () => {
       _count: { rolePermissions: 1, userRoles: 1 },
     });
 
-    const newUser = await newUserLoader(args(get(a.managerCookie)));
+    const newUser = await newUserLoader(
+      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
+    );
     expect(names(newUser.data.roles)).toEqual(["editor", "focal", "manager"]);
   });
 
@@ -206,5 +212,26 @@ describe("roles stored against a tenant the old way", () => {
         `manager (${a.elsewhere.slug})`,
       ].sort(),
     );
+  });
+
+  it("end up with a name each, the oldest keeping a name only tenants' roles shared", async () => {
+    const a = await arrange();
+    const clash = `editor (${a.elsewhere.slug})`;
+    await prisma.role.create({ data: { name: clash, scope: "TENANT" } });
+    const first = await prisma.role.create({
+      data: { name: "editor", scope: "TENANT", tenantId: a.adminHome.id },
+    });
+    const second = await prisma.role.create({
+      data: { name: "Editor", scope: "TENANT", tenantId: a.elsewhere.id },
+    });
+
+    await detachRolesFromTenants(prisma);
+    await detachRolesFromTenants(prisma);
+
+    const roles = await prisma.role.findMany({ select: { id: true, name: true } });
+    const lowered = roles.map((r) => r.name.toLowerCase());
+    expect(new Set(lowered).size).toBe(lowered.length);
+    expect(roles.find((r) => r.id === first.id)?.name).toBe("editor");
+    expect(roles.find((r) => r.id === second.id)?.name).toBe(`Editor (${a.elsewhere.slug} 2)`);
   });
 });

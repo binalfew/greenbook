@@ -245,16 +245,18 @@ describe("running the seed", () => {
     }
   });
 
-  it("opts the tenants that use the directory into notifications when no tenant has them yet", async () => {
+  it("opts the tenants that use the directory into notifications when the system tenant hands its directory over", async () => {
     await runSeed();
+    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
     const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
     const working = await prisma.tenant.create({ data: buildTenant() });
     const idle = await prisma.tenant.create({ data: buildTenant() });
-    await prisma.featureFlag.update({
-      where: { key: "FF_DIRECTORY" },
-      data: { enabledForTenants: { push: working.id } },
+    // The state of a database seeded before the system tenant became
+    // admin-only: it is a directory tenant and nobody has notifications.
+    await prisma.featureFlag.updateMany({
+      where: { key: { in: DIRECTORY_FLAGS } },
+      data: { enabledForTenants: [system.id, working.id] },
     });
-    // The state databases seeded before this step are in.
     await prisma.featureFlag.update({
       where: { key: "FF_NOTIFICATIONS" },
       data: { enabledForTenants: { set: [] } },
@@ -262,9 +264,68 @@ describe("running the seed", () => {
 
     await runSeed();
 
+    for (const key of DIRECTORY_FLAGS) {
+      expect(await enabledTenants(key)).toEqual([demo.id, working.id].sort());
+    }
     const notified = await enabledTenants("FF_NOTIFICATIONS");
     expect(notified).toEqual([demo.id, working.id].sort());
     expect(notified).not.toContain(idle.id);
+  });
+
+  it("takes the system tenant off notifications", async () => {
+    await runSeed();
+    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
+    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
+    await prisma.featureFlag.update({
+      where: { key: "FF_NOTIFICATIONS" },
+      data: { enabledForTenants: { push: system.id } },
+    });
+
+    await runSeed();
+
+    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([demo.id]);
+  });
+
+  it("leaves a flag turned off for the demo tenant turned off when run again", async () => {
+    await runSeed();
+    await prisma.featureFlag.updateMany({
+      where: { key: { in: ["FF_PUBLIC_DIRECTORY", "FF_NOTIFICATIONS"] } },
+      data: { enabledForTenants: [] },
+    });
+
+    await runSeed();
+
+    expect(await enabledTenants("FF_PUBLIC_DIRECTORY")).toEqual([]);
+    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([]);
+  });
+
+  it("moves the photos of the people it moves out of the system tenant", async () => {
+    await runSeed();
+    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
+    const demo = await prisma.tenant.findFirstOrThrow({ where: { slug: "demo" } });
+    const person = await prisma.person.findFirstOrThrow({ where: { tenantId: demo.id } });
+    const photo = await prisma.personPhoto.create({
+      data: {
+        tenantId: system.id,
+        contentType: "image/webp",
+        width: 1,
+        height: 1,
+        size: 1,
+        data: new Uint8Array([0]),
+      },
+    });
+    await prisma.person.update({
+      where: { id: person.id },
+      data: { tenantId: system.id, photoId: photo.id },
+    });
+
+    await runSeed();
+
+    const moved = await prisma.person.findUniqueOrThrow({
+      where: { id: person.id },
+      select: { tenantId: true, photo: { select: { id: true, tenantId: true } } },
+    });
+    expect(moved).toEqual({ tenantId: demo.id, photo: { id: photo.id, tenantId: demo.id } });
   });
 
   it("leaves a tenant opted out of notifications by hand opted out when run again", async () => {

@@ -6,13 +6,13 @@ import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef } from "~/components/data-table/data-table-types";
 import { Badge } from "~/components/ui/badge";
 import { listNotifications, markAllAsRead } from "~/services/notifications.server";
-import { requireFeature } from "~/utils/auth/require-auth.server";
+import { requireTenantFeature } from "~/utils/acting-tenant.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Notifications" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { user } = await requireFeature(request, "FF_NOTIFICATIONS");
+  const { user } = await requireTenantFeature(request, "FF_NOTIFICATIONS");
   const url = new URL(request.url);
   const page = Number(url.searchParams.get("page") ?? "1");
   const status = url.searchParams.get("status");
@@ -32,7 +32,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const { user } = await requireFeature(request, "FF_NOTIFICATIONS");
+  const { user } = await requireTenantFeature(request, "FF_NOTIFICATIONS");
   await markAllAsRead(user.id);
   return data({ ok: true });
 }

@@ -146,7 +146,10 @@ export class SystemTenantRoleError extends Error {
 
 // Every tenant-scope role (focal, manager, any custom one) carries authority
 // over its holder's home tenant, so none of them may be held there.
-async function assertNoTenantRolesInSystemTenant(tenantId: string | null, roleIds: string[]) {
+export async function assertNoTenantRolesInSystemTenant(
+  tenantId: string | null,
+  roleIds: string[],
+) {
   if (!tenantId || roleIds.length === 0) return;
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },

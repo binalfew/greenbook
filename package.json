@@ -6,7 +6,7 @@
     "build": "react-router build",
     "db:generate": "prisma generate",
     "db:migrate": "npx prisma migrate dev",
-    "db:push": "npx prisma db push",
+    "db:push": "tsx prisma/dedupe-user-roles.ts && prisma db push",
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
     "dev": "cross-env NODE_ENV=development node server.js",

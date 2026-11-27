@@ -5,7 +5,7 @@ import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { z } from "zod/v4";
 import { getFormProps, SwitchField, useForm } from "~/components/form";
 import { Badge } from "~/components/ui/badge";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireTenantPermission } from "~/utils/acting-tenant.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
@@ -32,9 +32,11 @@ const FLAG_LABELS: Record<string, string> = {
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "feature-flag", "read");
-  const tenantId = user.tenantId;
-  const isSuperAdmin = user.roles.some((r) => r.scope === "GLOBAL" && r.name === "admin");
+  const { tenantId, isGlobalAdmin: isSuperAdmin } = await requireTenantPermission(
+    request,
+    "feature-flag",
+    "read",
+  );
 
   const [flags, tenantCount] = await Promise.all([
     prisma.featureFlag.findMany({ orderBy: { key: "asc" } }),
@@ -50,13 +52,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (f.scope === "global") {
       return {
         ...f,
-        enabled: f.enabled && !(tenantId && f.disabledForTenants.includes(tenantId)),
+        enabled: f.enabled && !f.disabledForTenants.includes(tenantId),
         globallyEnabled,
       };
     }
     return {
       ...f,
-      enabled: !!tenantId && f.enabledForTenants.includes(tenantId),
+      enabled: f.enabledForTenants.includes(tenantId),
       globallyEnabled,
     };
   });
@@ -74,9 +76,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const user = await requirePermission(request, "feature-flag", "write");
-  const tenantId = user.tenantId;
-  const isSuperAdmin = user.roles.some((r) => r.scope === "GLOBAL" && r.name === "admin");
+  const { tenantId, isGlobalAdmin: isSuperAdmin } = await requireTenantPermission(
+    request,
+    "feature-flag",
+    "write",
+  );
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
@@ -97,7 +101,7 @@ export async function action({ request }: Route.ActionArgs) {
       where: { id: flagId },
       data: { enabled },
     });
-  } else if (flag.scope === "global" && flag.enabled && tenantId) {
+  } else if (flag.scope === "global" && flag.enabled) {
     const isCurrentlyOptedOut = flag.disabledForTenants.includes(tenantId);
     if (enabled && isCurrentlyOptedOut) {
       await prisma.featureFlag.update({

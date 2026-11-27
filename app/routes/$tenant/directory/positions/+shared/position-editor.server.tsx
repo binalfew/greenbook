@@ -28,10 +28,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return data(submission.reply({ formErrors: [outcome.conflict.message] }), { status: 409 });
   }
 
-  const base = `/${params.tenant}/directory/positions`;
-  if (outcome.mode === "SELF_APPROVED" && outcome.change.entityId) {
-    return redirect(`${base}/${outcome.change.entityId}`);
-  }
   if (outcome.mode === "DRAFT") return redirect(draftsPath(String(params.tenant)));
-  return redirect(`${base}?submitted=1`);
+  return redirect(`/${params.tenant}/directory/positions/${outcome.change.entityId}`);
 }

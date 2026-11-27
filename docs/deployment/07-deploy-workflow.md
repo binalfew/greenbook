@@ -895,6 +895,17 @@ $ docker run --rm \
 # we set up in §2.5.
 ```
 
+> **⚠ Upgrading a database from before the onboarding release: run the user-role clean-up first**
+>
+> `UserRole` now has a unique index on `(userId, roleId)`. An older database can hold the same role twice for one user, and `prisma db push` cannot add the index while it does. Run this once, before the push above:
+>
+> ```bash
+> $ docker run --rm --env-file /etc/greenbook.env \
+>   greenbook:$VERSION npx tsx prisma/dedupe-user-roles.ts
+> ```
+>
+> It deletes the extra copies and keeps one row per user and role, prints how many it removed, and does nothing on a clean or empty database, so it is safe to leave in the deploy sequence. Locally, `npm run db:push` runs it for you.
+
 > **⚠ `db push` can drop data under your feet**
 >
 > If a schema change is detected as data-destructive (dropped column, narrowed column type, removed table), `prisma db push` refuses in an interactive terminal and REFUSES AND EXITS in a non-TTY deploy like this one. It will NOT silently drop data. If it refuses, you have three choices:

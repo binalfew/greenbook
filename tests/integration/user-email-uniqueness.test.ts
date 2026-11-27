@@ -16,7 +16,8 @@ const TAKEN_MESSAGE = "A user with this email already exists";
 async function arrange() {
   const status = await seedActiveUserStatus(prisma);
   const [home, other] = await Promise.all([
-    prisma.tenant.create({ data: buildTenant() }),
+    // The requests below are made under `/t/...`, the admin's own tenant.
+    prisma.tenant.create({ data: buildTenant({ slug: "t" }) }),
     prisma.tenant.create({ data: buildTenant() }),
   ]);
 

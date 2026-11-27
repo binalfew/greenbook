@@ -19,6 +19,7 @@ import { authSessionStorage } from "~/utils/auth/session.server";
 import { prisma } from "~/utils/db/db.server";
 import { useIsPending } from "~/utils/misc";
 import { acceptInvitation, getInvitationByToken } from "~/services/invitations.server";
+import { assertNoTenantRolesInSystemTenant, SystemTenantRoleError } from "~/services/users.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import type { Route } from "./+types/accept-invite";
 
@@ -156,7 +157,14 @@ export async function action({ request }: Route.ActionArgs) {
       );
     }
     const ctx = buildServiceContext(request, { id: userId });
-    await acceptInvitation(token, userId, ctx);
+    try {
+      await acceptInvitation(token, userId, ctx);
+    } catch (error) {
+      if (error instanceof SystemTenantRoleError) {
+        return data({ result: submission.reply({ formErrors: [error.message] }) }, { status: 400 });
+      }
+      throw error;
+    }
     return redirect(`/${invitation.tenant.slug}`);
   }
 
@@ -174,6 +182,17 @@ export async function action({ request }: Route.ActionArgs) {
       },
       { status: 400 },
     );
+  }
+
+  // Checked before the account exists, so a refused invitation leaves nothing
+  // behind; `acceptInvitation` checks again for whoever it is handed.
+  try {
+    await assertNoTenantRolesInSystemTenant(invitation.tenantId, invitation.roleIds);
+  } catch (error) {
+    if (error instanceof SystemTenantRoleError) {
+      return data({ result: submission.reply({ formErrors: [error.message] }) }, { status: 400 });
+    }
+    throw error;
   }
 
   const hashedPassword = await getPasswordHash(password!);

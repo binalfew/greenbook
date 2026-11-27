@@ -24,7 +24,7 @@ export type DirectoryAccess = {
   tenantId: string;
   /** User can direct-apply CRUD against the named resource (manager path). */
   canDirect: boolean;
-  /** User can create a ChangeRequest via `submitChange` (focal-person path). */
+  /** User can propose changes: `saveDraft`, then `submitDrafts` (focal-person path). */
   canSubmit: boolean;
   /** User can review (read) others' change requests. */
   canReview: boolean;

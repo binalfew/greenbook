@@ -10,13 +10,9 @@ Field wrappers (`CheckboxField`, `SwitchField`, `RadioGroupField`, `DatePickerFi
 
 Every route — auth, tenant-scoped, settings — goes through `~/components/form` + shadcn `<Field>` / `<FieldLabel>` / `<FieldError>` composed directly. The earlier `~/components/field` (`FormField`) + `input-field` / `checkbox-field` / `textarea-field` surface was retired in a post-Phase-15 cleanup; if you see one in a downstream fork, migrate it to the canonical pattern so there's only one way to wire a form.
 
-## Cascading dropdowns
-
-Use `useCascade` from `~/hooks/use-cascade` for dependent selects (e.g., property → building → floor). The hook owns fetcher lifecycle, key-based remounts, and Conform value clearing. Root levels omit `parent`; child levels pass another binding as `parent` plus `buildUrl`, `intent`, and optional placeholders. Never manage cascade state with `useState` / `useEffect` / `useRef` in consumers.
-
 ## Base-prefix URLs
 
-Use `useBasePrefix` from `~/hooks/use-base-prefix` inside components that need `/${tenant}` or `/admin` URL prefixes (resource route URLs for `SearchableSelectField.fetchUrl`, `useCascade.buildUrl`, etc.).
+Use `useBasePrefix` from `~/hooks/use-base-prefix` inside components that need `/${tenant}` or `/admin` URL prefixes (resource route URLs for `SearchableSelectField.fetchUrl`, etc.).
 
 ## DataTable
 

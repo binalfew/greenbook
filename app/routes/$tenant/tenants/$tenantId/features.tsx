@@ -51,7 +51,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const flagKey = formData.get("flagKey");
   const enabled = formData.get("enabled");
   if (typeof flagKey !== "string" || (enabled !== "true" && enabled !== "false")) {
-    return data({ ok: false as const, error: "Invalid request" }, { status: 400 });
+    return data({ ok: false as const }, { status: 400 });
   }
 
   try {
@@ -63,7 +63,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   } catch (error) {
     if (error instanceof NotATenantFlagError || error instanceof SystemTenantDirectoryError) {
-      return data({ ok: false as const, error: error.message }, { status: 400 });
+      return data({ ok: false as const }, { status: 400 });
     }
     throw error;
   }

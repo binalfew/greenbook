@@ -10,10 +10,12 @@ import { action as submitDraftsAction } from "~/routes/$tenant/directory/approva
 import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
 import { loader as openNotificationLoader } from "~/routes/$tenant/notifications/$notificationId.open";
 import { loader as inboxLoader } from "~/routes/$tenant/notifications/index";
+import { action as markAllReadAction } from "~/routes/$tenant/notifications/mark-all-read";
 import { action as newTenantAction } from "~/routes/$tenant/tenants/new";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
-import { csrf } from "~/utils/auth/csrf.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { grantPermissions } from "./helpers/directory-actors";
+import { get, post, run, statusOf } from "./helpers/requests";
 import { createSessionCookie } from "./helpers/session";
 
 // The workflow's notifications are addressed to managers and focal persons,
@@ -28,46 +30,6 @@ beforeEach(() => {
   clearPublicTenantIdsCache();
 });
 
-async function grant(roleId: string, permissions: [string, string][]) {
-  for (const [resource, action] of permissions) {
-    const perm = await prisma.permission.upsert({
-      where: { resource_action: { resource, action } },
-      create: { resource, action, module: "directory" },
-      update: {},
-    });
-    await prisma.rolePermission.create({
-      data: { roleId, permissionId: perm.id, access: "any" },
-    });
-  }
-}
-
-function get(cookie: string, path: string): Request {
-  return new Request(`http://localhost${path}`, { headers: { cookie } });
-}
-
-async function post(path: string, cookie: string, body: Record<string, string>): Promise<Request> {
-  const [token, csrfCookie] = await csrf.commitToken();
-  return new Request(`http://localhost${path}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      cookie: `${cookie}; ${csrfCookie!.split(";")[0]}`,
-    },
-    body: new URLSearchParams({ ...body, csrf: token }).toString(),
-  });
-}
-
-/** Run a loader/action and return what it returned or threw. */
-async function run(fn: () => Promise<unknown>): Promise<unknown> {
-  return fn().catch((thrown) => thrown);
-}
-
-function statusOf(result: unknown): number {
-  if (result instanceof Response) return result.status;
-  const init = (result as { init?: { status?: number } | null }).init;
-  return init?.status ?? 200;
-}
-
 /**
  * A tenant created through the form the global admin uses, with one manager
  * and one focal person placed in it.
@@ -79,12 +41,12 @@ async function arrange() {
   const managerRole = await prisma.role.create({ data: { name: "manager", scope: "TENANT" } });
   const focalRole = await prisma.role.create({ data: { name: "focal", scope: "TENANT" } });
   await prisma.role.create({ data: { name: "user", scope: "GLOBAL" } });
-  await grant(focalRole.id, [
+  await grantPermissions(prisma, focalRole.id, [
     ["organization", "read"],
     ["directory-change", "submit"],
     ["directory-change", "read-own"],
   ]);
-  await grant(managerRole.id, [
+  await grantPermissions(prisma, managerRole.id, [
     ["organization", "read"],
     ["organization", "write"],
     ["directory-change", "read-all"],
@@ -145,7 +107,7 @@ type Listed = { id: string; type: string; title: string; read: boolean };
 /** What the bell shows this user: whether it is there, the count, the latest. */
 async function bell(cookie: string) {
   const result = (await tenantLayoutLoader({
-    request: get(cookie, `/${SLUG}`),
+    request: get(`/${SLUG}`, cookie),
     params: { tenant: SLUG },
     context: {},
   } as never)) as unknown as {
@@ -158,7 +120,7 @@ async function bell(cookie: string) {
 async function inbox(cookie: string) {
   const result = await run(() =>
     inboxLoader({
-      request: get(cookie, `/${SLUG}/notifications`),
+      request: get(`/${SLUG}/notifications`, cookie),
       params: { tenant: SLUG },
       context: {},
     } as never),
@@ -172,7 +134,7 @@ async function inbox(cookie: string) {
 async function open(cookie: string, notificationId: string) {
   const result = await run(() =>
     openNotificationLoader({
-      request: get(cookie, `/${SLUG}/notifications/${notificationId}/open`),
+      request: get(`/${SLUG}/notifications/${notificationId}/open`, cookie),
       params: { tenant: SLUG, notificationId },
       context: {},
     } as never),
@@ -186,7 +148,7 @@ async function changePage(cookie: string, path: string) {
   const changeId = path.split("/").pop()!;
   const result = await run(() =>
     changeDetailLoader({
-      request: get(cookie, path),
+      request: get(path, cookie),
       params: { tenant: SLUG, changeId },
       context: {},
     } as never),
@@ -323,6 +285,30 @@ describe("in a tenant created through the UI", () => {
     });
   });
 
+  it("keeps the inbox to the user's own tenant", async () => {
+    const a = await arrange();
+    const other = await prisma.tenant.create({ data: buildTenant() });
+    const path = `/${other.slug}/notifications`;
+
+    const page = await run(() =>
+      inboxLoader({
+        request: get(path, a.manager.cookie),
+        params: { tenant: other.slug },
+        context: {},
+      } as never),
+    );
+    expect(statusOf(page)).toBe(403);
+
+    const marked = await run(async () =>
+      markAllReadAction({
+        request: await post(`${path}/mark-all-read`, a.manager.cookie, {}),
+        params: { tenant: other.slug },
+        context: {},
+      } as never),
+    );
+    expect(statusOf(marked)).toBe(403);
+  });
+
   it("does not let one user open another user's notification", async () => {
     const a = await arrange();
     await submitAsFocal(a);
@@ -330,7 +316,7 @@ describe("in a tenant created through the UI", () => {
 
     const result = await run(() =>
       openNotificationLoader({
-        request: get(a.focal.cookie, `/${SLUG}/notifications/${toManager.id}/open`),
+        request: get(`/${SLUG}/notifications/${toManager.id}/open`, a.focal.cookie),
         params: { tenant: SLUG, notificationId: toManager.id },
         context: {},
       } as never),

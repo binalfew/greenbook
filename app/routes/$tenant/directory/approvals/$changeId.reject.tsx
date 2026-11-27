@@ -1,7 +1,8 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Form, data, redirect, useNavigate, useParams } from "react-router";
+import { Form, data, redirect, useNavigate } from "react-router";
+import { FormError } from "~/components/directory/form-error";
 import { getFormProps, getTextareaProps, useForm } from "~/components/form";
 import { Button } from "~/components/ui/button";
 import {
@@ -16,7 +17,9 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { rejectChange } from "~/services/directory-changes.server";
 import { requireRejectContext, requireReviewContext } from "~/utils/directory-access.server";
+import { directoryDialogConflict } from "~/utils/directory-submit.server";
 import { rejectChangeSchema } from "~/utils/schemas/directory";
+import { changePath } from "~/utils/directory-routes";
 import type { Route } from "./+types/$changeId.reject";
 
 export const handle = { breadcrumb: "Reject" };
@@ -34,16 +37,20 @@ export async function action({ request, params }: Route.ActionArgs) {
       status: submission.status === "error" ? 400 : 200,
     });
   }
-  await rejectChange(params.changeId, { notes: submission.value.notes }, ctx);
-  return redirect(`/${params.tenant}/directory/approvals/${params.changeId}`);
+  try {
+    await rejectChange(params.changeId, { notes: submission.value.notes }, ctx);
+  } catch (err) {
+    const { message } = directoryDialogConflict(request, err);
+    return data(submission.reply({ formErrors: [message] }), { status: 409 });
+  }
+  return redirect(changePath(params.tenant, params.changeId));
 }
 
 export default function RejectChangeDialog({ params, actionData }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
-  const { tenant } = useParams();
-  const base = `/${tenant}/directory/approvals/${params.changeId}`;
+  const base = changePath(params.tenant, params.changeId);
   const handleClose = () => navigate(base, { replace: true });
 
   const { form, fields } = useForm(rejectChangeSchema, {
@@ -64,6 +71,7 @@ export default function RejectChangeDialog({ params, actionData }: Route.Compone
         </DialogHeader>
 
         <Form method="post" {...getFormProps(form)} className="space-y-3">
+          <FormError message={form.errors?.[0]} />
           <div className="space-y-2">
             <Label htmlFor={fields.notes.id}>{t("changes.rejectDialog.notesLabel")}</Label>
             <Textarea {...getTextareaProps(fields.notes)} key={fields.notes.key} rows={3} />

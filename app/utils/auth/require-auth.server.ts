@@ -145,38 +145,6 @@ export function hasRole(user: AuthUser, roleName: string): boolean {
   return user.roles.some((r) => r.name === roleName);
 }
 
-/**
- * Gate a loader/action on a feature flag. Throws 404 (not 403) when the flag
- * is off — a disabled feature should be invisible, not visibly-forbidden.
- *
- * Returns { user, roles: string[], isSuperAdmin, tenantId } so callers can
- * skip a second `requireAuth` round-trip.
- */
-export async function requireFeature(
-  request: Request,
-  flagKey: string,
-): Promise<{ user: AuthUser; roles: string[]; isSuperAdmin: boolean; tenantId: string }> {
-  const user = await requireAuth(request);
-  if (!user.tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
-  const isSuperAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
-  const roleNames = user.roles.map((r) => r.name);
-
-  // Global admins evaluate without tenantId so global flags fall back to
-  // the `enabled` toggle instead of needing tenant opt-in.
-  const flagContext = isSuperAdmin
-    ? { roles: roleNames, userId: user.id }
-    : { tenantId: user.tenantId, roles: roleNames, userId: user.id };
-
-  const enabled = await isFeatureEnabled(flagKey, flagContext);
-  if (!enabled) {
-    throw data({ error: "Not Found" }, { status: 404 });
-  }
-
-  return { user, roles: roleNames, isSuperAdmin, tenantId: user.tenantId };
-}
-
 export interface ClientUser {
   id: string;
   email: string;

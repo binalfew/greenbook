@@ -9,6 +9,7 @@ import { action as approveAction } from "~/routes/$tenant/directory/approvals/$c
 import { action as discardAction } from "~/routes/$tenant/directory/approvals/$changeId.discard";
 import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
 import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
+import { action as reopenAction } from "~/routes/$tenant/directory/approvals/$changeId.reopen";
 import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
 import { action as personEditorAction } from "~/routes/$tenant/directory/people/+shared/person-editor.server";
 import { loader as editPersonLoader } from "~/routes/$tenant/directory/people/$personId_/edit";
@@ -206,7 +207,7 @@ async function submit(a: Seeded, cookie: string, changeId: string) {
 
 async function review(
   a: Seeded,
-  action: typeof approveAction | typeof rejectAction | typeof discardAction,
+  action: typeof approveAction | typeof rejectAction | typeof discardAction | typeof reopenAction,
   verb: string,
   cookie: string,
   changeId: string,
@@ -317,6 +318,34 @@ describe("person photo: upload", () => {
     expect(await prisma.person.count()).toBe(0);
     expect(await prisma.personPhoto.count()).toBe(0);
     expect(await prisma.changeRequest.count()).toBe(0);
+  });
+});
+
+describe("person photo: upload with a possible duplicate", () => {
+  it("reports a bad photo on the first save, before the duplicate warning", async () => {
+    const a = await arrange();
+    await savePerson(a, a.manager.cookie, personForm("Dayo"));
+    const text = new File(["just some text"], "photo.jpg", { type: "image/jpeg" });
+
+    const result = await savePerson(a, a.manager.cookie, personForm("Dayo", { photo: text }));
+
+    expect(statusOf(result)).toBe(400);
+    const reply = payloadOf<{ error?: Record<string, string[] | null> }>(result);
+    expect(reply.error?.photo?.[0]).toBeTruthy();
+  });
+
+  it("stores nothing while the duplicate warning is showing", async () => {
+    const a = await arrange();
+    await savePerson(a, a.manager.cookie, personForm("Efua"));
+
+    const result = await savePerson(
+      a,
+      a.manager.cookie,
+      personForm("Efua", { photo: await cameraJpeg() }),
+    );
+
+    expect(payloadOf<{ duplicates?: unknown[] }>(result).duplicates).toHaveLength(1);
+    expect(await prisma.personPhoto.count()).toBe(0);
   });
 });
 
@@ -498,24 +527,6 @@ describe("person photo: cleanup", () => {
     expect(await prisma.personPhoto.count()).toBe(0);
   });
 
-  it("rejecting a request deletes its photo and keeps the published one", async () => {
-    const a = await arrange();
-    const person = await publishedPersonWithPhoto(a, "Musa");
-    await savePerson(
-      a,
-      a.focal.cookie,
-      { ...editForm(person), photo: await cameraJpeg("#00cc00") },
-      { personId: person.id },
-    );
-    const draft = await onlyDraft(a);
-    await submit(a, a.focal.cookie, draft.id);
-    expect(await prisma.personPhoto.count()).toBe(2);
-
-    await review(a, rejectAction, "reject", a.manager.cookie, draft.id);
-
-    expect((await prisma.personPhoto.findMany()).map((p) => p.id)).toEqual([person.photoId]);
-  });
-
   it("replacing the photo in a draft deletes the photo it replaced", async () => {
     const a = await arrange();
     await savePerson(a, a.focal.cookie, personForm("Nia", { photo: await cameraJpeg() }));
@@ -558,5 +569,98 @@ describe("person photo: cleanup", () => {
 
     const { draft: resumed } = payloadOf<{ draft: { values: Record<string, unknown> } }>(loaded);
     expect(resumed.values.photoId).toBe(await photoIdOf(draft));
+  });
+});
+
+// A rejected request can be reopened as a draft, so the photo it proposed has
+// to outlive the rejection.
+describe("person photo: rejected and reopened", () => {
+  /** A published person, and a focal person's rejected request to replace the photo. */
+  async function rejectedReplacement(a: Seeded, name: string) {
+    const person = await publishedPersonWithPhoto(a, name);
+    await savePerson(
+      a,
+      a.focal.cookie,
+      { ...editForm(person), photo: await cameraJpeg("#00cc00") },
+      { personId: person.id },
+    );
+    const rejected = await onlyDraft(a);
+    await submit(a, a.focal.cookie, rejected.id);
+    await review(a, rejectAction, "reject", a.manager.cookie, rejected.id);
+    return { person, rejected, proposedPhotoId: (await photoIdOf(rejected))! };
+  }
+
+  const photoIds = async () => (await prisma.personPhoto.findMany()).map((p) => p.id).sort();
+
+  it("a reopened draft shows the proposed photo and publishes it when approved", async () => {
+    const a = await arrange();
+    const { person, rejected, proposedPhotoId } = await rejectedReplacement(a, "Musa");
+
+    await review(a, reopenAction, "reopen", a.focal.cookie, rejected.id);
+
+    const draft = await onlyDraft(a);
+    expect(await photoIdOf(draft)).toBe(proposedPhotoId);
+    expect((await tenantPhoto(a, a.focal.cookie, proposedPhotoId)).status).toBe(200);
+
+    // Saved again without touching the photo, as the editor would post it.
+    const resaved = await savePerson(
+      a,
+      a.focal.cookie,
+      { ...editForm(person), photoId: proposedPhotoId },
+      { personId: person.id, draftId: draft.id },
+    );
+    expect(statusOf(resaved)).toBe(302);
+    await submit(a, a.focal.cookie, draft.id);
+    await review(a, approveAction, "approve", a.manager.cookie, draft.id);
+
+    const published = await prisma.person.findUniqueOrThrow({ where: { id: person.id } });
+    expect(published.photoId).toBe(proposedPhotoId);
+    expect(await photoIds()).toEqual([proposedPhotoId]);
+  });
+
+  it("discarding the reopened draft deletes the proposed photo", async () => {
+    const a = await arrange();
+    const { person, rejected } = await rejectedReplacement(a, "Nala");
+    await review(a, reopenAction, "reopen", a.focal.cookie, rejected.id);
+
+    await review(a, discardAction, "discard", a.focal.cookie, (await onlyDraft(a)).id);
+
+    expect(await photoIds()).toEqual([person.photoId]);
+  });
+
+  it("reopening again after that gives a draft that leaves the photo alone", async () => {
+    const a = await arrange();
+    const { person, rejected } = await rejectedReplacement(a, "Omar");
+    await review(a, reopenAction, "reopen", a.focal.cookie, rejected.id);
+    await review(a, discardAction, "discard", a.focal.cookie, (await onlyDraft(a)).id);
+
+    await review(a, reopenAction, "reopen", a.focal.cookie, rejected.id);
+
+    const draft = await onlyDraft(a);
+    expect(await photoIdOf(draft)).toBeNull();
+    await submit(a, a.focal.cookie, draft.id);
+    await review(a, approveAction, "approve", a.manager.cookie, draft.id);
+    const published = await prisma.person.findUniqueOrThrow({ where: { id: person.id } });
+    expect(published.photoId).toBe(person.photoId);
+  });
+
+  it("approving a follow-up with a different photo deletes the one first proposed", async () => {
+    const a = await arrange();
+    const { person, rejected, proposedPhotoId } = await rejectedReplacement(a, "Pita");
+    await review(a, reopenAction, "reopen", a.focal.cookie, rejected.id);
+    const draft = await onlyDraft(a);
+    await savePerson(
+      a,
+      a.focal.cookie,
+      { ...editForm(person), photoId: proposedPhotoId, photo: await cameraJpeg("#0000cc") },
+      { personId: person.id, draftId: draft.id },
+    );
+    const finalPhotoId = (await photoIdOf(await onlyDraft(a)))!;
+    expect(finalPhotoId).not.toBe(proposedPhotoId);
+
+    await submit(a, a.focal.cookie, draft.id);
+    await review(a, approveAction, "approve", a.manager.cookie, draft.id);
+
+    expect(await photoIds()).toEqual([finalPhotoId]);
   });
 });

@@ -3,7 +3,7 @@ import { _applyCreateAssignment } from "~/services/position-assignments.server";
 import { prisma } from "~/utils/db/db.server";
 import { normaliseSearchTerm } from "~/utils/db/search.server";
 import { logger } from "~/utils/monitoring/logger.server";
-import { photoStorage } from "~/utils/photo-storage.server";
+import { statPhoto } from "~/utils/photo-storage.server";
 import type { PersonPayload } from "~/utils/schemas/directory";
 import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
 
@@ -154,7 +154,7 @@ function personDataFromPayload(payload: PersonPayload) {
 // treated as "leave alone" rather than failing the whole change.
 async function photoIdFromPayload(payload: PersonPayload, tenantId: string, db: Db) {
   if (!payload.photoId) return payload.photoId;
-  const photo = await photoStorage.stat(payload.photoId, db);
+  const photo = await statPhoto(payload.photoId, db);
   return photo?.tenantId === tenantId ? photo.id : undefined;
 }
 

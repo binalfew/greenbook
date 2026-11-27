@@ -1,29 +1,35 @@
+import type { SubmissionResult } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod/v4";
 import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
 import { CONFIRM_DUPLICATES_FIELD } from "~/components/directory/possible-duplicates";
-import enDirectory from "~/locales/en/directory.json";
-import frDirectory from "~/locales/fr/directory.json";
-import { findPossibleDuplicatePeople } from "~/services/person-duplicates.server";
+import {
+  findPossibleDuplicatePeople,
+  type PossibleDuplicate,
+} from "~/services/person-duplicates.server";
 import {
   PhotoUploadError,
   keepablePhotoId,
+  preparePersonPhoto,
   releaseUnreferencedPhotos,
   storePersonPhoto,
 } from "~/services/person-photos.server";
 import { PERSON_PHOTO_MAX_BYTES } from "~/utils/constants/person-photo";
 import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
 import { DRAFT_PARAM, draftsPath } from "~/utils/directory-routes";
-import { dispatchDirectoryChange } from "~/utils/directory-submit.server";
-import { getLangFromRequest } from "~/utils/i18n-cookie.server";
+import { directoryMessages, dispatchDirectoryChange } from "~/utils/directory-submit.server";
 import { personFormSchema } from "~/utils/schemas/directory";
 
-const PHOTO_ERRORS = { en: enDirectory.people.photo.errors, fr: frDirectory.people.photo.errors };
+/** What the editor gets back when a save does not go through. */
+export type PersonEditorResult = SubmissionResult<string[]> & {
+  /** Present when the save was held back with a duplicate warning. */
+  duplicates?: PossibleDuplicate[];
+};
 
 export async function action({ request, params }: ActionFunctionArgs) {
   // Checked before the body is read, so only editors can send an upload.
   const { user, tenantId } = await requireDirectoryWriteAccess(request, "person");
-  const photoErrors = PHOTO_ERRORS[getLangFromRequest(request) ?? "en"];
+  const photoErrors = directoryMessages(request).people.photo.errors;
 
   // Refuse an oversized request without buffering it. The form's other
   // fields are a few KB, so anything this far over the limit is the photo.
@@ -56,6 +62,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
   } = submission.value;
   const hasId = typeof id === "string" && id.length > 0;
 
+  // A file that cannot be used is an error on the first save, whatever else
+  // the save has to say.
+  let preparedPhoto;
+  try {
+    preparedPhoto = photo ? await preparePersonPhoto(photo) : null;
+  } catch (err) {
+    if (!(err instanceof PhotoUploadError)) throw err;
+    return data(submission.reply({ fieldErrors: { photo: [photoErrors[err.code]] } }), {
+      status: 400,
+    });
+  }
+
   // Possible duplicates are a warning, not an error: the first save comes
   // back with the matches, and the editor's "save anyway" button re-posts
   // with the confirmation field to go through. Runs before the photo is
@@ -71,15 +89,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // A new file wins, then an explicit removal; otherwise the photo stays.
   let photoId: string | null;
   let uploadedPhotoId: string | undefined;
-  if (photo) {
-    try {
-      uploadedPhotoId = await storePersonPhoto(photo, { tenantId, userId: user.id });
-    } catch (err) {
-      if (!(err instanceof PhotoUploadError)) throw err;
-      return data(submission.reply({ fieldErrors: { photo: [photoErrors[err.code]] } }), {
-        status: 400,
-      });
-    }
+  if (preparedPhoto) {
+    uploadedPhotoId = await storePersonPhoto(preparedPhoto, { tenantId, userId: user.id });
     photoId = uploadedPhotoId;
   } else if (removePhoto) {
     photoId = null;
@@ -125,10 +136,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return data(submission.reply({ formErrors: [outcome.conflict.message] }), { status: 409 });
   }
 
-  const base = `/${params.tenant}/directory/people`;
-  if (outcome.mode === "SELF_APPROVED" && outcome.change.entityId) {
-    return redirect(`${base}/${outcome.change.entityId}`);
-  }
   if (outcome.mode === "DRAFT") return redirect(draftsPath(String(params.tenant)));
-  return redirect(`${base}?submitted=1`);
+  return redirect(`/${params.tenant}/directory/people/${outcome.change.entityId}`);
 }

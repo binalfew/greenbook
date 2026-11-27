@@ -17,7 +17,7 @@ beforeEach(() => {
 
 /**
  * Phase B.4 — proves the editor action end-to-end: form POST → Conform parse →
- * dispatchDirectoryChange → submitChange / submitAndApply → DB write.
+ * dispatchDirectoryChange → saveDraft / submitAndApply → DB write.
  * Services already have unit-level coverage; this file is about the
  * route-action pipeline (Conform + permission routing).
  */
