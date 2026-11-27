@@ -9,6 +9,7 @@ import {
   getTextareaProps,
   useForm,
 } from "~/components/form";
+import { FormError } from "~/components/directory/form-error";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -66,7 +67,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const { positionId, personId, startDate, notes } = submission.value;
 
-  await dispatchDirectoryChange(request, "position-assignment", {
+  const outcome = await dispatchDirectoryChange(request, "position-assignment", {
     entityType: "POSITION_ASSIGNMENT",
     operation: "CREATE",
     payload: {
@@ -76,6 +77,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       notes,
     },
   });
+  if (outcome.conflict) {
+    return data(submission.reply({ formErrors: [outcome.conflict.message] }), { status: 409 });
+  }
 
   return redirect(`/${params.tenant}/directory/positions/${params.positionId}`);
 }
@@ -114,6 +118,7 @@ export default function AssignPersonDialog({
         </DialogHeader>
 
         <Form method="post" {...getFormProps(form)} className="space-y-3">
+          <FormError message={form.errors?.[0]} />
           <input
             {...getInputProps(fields.positionId, { type: "hidden" })}
             key={fields.positionId.key}

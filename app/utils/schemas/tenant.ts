@@ -1,32 +1,5 @@
 import { z } from "zod/v4";
-
-const SUBSCRIPTION_PLANS = ["free", "starter", "professional", "enterprise"] as const;
-
-/**
- * Slugs that would collide with top-level app routes if a tenant picked them.
- * Keep this list in sync with the directories under `app/routes/` that live at
- * the root (i.e. not under `$tenant/`).
- */
-const RESERVED_SLUGS = new Set([
-  "api",
-  "login",
-  "logout",
-  "signup",
-  "forgot-password",
-  "reset-password",
-  "change-expired-password",
-  "accept-invite",
-  "verify",
-  "onboarding",
-  "resources",
-  "home",
-  "offline",
-  "directory",
-  "public",
-  "people",
-  "organizations",
-  "positions",
-]);
+import { RESERVED_SLUG_MESSAGE, isReservedSlug } from "~/utils/reserved-slugs";
 
 const slugField = z
   .string({ error: "Slug is required" })
@@ -36,14 +9,7 @@ const slugField = z
     /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/,
     "Slug must be lowercase alphanumeric with hyphens only, cannot start or end with a hyphen",
   )
-  .refine((val) => !RESERVED_SLUGS.has(val), "This slug is reserved and cannot be used");
-
-export const subscriptionPlanSchema = z.enum(SUBSCRIPTION_PLANS);
-
-export const PLAN_OPTIONS = SUBSCRIPTION_PLANS.map((p) => ({
-  value: p,
-  label: p.charAt(0).toUpperCase() + p.slice(1),
-}));
+  .refine((val) => !isReservedSlug(val), RESERVED_SLUG_MESSAGE);
 
 export const createTenantSchema = z.object({
   name: z
@@ -56,7 +22,6 @@ export const createTenantSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
-  subscriptionPlan: subscriptionPlanSchema.optional(),
   logoUrl: z.string().optional(),
   brandTheme: z.string().optional(),
   // Optional: existing user to bootstrap as the new tenant's admin. Empty

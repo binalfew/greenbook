@@ -1,14 +1,16 @@
-import { emitWebhookEvent } from "~/utils/events/webhook-emitter.server";
+import { logger } from "~/utils/monitoring/logger.server";
 
 /**
- * Emit a domain event to external consumers via Webhooks. Fire-and-forget —
- * errors are suppressed so the caller's write path isn't blocked by a slow or
- * broken webhook endpoint.
+ * Announce a domain event (catalog: `~/utils/events/domain-events`). Events are
+ * tenant-scoped and fire-and-forget: emitting never throws and never blocks
+ * the caller's write path. There is no outbound delivery — the event is
+ * recorded in the structured log, and in-process consumers (notifications,
+ * audit trail) are invoked by the services that emit.
  */
 export function emitDomainEvent(
   tenantId: string,
   eventType: string,
   data: Record<string, unknown>,
 ) {
-  emitWebhookEvent(tenantId, eventType, data).catch(() => {});
+  logger.debug({ tenantId, eventType, data }, "domain event");
 }

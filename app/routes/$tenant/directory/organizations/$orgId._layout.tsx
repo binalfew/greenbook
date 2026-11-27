@@ -1,7 +1,8 @@
-import { ArrowLeft, Building2, Network, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, Network } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, data } from "react-router";
 import { PendingBadge } from "~/components/directory/pending-badge";
+import { RecordActions, RecordLockedNotice } from "~/components/directory/record-actions";
 import { Badge } from "~/components/ui/badge";
 import {
   Breadcrumb,
@@ -13,9 +14,9 @@ import {
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
+import { findPendingChange } from "~/services/directory-changes.server";
 import { getOrganization, getOrganizationAncestry } from "~/services/organizations.server";
 import { hasPermission } from "~/utils/auth/require-auth.server";
-import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$orgId._layout";
@@ -32,15 +33,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const [org, ancestry, pendingChange] = await Promise.all([
     getOrganization(params.orgId, tenantId),
     getOrganizationAncestry(params.orgId, tenantId),
-    prisma.changeRequest.findFirst({
-      where: {
-        tenantId,
-        status: "PENDING",
-        entityType: "ORGANIZATION",
-        entityId: params.orgId,
-      },
-      select: { id: true, submittedById: true, submittedAt: true },
-    }),
+    findPendingChange(tenantId, "ORGANIZATION", params.orgId),
   ]);
 
   return data({
@@ -63,6 +56,7 @@ export default function OrganizationDetailLayout({ loaderData, params }: Route.C
 
   const canEdit = canWrite || canSubmit;
   const canDel = canDelete || canSubmit;
+  const locked = pendingChange !== null;
   const crumbs = ancestry.slice(0, -1);
 
   return (
@@ -75,24 +69,14 @@ export default function OrganizationDetailLayout({ loaderData, params }: Route.C
           </Link>
         </Button>
         <div className="flex gap-2">
-          {canEdit ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to={`${base}/${org.id}/edit`}>
-                <Pencil className="mr-1 size-4" />
-                {t("actions.edit")}
-              </Link>
-            </Button>
-          ) : null}
-          {canDel ? (
-            <Button asChild size="sm" variant="destructive">
-              <Link to={`${base}/${org.id}/delete`}>
-                <Trash2 className="mr-1 size-4" />
-                {t("actions.delete")}
-              </Link>
-            </Button>
-          ) : null}
+          <RecordActions
+            editHref={canEdit ? `${base}/${org.id}/edit` : undefined}
+            deleteHref={canDel ? `${base}/${org.id}/delete` : undefined}
+            locked={locked}
+          />
         </div>
       </div>
+      {locked && (canEdit || canDel) ? <RecordLockedNotice /> : null}
 
       <header className="space-y-2">
         {crumbs.length > 0 ? (

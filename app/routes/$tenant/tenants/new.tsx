@@ -10,12 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
-import { createTenant } from "~/services/tenants.server";
+import { TenantSlugError, createTenant } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import { PLAN_OPTIONS, createTenantSchema } from "~/utils/schemas/tenant";
+import { createTenantSchema } from "~/utils/schemas/tenant";
 import type { Route } from "./+types/new";
 
 export const handle = { breadcrumb: "New Tenant" };
@@ -50,16 +50,23 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const ctx = buildServiceContext(request, user);
-  await createTenant(
-    {
-      ...submission.value,
-      address: submission.value.address ?? "",
-      city: submission.value.city ?? "",
-      state: submission.value.state ?? "",
-      initialAdminUserId: submission.value.initialAdminUserId,
-    },
-    ctx,
-  );
+  try {
+    await createTenant(
+      {
+        ...submission.value,
+        address: submission.value.address ?? "",
+        city: submission.value.city ?? "",
+        state: submission.value.state ?? "",
+        initialAdminUserId: submission.value.initialAdminUserId,
+      },
+      ctx,
+    );
+  } catch (error) {
+    if (error instanceof TenantSlugError) {
+      return data(submission.reply({ fieldErrors: { slug: [error.message] } }), { status: 400 });
+    }
+    throw error;
+  }
 
   return redirect(`/${params.tenant}/tenants`);
 }
@@ -209,25 +216,6 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
                 {fields.state.errors && <FieldError>{fields.state.errors}</FieldError>}
               </Field>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Subscription</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field>
-              <FieldLabel htmlFor={fields.subscriptionPlan.id}>Plan</FieldLabel>
-              <SelectField
-                meta={fields.subscriptionPlan}
-                options={PLAN_OPTIONS}
-                placeholder="Select plan"
-              />
-              {fields.subscriptionPlan.errors && (
-                <FieldError>{fields.subscriptionPlan.errors}</FieldError>
-              )}
-            </Field>
           </CardContent>
         </Card>
 

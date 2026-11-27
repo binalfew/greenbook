@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, data, redirect, useNavigate, useParams } from "react-router";
+import { FormError } from "~/components/directory/form-error";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -51,11 +52,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export async function action({ request, params }: Route.ActionArgs) {
   const formData = await request.formData();
   const reason = String(formData.get("reason") ?? "").trim() || undefined;
-  await dispatchDirectoryDelete(request, "person", "PERSON", params.personId, reason);
+  const outcome = await dispatchDirectoryDelete(
+    request,
+    "person",
+    "PERSON",
+    params.personId,
+    reason,
+  );
+  if (outcome.conflict) {
+    return data({ formError: outcome.conflict.message }, { status: 409 });
+  }
   return redirect(`/${params.tenant}/directory/people`);
 }
 
-export default function DeletePersonDialog({ loaderData, params }: Route.ComponentProps) {
+export default function DeletePersonDialog({
+  loaderData,
+  params,
+  actionData,
+}: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
@@ -88,6 +102,7 @@ export default function DeletePersonDialog({ loaderData, params }: Route.Compone
         ) : null}
 
         <Form method="post" className="space-y-3">
+          <FormError message={actionData?.formError} />
           <div className="space-y-2">
             <Label htmlFor="reason">{t("people.deleteReasonLabel")}</Label>
             <Textarea id="reason" name="reason" rows={3} />

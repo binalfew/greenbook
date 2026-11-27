@@ -42,7 +42,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export const meta: MetaFunction = () => {
-  return [{ title: "Setup Accreditation Account" }];
+  return [{ title: "Verify your email · Greenbook" }];
 };
 
 export default function VerifyRoute({ actionData }: Route.ComponentProps) {

@@ -13,7 +13,6 @@ import type { Theme } from "~/utils/theme.server";
 type TenantInfo = {
   name: string;
   slug: string;
-  plan: string;
   logoUrl?: string | null;
 };
 
@@ -89,7 +88,6 @@ export function DashboardLayout({
       notifications={recentNotifications}
       settingsChildren={settingsChildren}
       permissions={permissions}
-      enabledFeatures={enabledFeatures}
       hideSidebarTrigger={layoutMode === "navbar"}
       brandTenant={layoutMode === "navbar" ? (tenant ?? null) : undefined}
       brandIsSuperAdmin={isGlobalAdmin}

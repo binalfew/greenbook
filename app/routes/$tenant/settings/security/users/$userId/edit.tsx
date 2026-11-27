@@ -8,7 +8,7 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { RoleScope } from "~/generated/prisma/client";
-import { setUserTenantAssignment, updateUser } from "~/services/users.server";
+import { EmailTakenError, setUserTenantAssignment, updateUser } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { requireUserInScope } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
@@ -71,8 +71,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   // Always update the basic profile fields. The tenant assignment goes
   // through its own helper so role wiring + tenant bootstrapping happen too.
-  await updateUser(params.userId, rest, ctx);
-  if (isGlobalAdmin) {
+  try {
+    await updateUser(params.userId, rest, ctx);
+  } catch (error) {
+    if (!(error instanceof EmailTakenError)) throw error;
+    return data(submission.reply({ fieldErrors: { email: [error.message] } }), { status: 400 });
+  }
+  // A form without the tenant field is not a request to clear the tenant;
+  // only an explicit value ("" included) from the picker reassigns.
+  if (isGlobalAdmin && formData.has("tenantId")) {
     await setUserTenantAssignment(params.userId, targetTenantId, ctx);
   }
 

@@ -31,7 +31,7 @@ const LAYOUT_OPTIONS: LayoutOption[] = [
     value: "navbar",
     icon: LayoutDashboard,
     title: "Navbar only",
-    description: "Top navbar only. Navigate via the dashboard's module grid or ⌘K.",
+    description: "Top navbar only. Navigate via the dashboard's module grid.",
   },
 ];
 
@@ -46,12 +46,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const user = await requirePermission(request, "settings", "read");
 
   const grouped = await getAllSettings({ userId: user.id, tenantId: tenant.id });
-  // Order categories by the registry (skips any unknown DB-only categories at the end).
-  const knownCategories = getSettingCategories();
-  const sortedCategories = [
-    ...knownCategories.filter((c) => grouped[c]?.length),
-    ...Object.keys(grouped).filter((c) => !knownCategories.includes(c)),
-  ];
+  const sortedCategories = getSettingCategories().filter((c) => grouped[c]?.length);
 
   return data({
     tenantSlug: tenant.slug,
@@ -184,16 +179,8 @@ export default function SettingsIndex({ loaderData }: Route.ComponentProps) {
 
 function describeCategory(category: string): string {
   switch (category) {
-    case "general":
-      return "Application display and timezone defaults.";
-    case "auth":
-      return "Session, lockout, and password policy.";
-    case "upload":
-      return "File upload limits and allowed extensions.";
-    case "email":
-      return "Outgoing email sender identity.";
-    case "audit":
-      return "Audit log retention policy.";
+    case "i18n":
+      return "Languages offered in the language switcher.";
     default:
       return "Settings for this category.";
   }

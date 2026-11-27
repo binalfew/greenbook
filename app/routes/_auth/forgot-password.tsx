@@ -76,7 +76,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const response = await sendEmail({
     to: user.email,
-    subject: `Accreditation Password Reset`,
+    subject: "Greenbook password reset",
     react: <ForgotPasswordEmail onboardingUrl={verifyUrl.toString()} otp={otp} />,
   });
 
@@ -95,7 +95,7 @@ function ForgotPasswordEmail({ onboardingUrl, otp }: { onboardingUrl: string; ot
     <E.Html lang="en" dir="ltr">
       <E.Container>
         <h1>
-          <E.Text>Epic Notes Password Reset</E.Text>
+          <E.Text>Greenbook password reset</E.Text>
         </h1>
         <p>
           <E.Text>

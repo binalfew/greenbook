@@ -28,7 +28,6 @@ const toggleFlagSchema = z.object({
 const FLAG_LABELS: Record<string, string> = {
   FF_I18N: "Multi-language (i18n)",
   FF_PWA: "Progressive web app",
-  FF_WEBHOOKS: "Webhooks",
   FF_IMPERSONATION: "Impersonation",
   FF_NOTIFICATIONS: "Notifications",
   FF_NOTES: "Notes",

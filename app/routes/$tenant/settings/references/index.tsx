@@ -1,4 +1,4 @@
-import { Briefcase, ChevronRight, CircleUser, Languages, Map, Network, Users } from "lucide-react";
+import { Briefcase, ChevronRight, CircleUser, Map, Network, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
@@ -79,14 +79,6 @@ export default function ReferencesIndex({ loaderData, params }: Route.ComponentP
             description={t("titlesDescription")}
             to={`${base}/titles`}
             accent="bg-violet-500/10 text-violet-600 dark:text-violet-400"
-          />
-          <SurfaceCard
-            icon={Languages}
-            title={t("languages")}
-            value={counts.languages}
-            description={t("languagesDescription")}
-            to={`${base}/languages`}
-            accent="bg-amber-500/10 text-amber-600 dark:text-amber-400"
           />
           <SurfaceCard
             icon={Network}

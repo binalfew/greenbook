@@ -31,7 +31,9 @@ type Seeded = {
 
 async function arrange(): Promise<Seeded> {
   const status = await seedActiveUserStatus(prisma);
-  const tenant = await prisma.tenant.create({ data: buildTenant() });
+  // The slug matches the `/system/...` URL the requests below are sent to:
+  // directory routes act on the tenant named in the URL.
+  const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "system" }) });
   const passwordHash = await hash("test-password", 4);
 
   // Two distinct roles per tenant — mirrors the directory seed shape.
