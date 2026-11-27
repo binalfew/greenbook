@@ -323,6 +323,21 @@
     "NOT_PENDING": "This change is no longer waiting for review. Reload the page to see its current status.",
     "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review."
   },
+  "duplicates": {
+    "title": "Possible duplicates",
+    "saveHelp": "Nothing has been saved yet. Check that this is not one of the people below, then save anyway or cancel.",
+    "reviewHelp": "This person may already be in the directory. Check the people below before approving.",
+    "saveAnyway": "Save anyway",
+    "source": {
+      "PERSON": "published",
+      "DRAFT": "draft",
+      "PENDING": "waiting for review"
+    },
+    "matchedOn": {
+      "name": "same name",
+      "email": "same email"
+    }
+  },
   "status": {
     "published": "Published",
     "pendingYours": "Pending your review",
