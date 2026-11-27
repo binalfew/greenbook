@@ -1,3 +1,4 @@
+import { requireActingTenant } from "~/utils/acting-tenant.server";
 import { hasPermission, requireFeature, type AuthUser } from "~/utils/auth/require-auth.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import type { TenantServiceContext } from "~/utils/types.server";
@@ -14,6 +15,10 @@ export type DirectoryResource = "organization" | "person" | "position" | "positi
 
 export type DirectoryAccess = {
   user: AuthUser;
+  /**
+   * The acting tenant: the one named in the URL, which for a global admin
+   * need not be their home tenant. Scope every query and write by this.
+   */
   tenantId: string;
   /** User can direct-apply CRUD against the named resource (manager path). */
   canDirect: boolean;
@@ -31,7 +36,8 @@ export async function requireDirectoryAccess(
   request: Request,
   options: { write?: DirectoryResource } = {},
 ): Promise<DirectoryAccess> {
-  const { user, tenantId } = await requireFeature(request, "FF_DIRECTORY");
+  const { user, tenantId } = await requireActingTenant(request);
+  await requireFeature(request, "FF_DIRECTORY");
   const canDirect = options.write ? hasPermission(user, options.write, "write") : false;
   const canSubmit = hasPermission(user, "directory-change", "submit");
   const canReview = hasPermission(user, "directory-change", "read-all");
