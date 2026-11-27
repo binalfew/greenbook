@@ -90,7 +90,7 @@ greenbook/
 │   │   ├── directory/           # Change diff, status pill, assignment timeline, photo
 │   │   ├── form.tsx             # Conform wrapper + field wrappers
 │   │   └── pwa/                 # Install + update prompts
-│   ├── hooks/                   # use-base-prefix, use-cascade, use-mobile, use-online-status
+│   ├── hooks/                   # use-base-prefix, use-mobile, use-online-status
 │   ├── locales/                 # en/*.json + fr/*.json, registered in utils/i18n.ts
 │   ├── middleware/              # correlation.server.ts
 │   ├── routes/                  # File-based via react-router-auto-routes

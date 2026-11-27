@@ -57,9 +57,8 @@ Limits are keyed per-user when authenticated, per-IP otherwise. Health checks (`
 
 ## Sentry
 
-- `~/utils/monitoring/sentry.server.ts` — `@sentry/node` wrapper with `captureException`, `captureMessage`, `setUser`. No-ops when `SENTRY_DSN` is unset.
 - `~/utils/monitoring/sentry.client.ts` — `@sentry/browser` wrapper plus `initSentryClient(dsn)`. `root.tsx` invokes it in an effect with the DSN from `window.ENV.SENTRY_DSN`.
-- `server/sentry.js` — boot-time init. **Must** be imported at the very top of `server/app.ts` because `@sentry/node` patches global `http` / `fetch` on `init()`.
+- `server/sentry.js` — boot-time init plus `captureException` / `captureMessage`, which do nothing when `SENTRY_DSN` is unset. **Must** be imported at the very top of `server/app.ts` because `@sentry/node` patches global `http` / `fetch` on `init()`.
 
 Context propagation: pass `{ correlationId, tenantId, userId }` to `captureException` — they become tags (correlationId, tenantId) and user (userId); everything else goes into extras.
 
