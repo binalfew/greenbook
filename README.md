@@ -171,6 +171,7 @@ Required:
 - `SESSION_SECRET`
 - `HONEYPOT_SECRET`
 - `RESEND_API_KEY` (can be a dev placeholder — MSW intercepts in tests)
+- `EMAIL_FROM` (sender of every outgoing email)
 
 Optional but recommended in production:
 
