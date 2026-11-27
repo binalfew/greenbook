@@ -87,6 +87,7 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 | `SESSION_SECRET`  | `app/utils/auth/session.server.ts`, `app/utils/auth/csrf.server.ts`, `app/utils/auth/verification.server.ts`, `app/utils/auth/sso-state.server.ts`, `app/utils/toast.server.ts`, `app/utils/auth/auth.server.ts` | **Comma-separated list** (`new,old`) — greenbook signs with the first secret and verifies against all of them, so you can rotate without invalidating live sessions. See "Rotation" below. |
 | `HONEYPOT_SECRET` | `app/utils/auth/honeypot.server.ts`                                                                                                                                                                              | Used as the encryption seed for the honeypot anti-bot form field. Independent from SESSION_SECRET by design.                                                                               |
 | `RESEND_API_KEY`  | `app/utils/email/email.server.ts`                                                                                                                                                                                | Auth token for the Resend transactional email API. Verification emails, password resets, DSAR exports, tenant invites all flow through this.                                               |
+| `EMAIL_FROM`      | `app/utils/email/email.server.ts`                                                                                                                                                                                | Sender of every outgoing email, e.g. `Greenbook <address>`. The address must be on a domain verified in Resend.                                                                            |
 
 ##### Not applicable: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
 
@@ -204,6 +205,8 @@ HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
 
 # Resend transactional email. Create in the Resend dashboard.
 RESEND_API_KEY=re_REPLACE_WITH_REAL_KEY
+# Sender of every outgoing email. Must be on a domain verified in Resend.
+EMAIL_FROM="Greenbook <REPLACE_WITH_VERIFIED_SENDER_ADDRESS>"
 
 # ─── Public URL + service metadata ──────────────────────
 APP_URL=https://greenbook.africanunion.org

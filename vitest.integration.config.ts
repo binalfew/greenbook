@@ -39,6 +39,7 @@ export default defineConfig({
       SESSION_SECRET: "integration-test-secret-minimum-32-characters",
       HONEYPOT_SECRET: "integration-test-honeypot-secret",
       RESEND_API_KEY: "test-resend-key",
+      EMAIL_FROM: "Greenbook Test <no-reply@greenbook.test>",
       NODE_ENV: "test",
     },
   },
