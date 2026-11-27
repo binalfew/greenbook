@@ -5,6 +5,7 @@ import { writeAudit } from "~/utils/auth/audit.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { addTenantToNewTenantFlags } from "~/utils/config/tenant-flag-membership.server";
 import { prisma } from "~/utils/db/db.server";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import {
   DUPLICATE_SLUG_MESSAGE,
@@ -52,13 +53,19 @@ export function slugify(name: string): string {
   return base || "tenant";
 }
 
+const SLUG_ERROR_MESSAGES = {
+  reserved: RESERVED_SLUG_MESSAGE,
+  taken: DUPLICATE_SLUG_MESSAGE,
+  system: "The system tenant's slug cannot be changed",
+};
+
 /**
  * A slug the tenant cannot have, for a reason the admin can fix. The message
  * is safe to show next to the slug field.
  */
 export class TenantSlugError extends Error {
-  constructor(public readonly reason: "reserved" | "taken") {
-    super(reason === "reserved" ? RESERVED_SLUG_MESSAGE : DUPLICATE_SLUG_MESSAGE);
+  constructor(public readonly reason: "reserved" | "taken" | "system") {
+    super(SLUG_ERROR_MESSAGES[reason]);
   }
 }
 
@@ -255,6 +262,11 @@ export async function updateTenant(
   if (!existing) throw new Error("Tenant not found");
 
   if (input.slug && input.slug !== existing.slug) {
+    // The system tenant is recognised by its slug: every rule that protects
+    // it, and the seed that creates it, would lose track of it under another.
+    if (existing.slug === SYSTEM_TENANT_SLUG) {
+      throw new TenantSlugError("system");
+    }
     await assertSlugAvailable(input.slug, id);
   }
 
@@ -302,7 +314,7 @@ export async function deleteTenant(id: string, ctx: TenantServiceContext): Promi
   });
   if (!existing) throw new Error("Tenant not found");
 
-  if (existing.slug === "system") {
+  if (existing.slug === SYSTEM_TENANT_SLUG) {
     throw new TenantDeleteError("The system tenant cannot be deleted.");
   }
   // Also covers the acting admin's own home tenant, and means no account is

@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { getTenantWithCounts } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Details" };
@@ -70,12 +71,14 @@ export default function TenantDetailPage({ loaderData }: Route.ComponentProps) {
               Edit
             </Link>
           </Button>
-          <Button variant="destructive" size="sm" asChild>
-            <Link to={`${basePrefix}/tenants/${tenant.id}/delete`}>
-              <Trash2 className="mr-1.5 size-3.5" />
-              Delete
-            </Link>
-          </Button>
+          {tenant.slug !== SYSTEM_TENANT_SLUG && (
+            <Button variant="destructive" size="sm" asChild>
+              <Link to={`${basePrefix}/tenants/${tenant.id}/delete`}>
+                <Trash2 className="mr-1.5 size-3.5" />
+                Delete
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

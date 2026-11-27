@@ -6,6 +6,7 @@ import { Badge } from "~/components/ui/badge";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { listTenantsPaginatedWithCounts } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Tenants" };
@@ -150,6 +151,7 @@ export default function TenantsListPage({ loaderData }: Route.ComponentProps) {
             icon: Trash2,
             href: (row) => `${base}/tenants/${row.id}/delete`,
             variant: "destructive",
+            visible: (row) => row.slug !== SYSTEM_TENANT_SLUG,
           },
         ]}
         pagination={pagination}

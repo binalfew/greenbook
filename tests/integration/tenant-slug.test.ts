@@ -154,6 +154,18 @@ describe("editing a tenant", () => {
     expect(result.status).toBe(302);
   });
 
+  it("refuses to change the system tenant's slug", async () => {
+    const { session, system } = await arrange();
+
+    const result = await editTenant(session, system.id, { slug: "platform", name: "Platform" });
+
+    expect(result.status).toBe(400);
+    expect(result.slugErrors).toEqual(["The system tenant's slug cannot be changed"]);
+    const saved = await prisma.tenant.findUniqueOrThrow({ where: { id: system.id } });
+    expect(saved.slug).toBe("system");
+    expect(saved.name).not.toBe("Platform");
+  });
+
   it.each(["healthz", "sso"])("shows a slug error for the reserved slug %s", async (slug) => {
     const { session } = await arrange();
     const tenant = await prisma.tenant.create({ data: buildTenant({ slug: "medical" }) });

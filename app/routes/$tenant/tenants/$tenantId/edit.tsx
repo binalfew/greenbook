@@ -12,6 +12,7 @@ import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import { updateTenantSchema } from "~/utils/schemas/tenant";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 import type { Route } from "./+types/edit";
 
 export const handle = { breadcrumb: "Edit" };
@@ -57,6 +58,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 export default function EditTenantPage({ loaderData, actionData }: Route.ComponentProps) {
   const { tenant } = loaderData;
   const basePrefix = useBasePrefix();
+  const isSystemTenant = tenant.slug === SYSTEM_TENANT_SLUG;
 
   const { form, fields } = useForm(updateTenantSchema, {
     lastResult: actionData,
@@ -99,10 +101,16 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
 
             <Field>
               <FieldLabel htmlFor={fields.slug.id}>URL slug</FieldLabel>
-              <Input {...getInputProps(fields.slug, { type: "text" })} key={fields.slug.key} />
+              <Input
+                {...getInputProps(fields.slug, { type: "text" })}
+                key={fields.slug.key}
+                readOnly={isSystemTenant}
+              />
               {fields.slug.errors && <FieldError>{fields.slug.errors}</FieldError>}
               <p className="text-muted-foreground mt-1 text-xs">
-                Changing the slug will break existing tenant URLs.
+                {isSystemTenant
+                  ? "The system tenant's slug cannot be changed."
+                  : "Changing the slug will break existing tenant URLs."}
               </p>
             </Field>
 
