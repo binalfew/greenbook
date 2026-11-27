@@ -60,20 +60,17 @@ async function arrange(): Promise<Arranged> {
     },
   });
   const orgTypeA = await prisma.organizationType.create({
-    data: { tenantId: tenantA.id, code: "ROOT", name: "Root", level: 0 },
+    data: { code: "ROOT", name: "Root", level: 0 },
   });
-  const orgTypeB = await prisma.organizationType.create({
-    data: { tenantId: tenantB.id, code: "ROOT", name: "Root", level: 0 },
-  });
+  const orgTypeB = orgTypeA;
   const posTypeA = await prisma.positionType.create({
-    data: { tenantId: tenantA.id, code: "DIRECTOR", name: "Director", hierarchyLevel: 3 },
+    data: { code: "DIRECTOR", name: "Director", hierarchyLevel: 3 },
   });
   const rg = await prisma.regionalGroup.create({
-    data: { tenantId: tenantA.id, code: "EAST", name: "Eastern Africa" },
+    data: { code: "EAST", name: "Eastern Africa" },
   });
   const memberStateA = await prisma.memberState.create({
     data: {
-      tenantId: tenantA.id,
       fullName: "Ethiopia",
       abbreviation: "ET",
       dateJoined: new Date("1963-05-25"),
@@ -405,12 +402,9 @@ describe("public directory: PII strip for people", () => {
 
   it("omits people from opt-out tenants", async () => {
     const a = await arrange();
-    const rgB = await prisma.regionalGroup.create({
-      data: { tenantId: a.tenantB.id, code: "EAST", name: "Eastern Africa" },
-    });
+    const rgB = await prisma.regionalGroup.findFirstOrThrow({ where: { code: "EAST" } });
     const msB = await prisma.memberState.create({
       data: {
-        tenantId: a.tenantB.id,
         fullName: "Kenya",
         abbreviation: "KE",
         dateJoined: new Date("1963-12-13"),

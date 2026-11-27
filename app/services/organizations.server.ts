@@ -230,9 +230,9 @@ export async function assertNoCycle(
   }
 }
 
-async function assertReferencedOrganizationType(typeId: string, tenantId: string, db: Db) {
+async function assertReferencedOrganizationType(typeId: string, db: Db) {
   const row = await db.organizationType.findFirst({
-    where: { id: typeId, tenantId, deletedAt: null },
+    where: { id: typeId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {
@@ -292,7 +292,7 @@ export async function _applyCreateOrg(
   tx?: Prisma.TransactionClient,
 ) {
   const db: Db = tx ?? prisma;
-  await assertReferencedOrganizationType(payload.typeId, tenantId, db);
+  await assertReferencedOrganizationType(payload.typeId, db);
   if (payload.parentId) await assertReferencedParent(payload.parentId, tenantId, db);
 
   logger.info({ tenantId, userId: ctx.userId, name: payload.name }, "applying CREATE organization");
@@ -317,7 +317,7 @@ export async function _applyUpdateOrg(
   });
   if (!existing) throw new OrganizationError("Organization not found", 404, "NOT_FOUND");
 
-  await assertReferencedOrganizationType(payload.typeId, tenantId, db);
+  await assertReferencedOrganizationType(payload.typeId, db);
   if (payload.parentId) {
     await assertReferencedParent(payload.parentId, tenantId, db);
     await assertNoCycle(id, payload.parentId, tenantId, tx);

@@ -8,20 +8,15 @@ import {
   getOrganizationType,
   ReferenceDataError,
 } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
-import { buildServiceContext } from "~/utils/request-context.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import type { Route } from "./+types/$orgTypeId.delete";
 
 export const handle = { breadcrumb: "Delete" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requireReferenceDataAdmin(request);
   try {
-    const organizationType = await getOrganizationType(params.orgTypeId, tenantId);
+    const organizationType = await getOrganizationType(params.orgTypeId);
     return data({ organizationType });
   } catch (err) {
     if (err instanceof ReferenceDataError) {
@@ -32,13 +27,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "reference-data", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
-  const ctx = buildServiceContext(request, user, tenantId);
-  await deleteOrganizationType(params.orgTypeId, ctx);
+  await requireReferenceDataAdmin(request);
+  await deleteOrganizationType(params.orgTypeId);
   return redirect(`/${params.tenant}/settings/references/organization-types`);
 }
 

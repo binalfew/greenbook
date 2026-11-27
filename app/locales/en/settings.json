@@ -51,5 +51,17 @@
   "end": "End",
   "editSettingTitle": "Edit {{label}}",
   "currentValueLabel": "Current value",
-  "defaultValueLabel": "Default"
+  "defaultValueLabel": "Default",
+  "tenantInitialUserTitle": "Initial user",
+  "tenantInitialUserHelp": "Optionally move a user who belongs to no tenant into this tenant as its first focal person or manager. Leave empty to create the tenant with no members; you can assign users later from the user edit form.",
+  "tenantInitialUserLabel": "User",
+  "tenantInitialUserNone": "— None (assign later) —",
+  "tenantInitialUserPlaceholder": "Select user",
+  "tenantInitialUserEmpty": "No users without a tenant are available. Create a user first, or leave this empty and assign someone later.",
+  "tenantInitialUserRoleLabel": "Role",
+  "tenantInitialUserRolePlaceholder": "Select role",
+  "tenantInitialUserRole_focal": "Focal person",
+  "tenantInitialUserRoleHelp_focal": "Registers records and submits them for review",
+  "tenantInitialUserRole_manager": "Manager",
+  "tenantInitialUserRoleHelp_manager": "Approves submissions and edits records directly"
 }

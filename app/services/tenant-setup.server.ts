@@ -1,88 +1,48 @@
-import { prisma } from "~/utils/db/db.server";
+import type { Prisma } from "~/generated/prisma/client";
+import { INITIAL_USER_ROLES, type InitialUserRole } from "~/utils/schemas/tenant";
 
-export type BootstrapResult = {
-  /** Canonical platform `admin` role id (GLOBAL scope). */
-  adminRoleId: string;
-  /** Canonical `manager` role id (TENANT scope). Was the per-tenant "admin"
-   *  before the role consolidation. Tenant onboarding flows that used to
-   *  attach the initial admin to a tenant-scoped admin role now attach them
-   *  to `manager` instead. */
-  managerRoleId: string;
-  /** Canonical `focal` role id (TENANT scope). */
-  focalRoleId: string;
-  /** Canonical `user` role id (GLOBAL scope). */
-  userRoleId: string;
-};
+export type InitialUser = { userId: string; role: InitialUserRole };
 
 /**
- * Resolve the four canonical platform-wide role ids: `admin`, `manager`,
- * `focal`, `user`. All four exist as a single row each (tenantId = null) and
- * are seeded by `prisma/seed.ts`.
- *
- * Throws if the seed has not been applied — callers can rely on the four
- * roles being present in any environment that has been initialised.
+ * The user picked as a new tenant's initial user cannot be placed in it, for
+ * a reason the admin can fix. The message is safe to show next to the field.
  */
-async function getCanonicalRoleIds(): Promise<BootstrapResult> {
-  const roles = await prisma.role.findMany({
-    where: { tenantId: null, name: { in: ["admin", "manager", "focal", "user"] } },
-    select: { id: true, name: true },
-  });
-  const byName = new Map(roles.map((r) => [r.name, r.id] as const));
-  const missing = ["admin", "manager", "focal", "user"].filter((n) => !byName.has(n));
-  if (missing.length > 0) {
-    throw new Error(
-      `Canonical roles missing from database: ${missing.join(", ")}. ` +
-        `Run \`npm run db:seed\` to provision them.`,
-    );
+export class InitialUserError extends Error {
+  constructor() {
+    super("This user is no longer available. Choose a user who belongs to no tenant.");
   }
-  return {
-    adminRoleId: byName.get("admin")!,
-    managerRoleId: byName.get("manager")!,
-    focalRoleId: byName.get("focal")!,
-    userRoleId: byName.get("user")!,
-  };
 }
 
 /**
- * Tenant initialisation hook. With the role consolidation, this no longer
- * creates per-tenant role rows — there are exactly four global Role rows for
- * the whole platform. Tenant creation now does no role plumbing at all.
+ * Make an existing tenantless user a member of a tenant as its focal person
+ * or manager. Their other roles are kept, so they stay a directory reader.
  *
- * The function is preserved as a thin shim for two reasons:
- *   1. Existing callers (`signup`, `createTenant`, `setUserTenantAssignment`)
- *      continue to attach an "initial manager" to the tenant via this entry
- *      point.
- *   2. Future tenant-scoped initialisation (default settings, sample data,
- *      welcome notifications) can hang off this hook.
- *
- * `initialAdminUserId` (when provided) attaches the user to the canonical
- * `manager` role — that's the consolidated successor of the old per-tenant
- * `admin`. To make someone a platform admin, grant the global `admin` role
- * via the user-roles UI.
+ * Runs on the caller's transaction, so a tenant is never left behind when its
+ * initial user turns out to be unusable.
  */
-export async function bootstrapNewTenant(args: {
-  tenantId: string;
-  initialAdminUserId?: string;
-}): Promise<BootstrapResult> {
-  const { initialAdminUserId } = args;
-  const canonical = await getCanonicalRoleIds();
+export async function placeInitialUser(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  { userId, role }: InitialUser,
+): Promise<void> {
+  // The condition is part of the write, so a user who joined a tenant or was
+  // deleted since the form was loaded is refused rather than moved.
+  const moved = await tx.user.updateMany({
+    where: { id: userId, tenantId: null, deletedAt: null },
+    data: { tenantId },
+  });
+  if (moved.count !== 1) throw new InitialUserError();
 
-  if (initialAdminUserId) {
-    // Idempotent: skip if the manager role is already assigned.
-    const existing = await prisma.userRole.findFirst({
-      where: {
-        userId: initialAdminUserId,
-        roleId: canonical.managerRoleId,
-        eventId: null,
-      },
-      select: { id: true },
-    });
-    if (!existing) {
-      await prisma.userRole.create({
-        data: { userId: initialAdminUserId, roleId: canonical.managerRoleId },
-      });
-    }
+  const roles = await tx.role.findMany({
+    where: { tenantId: null, name: { in: [...INITIAL_USER_ROLES] } },
+    select: { id: true, name: true },
+  });
+  const chosen = roles.find((r) => r.name === role);
+  if (!chosen) {
+    throw new Error(`Role "${role}" is missing. Run \`npm run db:seed\` to provision it.`);
   }
 
-  return canonical;
+  // Exactly one of focal / manager: the one the admin chose.
+  await tx.userRole.deleteMany({ where: { userId, roleId: { in: roles.map((r) => r.id) } } });
+  await tx.userRole.create({ data: { userId, roleId: chosen.id } });
 }

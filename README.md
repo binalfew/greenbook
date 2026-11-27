@@ -5,7 +5,7 @@ A production-ready template for building multi-tenant SaaS applications on React
 ## What you get, out of the box
 
 - **Multi-tenancy** — every app-facing route lives under `$tenant/` with tenant isolation enforced at the service layer.
-- **Auth + RBAC** — cookie sessions with DB backing, 2FA (TOTP + recovery codes), API keys, impersonation, `requirePermission` / `requireRole` / `requireAnyRole` / `requireFeature` helpers, password history.
+- **Auth + RBAC** — cookie sessions with DB backing, API keys, impersonation, `requirePermission` / `requireRole` / `requireAnyRole` / `requireFeature` helpers, password history.
 - **SSO** — OpenID Connect (Okta, Azure AD, Google, custom) + SAML 2.0, with a full admin UI and auto-provisioning.
 - **Privacy** — DSAR workflow (ACCESS / RECTIFICATION / ERASURE / etc.) + consent records + audit-log viewer with CSV export.
 - **Events + jobs** — in-process Postgres-backed job queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain events, SSE.
@@ -84,7 +84,7 @@ react-router/
 │   ├── locales/                 # en/*.json + fr/*.json, registered in utils/i18n.ts
 │   ├── middleware/              # correlation.server.ts
 │   ├── routes/                  # File-based via react-router-auto-routes
-│   │   ├── _auth/               # login, signup, 2fa, sso, accept-invite
+│   │   ├── _auth/               # login, signup, sso, accept-invite
 │   │   └── $tenant/             # Tenant-scoped app (layout + settings + notes + logs)
 │   ├── services/                # Business logic (one file per domain, *.server.ts)
 │   ├── utils/
@@ -151,7 +151,6 @@ Everything gateable is behind a flag. Inspect them in the UI at `/$tenant/settin
 
 | Key                | Default | Scope  | What it gates                                      |
 | ------------------ | ------- | ------ | -------------------------------------------------- |
-| `FF_TWO_FACTOR`    | on      | global | TOTP setup + verify + recovery codes               |
 | `FF_IMPERSONATION` | off     | global | Admin-as-user session switching                    |
 | `FF_REST_API`      | off     | tenant | `/api/*` API-key authenticated routes              |
 | `FF_SSE`           | on      | tenant | Server-sent events (notifications + domain events) |

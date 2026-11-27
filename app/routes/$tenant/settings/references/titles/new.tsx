@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { data } from "react-router";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import { TitleEditor } from "./+shared/title-editor";
 import type { Route } from "./+types/new";
 
@@ -9,7 +9,7 @@ export const handle = { breadcrumb: "New" };
 export { action } from "./+shared/title-editor.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requirePermission(request, "reference-data", "write");
+  await requireReferenceDataAdmin(request);
   return data({});
 }
 

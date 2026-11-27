@@ -25,7 +25,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       select: { id: true, name: true, acronym: true },
     }),
     prisma.positionType.findMany({
-      where: { tenantId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: [{ hierarchyLevel: "asc" }, { name: "asc" }],
       select: { id: true, name: true, code: true },
     }),

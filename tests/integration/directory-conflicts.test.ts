@@ -80,13 +80,13 @@ async function arrange() {
   });
 
   const orgType = await prisma.organizationType.create({
-    data: { tenantId: tenant.id, code: "ROOT", name: "Root", level: 0 },
+    data: { code: "ROOT", name: "Root", level: 0 },
   });
   const org = await prisma.organization.create({
     data: { tenantId: tenant.id, name: "Commission", typeId: orgType.id },
   });
   const positionType = await prisma.positionType.create({
-    data: { tenantId: tenant.id, code: "DIR", name: "Director" },
+    data: { code: "DIR", name: "Director" },
   });
   const position = await prisma.position.create({
     data: {
@@ -279,7 +279,6 @@ describe("directory conflicts return a form-level message", () => {
     const a = await arrange();
     const memberState = await prisma.memberState.create({
       data: {
-        tenantId: a.tenantId,
         fullName: "Testland",
         abbreviation: "TL",
         dateJoined: new Date("1963-05-25"),
