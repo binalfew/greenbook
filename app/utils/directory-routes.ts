@@ -25,6 +25,17 @@ export function directoryEntitySegment(entity: DirectoryEntity): string {
 // `dispatchDirectoryChange`, which re-saves that draft instead of creating one.
 export const DRAFT_PARAM = "draft";
 
+/** The author's own submissions list (drafts and everything they sent for review). */
+export function submissionsPath(tenantSlug: string): string {
+  return `/${tenantSlug}/directory/submissions`;
+}
+
+/**
+ * What the submit-drafts action reports when at least one draft went to
+ * review; `SubmittedNotice` renders it.
+ */
+export type SubmittedConfirmation = { count: number; submissionsHref: string };
+
 /** Where the author goes after saving a draft: their drafts, ready to submit. */
 export function draftsPath(tenantSlug: string): string {
   return `/${tenantSlug}/directory/submissions?status=DRAFT`;

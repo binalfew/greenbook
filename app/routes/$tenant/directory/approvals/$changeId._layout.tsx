@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, Outlet, data, useFetcher } from "react-router";
 import { ChangeDiff } from "~/components/directory/change-diff";
 import { ChangeStatusPill } from "~/components/directory/change-status-pill";
+import { SubmittedNotice } from "~/components/directory/submitted-notice";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -14,7 +15,11 @@ import {
   type BatchResult,
 } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
-import { directoryEntitySegment, draftEditPath } from "~/utils/directory-routes";
+import {
+  directoryEntitySegment,
+  draftEditPath,
+  type SubmittedConfirmation,
+} from "~/utils/directory-routes";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$changeId._layout";
 
@@ -62,7 +67,11 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
   // The loader only ever returns a draft to its author.
   const isDraft = change.status === "DRAFT";
   const draftEditHref = isDraft ? draftEditPath(params.tenant, change) : null;
-  const submitFetcher = useFetcher<{ result: BatchResult | null; summary: string }>();
+  const submitFetcher = useFetcher<{
+    result: BatchResult | null;
+    summary: string;
+    confirmation: SubmittedConfirmation | null;
+  }>();
   const submitFailure = submitFetcher.data
     ? (submitFetcher.data.result?.failed[0]?.message ??
       (submitFetcher.data.result ? null : submitFetcher.data.summary))
@@ -144,6 +153,8 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
           ) : null}
         </div>
       </div>
+
+      <SubmittedNotice confirmation={submitFetcher.data?.confirmation} />
 
       {submitFailure ? (
         <p role="alert" className="text-destructive text-sm">

@@ -254,6 +254,12 @@
       "submitSelected_one": "Soumettre {{count}} brouillon",
       "submitSelected_other": "Soumettre {{count}} brouillons"
     },
+    "submitted": {
+      "title_one": "Soumis pour revue",
+      "title_other": "{{count}} modifications soumises pour revue",
+      "description": "Rien n'est publié tant qu'un gestionnaire ne l'a pas approuvé.",
+      "link": "Voir mes soumissions"
+    },
     "discardDialog": {
       "title": "Supprimer ce brouillon ?",
       "description": "Le brouillon sera définitivement supprimé. L'enregistrement publié n'est pas modifié.",
