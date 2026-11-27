@@ -1,6 +1,5 @@
-# git invokes this hook with cwd = repo root; $1 is relative to that in the main
-# checkout and already absolute in a linked worktree.
-# Resolve $1 to an absolute path so both normal and merge commits validate.
+# git invokes this hook with cwd = repo root. $1 is relative to that in a normal
+# checkout and absolute in a linked worktree; accept both.
 case "$1" in
   /*) MSG_FILE="$1" ;;
   *) MSG_FILE="$PWD/$1" ;;
