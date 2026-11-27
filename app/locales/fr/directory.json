@@ -323,6 +323,21 @@
     "NOT_PENDING": "Cette modification n'est plus en attente de revue. Rechargez la page pour voir son statut actuel.",
     "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue."
   },
+  "duplicates": {
+    "title": "Doublons possibles",
+    "saveHelp": "Rien n'a encore été enregistré. Vérifiez qu'il ne s'agit pas de l'une des personnes ci-dessous, puis enregistrez quand même ou annulez.",
+    "reviewHelp": "Cette personne figure peut-être déjà dans l'annuaire. Vérifiez les personnes ci-dessous avant d'approuver.",
+    "saveAnyway": "Enregistrer quand même",
+    "source": {
+      "PERSON": "publiée",
+      "DRAFT": "brouillon",
+      "PENDING": "en attente de revue"
+    },
+    "matchedOn": {
+      "name": "même nom",
+      "email": "même e-mail"
+    }
+  },
   "status": {
     "published": "Publié",
     "pendingYours": "En attente de votre revue",

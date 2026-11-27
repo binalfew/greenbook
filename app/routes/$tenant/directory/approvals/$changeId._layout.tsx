@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, Outlet, data, useFetcher } from "react-router";
 import { ChangeDiff } from "~/components/directory/change-diff";
 import { ChangeStatusPill } from "~/components/directory/change-status-pill";
+import { PossibleDuplicates } from "~/components/directory/possible-duplicates";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -13,6 +14,10 @@ import {
   getChange,
   type BatchResult,
 } from "~/services/directory-changes.server";
+import {
+  findPossibleDuplicatePeople,
+  type DuplicateCandidate,
+} from "~/services/person-duplicates.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import { directoryEntitySegment, draftEditPath } from "~/utils/directory-routes";
 import { formatDate } from "~/utils/format-date";
@@ -45,12 +50,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const backHref = canReview
     ? `/${params.tenant}/directory/approvals`
     : `/${params.tenant}/directory/submissions`;
-  return data({ change, diffs, currentUserId: user.id, canReview, backHref });
+  // The advisory check the person editor runs on save, repeated here so a
+  // reviewer sees it before approving. Only while the change is still open.
+  const isOpenPersonChange =
+    change.entityType === "PERSON" &&
+    (change.operation === "CREATE" || change.operation === "UPDATE") &&
+    (change.status === "DRAFT" || change.status === "PENDING");
+  const possibleDuplicates = isOpenPersonChange
+    ? await findPossibleDuplicatePeople(tenantId, change.payload as DuplicateCandidate, {
+        personId: change.entityId,
+        changeId: change.id,
+      })
+    : [];
+  return data({ change, diffs, currentUserId: user.id, canReview, backHref, possibleDuplicates });
 }
 
 export default function ChangeDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
-  const { change, diffs, currentUserId, canReview, backHref } = loaderData;
+  const { change, diffs, currentUserId, canReview, backHref, possibleDuplicates } = loaderData;
   const base = `/${params.tenant}/directory/approvals`;
   const entitySegment = directoryEntitySegment(change.entityType);
   const entityHref = change.entityId
@@ -163,6 +180,11 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
         </div>
         <p className="text-muted-foreground text-sm">{t("changes.detailSubtitle")}</p>
       </header>
+
+      <PossibleDuplicates
+        duplicates={possibleDuplicates}
+        peopleHref={`/${params.tenant}/directory/people`}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
