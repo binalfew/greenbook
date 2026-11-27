@@ -379,7 +379,9 @@ describe("reopening a rejected request", () => {
       params: { tenant: a.slug },
       context: {},
     });
-    expect(payloadOf<{ summary: string }>(approved).summary).toBe("1 approved");
+    expect(payloadOf<{ result: { succeeded: unknown[] } }>(approved).result.succeeded).toHaveLength(
+      1,
+    );
 
     const orgs = await prisma.organization.findMany({ where: { tenantId: a.tenantId } });
     expect(orgs.map((o) => [o.name, o.acronym])).toEqual([["Bureau of Statistics", "BOS"]]);

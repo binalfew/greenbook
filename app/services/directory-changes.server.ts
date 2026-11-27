@@ -1178,20 +1178,6 @@ export async function rejectChanges(
   return runBatch(ids, (id) => rejectChange(id, { notes }, ctx), ctx);
 }
 
-// Compose a short "N approved · M skipped · K failed" summary from a
-// BatchResult for inline feedback after a batch action. Callers pass the
-// verb that matches the action (approved | rejected | withdrawn).
-export function formatBatchSummary(
-  result: BatchResult,
-  verb: "approved" | "rejected" | "withdrawn" | "submitted",
-): string {
-  const parts: string[] = [];
-  if (result.succeeded.length > 0) parts.push(`${result.succeeded.length} ${verb}`);
-  if (result.skipped.length > 0) parts.push(`${result.skipped.length} skipped`);
-  if (result.failed.length > 0) parts.push(`${result.failed.length} failed`);
-  return parts.join(" · ") || "No changes processed";
-}
-
 // Shared batch loop: one authoritative call per id. NOT_FOUND / NOT_PENDING
 // surface as ChangeRequestError codes from the inner call — we bucket them
 // as `skipped` rather than `failed` so the UI summary is "5 approved, 0

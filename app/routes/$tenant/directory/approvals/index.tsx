@@ -2,7 +2,9 @@ import { ListChecks, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { data, redirect, useFetcher } from "react-router";
+import { BatchOutcome } from "~/components/directory/batch-outcome";
 import { useChangeColumns } from "~/components/directory/change-row-columns";
+import { FormError } from "~/components/directory/form-error";
 import { DataTable } from "~/components/data-table/data-table";
 import type { FilterDef, PaginationMeta } from "~/components/data-table/data-table-types";
 import { Button } from "~/components/ui/button";
@@ -20,6 +22,8 @@ import { listPendingChanges } from "~/services/directory-changes.server";
 import { directoryEntityValues } from "~/utils/schemas/directory";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import type { Route } from "./+types/index";
+import type { action as batchApproveAction } from "./batch-approve";
+import type { action as batchRejectAction } from "./batch-reject";
 
 export const handle = { breadcrumb: "Pending" };
 
@@ -66,8 +70,8 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectNotes, setRejectNotes] = useState("");
-  const approveFetcher = useFetcher<{ summary: string }>();
-  const rejectFetcher = useFetcher<{ summary: string }>();
+  const approveFetcher = useFetcher<typeof batchApproveAction>();
+  const rejectFetcher = useFetcher<typeof batchRejectAction>();
 
   // Selection is page-local: clear it whenever the user paginates or
   // changes filters so a stale id doesn't survive into the next batch.
@@ -75,9 +79,10 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
     setSelectedIds([]);
   }, [pagination.page, pagination.pageSize]);
 
-  // Close the reject dialog + reset notes once the server action finishes.
+  // Close the reject dialog + reset notes once the batch has run. A batch the
+  // server refused keeps the dialog open, with the reason shown in it.
   useEffect(() => {
-    if (rejectFetcher.state === "idle" && rejectFetcher.data?.summary) {
+    if (rejectFetcher.state === "idle" && rejectFetcher.data?.result) {
       setRejectOpen(false);
       setRejectNotes("");
     }
@@ -125,7 +130,9 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
         toolbarExtra={
           hasSelection ? (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">{selectedIds.length} selected</span>
+              <span className="text-muted-foreground text-xs">
+                {t("changes.selected", { count: selectedIds.length })}
+              </span>
               <approveFetcher.Form method="post" action={`${base}/batch-approve`}>
                 {selectedIds.map((id) => (
                   <input key={id} type="hidden" name="ids[]" value={id} />
@@ -154,10 +161,10 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
         }}
       />
 
-      {approveFetcher.data?.summary ? (
-        <p className="text-sm">{approveFetcher.data.summary}</p>
+      <BatchOutcome verb="approved" outcome={approveFetcher.data} />
+      {rejectFetcher.data?.result ? (
+        <BatchOutcome verb="rejected" outcome={rejectFetcher.data} />
       ) : null}
-      {rejectFetcher.data?.summary ? <p className="text-sm">{rejectFetcher.data.summary}</p> : null}
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
@@ -169,8 +176,9 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
             <DialogDescription>{t("changes.rejectDialog.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <FormError message={rejectFetcher.data?.error} />
             <div className="bg-muted rounded-md px-3 py-2 text-sm">
-              {selectedIds.length} selected
+              {t("changes.selected", { count: selectedIds.length })}
             </div>
             <div className="space-y-2">
               <Label htmlFor="batch-reject-notes">{t("changes.rejectDialog.notesLabel")}</Label>

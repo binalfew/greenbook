@@ -1,6 +1,7 @@
 import { Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, data, redirect, useNavigate, useParams } from "react-router";
+import { FormError } from "~/components/directory/form-error";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 } from "~/components/ui/dialog";
 import { withdrawChange } from "~/services/directory-changes.server";
 import { requireSubmitContext } from "~/utils/directory-access.server";
+import { directoryDialogConflict } from "~/utils/directory-submit.server";
 import type { Route } from "./+types/$changeId.withdraw";
 
 export const handle = { breadcrumb: "Withdraw" };
@@ -23,11 +25,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request, params }: Route.ActionArgs) {
   const { ctx } = await requireSubmitContext(request);
-  await withdrawChange(params.changeId, ctx);
+  try {
+    await withdrawChange(params.changeId, ctx);
+  } catch (err) {
+    return data({ error: directoryDialogConflict(request, err).message }, { status: 409 });
+  }
   return redirect(`/${params.tenant}/directory/submissions`);
 }
 
-export default function WithdrawChangeDialog({ params }: Route.ComponentProps) {
+export default function WithdrawChangeDialog({ params, actionData }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
@@ -46,7 +52,8 @@ export default function WithdrawChangeDialog({ params }: Route.ComponentProps) {
           <DialogDescription>{t("changes.withdrawDialog.description")}</DialogDescription>
         </DialogHeader>
 
-        <Form method="post">
+        <Form method="post" className="space-y-4">
+          <FormError message={actionData?.error} />
           <DialogFooter>
             <Button variant="outline" onClick={handleClose} type="button">
               {tc("cancel")}

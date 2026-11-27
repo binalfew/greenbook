@@ -15,7 +15,7 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { approveChange } from "~/services/directory-changes.server";
 import { requireApproveContext, requireReviewContext } from "~/utils/directory-access.server";
-import { directoryConflictFrom } from "~/utils/directory-submit.server";
+import { directoryDialogConflict } from "~/utils/directory-submit.server";
 import type { Route } from "./+types/$changeId.approve";
 
 export const handle = { breadcrumb: "Approve" };
@@ -32,9 +32,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   try {
     await approveChange(params.changeId, { notes }, ctx);
   } catch (err) {
-    const conflict = directoryConflictFrom(request, err);
-    if (!conflict) throw err;
-    return data({ formError: conflict.message }, { status: 409 });
+    return data({ formError: directoryDialogConflict(request, err).message }, { status: 409 });
   }
   return redirect(`/${params.tenant}/directory/approvals/${params.changeId}`);
 }

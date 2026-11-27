@@ -197,7 +197,6 @@ async function saveRename(
 }
 
 type SubmitResponse = {
-  summary: string;
   result: {
     succeeded: { id: string }[];
     failed: { id: string; code: string }[];
@@ -444,10 +443,9 @@ describe("drafts: submitting", () => {
     const two = await saveOrgDraft(a, a.focal.cookie, "Org Two");
     const three = await saveOrgDraft(a, a.focal.cookie, "Org Three");
 
-    const { result, summary } = await submitDrafts(a, a.focal.cookie, [one.id, two.id, three.id]);
+    const { result } = await submitDrafts(a, a.focal.cookie, [one.id, two.id, three.id]);
 
     expect(result.succeeded.map((s) => s.id)).toEqual([one.id, two.id, three.id]);
-    expect(summary).toBe("3 submitted");
     expect((await queueIds(a, a.manager.cookie)).sort()).toEqual([one.id, two.id, three.id].sort());
 
     const notifications = await prisma.notification.findMany({
@@ -482,7 +480,7 @@ describe("drafts: submitting", () => {
     const already = await saveOrgDraft(a, a.focal.cookie, "Already");
     await submitDrafts(a, a.focal.cookie, [already.id]);
 
-    const { result, summary } = await submitDrafts(a, a.focal.cookie, [
+    const { result } = await submitDrafts(a, a.focal.cookie, [
       mine.id,
       theirs.id,
       already.id,
@@ -495,7 +493,6 @@ describe("drafts: submitting", () => {
       { id: already.id, reason: "NOT_DRAFT" },
       { id: "does-not-exist", reason: "NOT_FOUND" },
     ]);
-    expect(summary).toBe("1 submitted · 3 skipped");
     const untouched = await prisma.changeRequest.findUniqueOrThrow({ where: { id: theirs.id } });
     expect(untouched.status).toBe("DRAFT");
   });
@@ -553,11 +550,10 @@ describe("drafts: submitting", () => {
     const live = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
     expect(live.name).toBe("Manager Rename");
 
-    const { result, summary } = await submitDrafts(a, a.focal.cookie, [draft.id]);
+    const { result } = await submitDrafts(a, a.focal.cookie, [draft.id]);
 
     expect(result.succeeded).toEqual([]);
     expect(result.failed).toMatchObject([{ id: draft.id, code: "VERSION_CONFLICT" }]);
-    expect(summary).toBe("1 failed");
     const row = await prisma.changeRequest.findUniqueOrThrow({ where: { id: draft.id } });
     expect(row.status).toBe("DRAFT");
     expect(await prisma.notification.count({ where: { tenantId: a.tenantId } })).toBe(0);
@@ -633,7 +629,9 @@ describe("drafts: through to approval", () => {
       params: { tenant: a.slug },
       context: {},
     });
-    expect(payloadOf<{ summary: string }>(approved).summary).toBe("2 approved");
+    expect(payloadOf<{ result: { succeeded: unknown[] } }>(approved).result.succeeded).toHaveLength(
+      2,
+    );
 
     const orgs = await prisma.organization.findMany({
       where: { tenantId: a.tenantId, deletedAt: null },

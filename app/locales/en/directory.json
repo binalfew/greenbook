@@ -300,7 +300,8 @@
       "title": "Reject this change?",
       "description": "The submitter will be notified. A reason is required.",
       "notesLabel": "Reason",
-      "confirm": "Reject"
+      "confirm": "Reject",
+      "reasonRequired": "A reason is required."
     },
     "withdrawDialog": {
       "title": "Withdraw this submission?",
@@ -315,7 +316,9 @@
       "failed_one": "{{count}} failed.",
       "failed_other": "{{count}} failed.",
       "skipped_one": "{{count}} skipped (no longer pending).",
-      "skipped_other": "{{count}} skipped (no longer pending)."
+      "skipped_other": "{{count}} skipped (no longer pending).",
+      "skippedDrafts_one": "{{count}} skipped (no longer a draft).",
+      "skippedDrafts_other": "{{count}} skipped (no longer a draft)."
     },
     "selfApprovedTag": "Self-approved",
     "reviewedBy": "Reviewed by {{name}} on {{date}}",
@@ -325,7 +328,9 @@
       "REVIEWED": "Reviewed",
       "SELF_APPROVED": "Self-approved"
     },
-    "metadata": "Metadata"
+    "metadata": "Metadata",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected"
   },
   "actions": {
     "submit": "Save as draft",
@@ -355,6 +360,9 @@
     "RECORD_CHANGED": "This record has changed since the request was made, so the request cannot be reopened. Open the record and make the change again.",
     "ALREADY_REOPENED": "This request has already been reopened. Continue with the draft or submission that followed it.",
     "NOT_REJECTED": "Only a rejected request can be reopened. Reload the page to see its current status.",
+    "EMPTY_BATCH": "Select at least one change.",
+    "BATCH_TOO_LARGE": "Too many changes selected. Select 100 or fewer and try again.",
+    "UNKNOWN": "This change could not be processed. Open it to see what is wrong.",
     "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review."
   },
   "duplicates": {

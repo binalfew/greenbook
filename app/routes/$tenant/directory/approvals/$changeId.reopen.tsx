@@ -11,10 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { ChangeRequestError, reopenRejectedChange } from "~/services/directory-changes.server";
+import { reopenRejectedChange } from "~/services/directory-changes.server";
 import { requireSubmitContext } from "~/utils/directory-access.server";
 import { draftEditPath } from "~/utils/directory-routes";
-import { directoryConflictFrom } from "~/utils/directory-submit.server";
+import { directoryDialogConflict } from "~/utils/directory-submit.server";
 import type { Route } from "./+types/$changeId.reopen";
 
 export const handle = { breadcrumb: "Reopen" };
@@ -33,16 +33,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     return redirect(
       draftEditPath(params.tenant, draft) ?? `/${params.tenant}/directory/approvals/${draft.id}`,
     );
-  } catch (error) {
-    if (error instanceof ChangeRequestError && error.code === "NOT_FOUND") {
-      throw new Response("Not Found", { status: 404 });
-    }
-    if (error instanceof ChangeRequestError && error.code === "NOT_SUBMITTER") {
-      throw new Response("Forbidden", { status: 403 });
-    }
-    const conflict = directoryConflictFrom(request, error);
-    if (!conflict) throw error;
-    return data({ error: conflict.message }, { status: 409 });
+  } catch (err) {
+    return data({ error: directoryDialogConflict(request, err).message }, { status: 409 });
   }
 }
 

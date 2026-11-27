@@ -300,7 +300,8 @@
       "title": "Rejeter cette modification ?",
       "description": "Le soumissionnaire sera notifié. Un motif est requis.",
       "notesLabel": "Motif",
-      "confirm": "Rejeter"
+      "confirm": "Rejeter",
+      "reasonRequired": "Un motif est requis."
     },
     "withdrawDialog": {
       "title": "Retirer cette soumission ?",
@@ -315,7 +316,9 @@
       "failed_one": "{{count}} échec.",
       "failed_other": "{{count}} échecs.",
       "skipped_one": "{{count}} ignorée (plus en attente).",
-      "skipped_other": "{{count}} ignorées (plus en attente)."
+      "skipped_other": "{{count}} ignorées (plus en attente).",
+      "skippedDrafts_one": "{{count}} ignorée (n'est plus un brouillon).",
+      "skippedDrafts_other": "{{count}} ignorées (ne sont plus des brouillons)."
     },
     "selfApprovedTag": "Auto-approuvé",
     "reviewedBy": "Revu par {{name}} le {{date}}",
@@ -325,7 +328,9 @@
       "REVIEWED": "Revu",
       "SELF_APPROVED": "Auto-approuvé"
     },
-    "metadata": "Métadonnées"
+    "metadata": "Métadonnées",
+    "selected_one": "{{count}} sélectionnée",
+    "selected_other": "{{count}} sélectionnées"
   },
   "actions": {
     "submit": "Enregistrer comme brouillon",
@@ -355,6 +360,9 @@
     "RECORD_CHANGED": "Cette fiche a changé depuis la demande : celle-ci ne peut donc pas être rouverte. Ouvrez la fiche et refaites la modification.",
     "ALREADY_REOPENED": "Cette demande a déjà été rouverte. Poursuivez avec le brouillon ou la soumission qui l'a suivie.",
     "NOT_REJECTED": "Seule une demande rejetée peut être rouverte. Rechargez la page pour voir son statut actuel.",
+    "EMPTY_BATCH": "Sélectionnez au moins une modification.",
+    "BATCH_TOO_LARGE": "Trop de modifications sélectionnées. Sélectionnez-en 100 au maximum et réessayez.",
+    "UNKNOWN": "Cette modification n'a pas pu être traitée. Ouvrez-la pour voir ce qui ne va pas.",
     "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue."
   },
   "duplicates": {

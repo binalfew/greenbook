@@ -9,6 +9,7 @@ import {
   getReopenedFrom,
   saveDraft,
   submitAndApply,
+  type BatchResult,
   type SubmitInput,
 } from "~/services/directory-changes.server";
 import {
@@ -44,6 +45,8 @@ const CONFLICT_CODES = [
   "RECORD_CHANGED",
   "ALREADY_REOPENED",
   "NOT_REJECTED",
+  "EMPTY_BATCH",
+  "BATCH_TOO_LARGE",
 ] as const;
 
 export type DirectoryConflictCode = (typeof CONFLICT_CODES)[number];
@@ -55,7 +58,16 @@ export type DirectorySubmitResult =
   | (DirectorySubmitOutcome & { conflict?: undefined })
   | { conflict: DirectoryConflict; change?: undefined; mode?: undefined };
 
-const CONFLICT_MESSAGES = { en: enDirectory.conflicts, fr: frDirectory.conflicts };
+const MESSAGES = { en: enDirectory, fr: frDirectory };
+
+/** The `directory` locale namespace in the request's language, for text composed on the server. */
+export function directoryMessages(request: Request) {
+  return MESSAGES[getLangFromRequest(request) ?? "en"];
+}
+
+function errorCode(err: unknown): unknown {
+  return err instanceof Error && "code" in err ? err.code : undefined;
+}
 
 /**
  * The conflict behind a thrown error, with its message in the request's
@@ -63,11 +75,67 @@ const CONFLICT_MESSAGES = { en: enDirectory.conflicts, fr: frDirectory.conflicts
  * must rethrow it).
  */
 export function directoryConflictFrom(request: Request, err: unknown): DirectoryConflict | null {
-  if (!(err instanceof Error) || !("code" in err)) return null;
-  const code = CONFLICT_CODES.find((c) => c === err.code);
+  const code = CONFLICT_CODES.find((c) => c === errorCode(err));
   if (!code) return null;
-  const lang = getLangFromRequest(request) ?? "en";
-  return { code, message: CONFLICT_MESSAGES[lang][code] };
+  return { code, message: directoryMessages(request).conflicts[code] };
+}
+
+/**
+ * For the action of a dialog that acts on one change request: the conflict to
+ * show on the dialog. A request the user cannot see becomes a 404 and one
+ * they may not act on a 403; anything that is not a known conflict is
+ * rethrown.
+ */
+export function directoryDialogConflict(request: Request, err: unknown): DirectoryConflict {
+  const code = errorCode(err);
+  if (code === "NOT_FOUND") throw new Response("Not Found", { status: 404 });
+  if (code === "NOT_SUBMITTER") throw new Response("Forbidden", { status: 403 });
+  const conflict = directoryConflictFrom(request, err);
+  if (!conflict) throw err;
+  return conflict;
+}
+
+/** What a batch action tells the page: which ids went through and why the others did not. */
+export type DirectoryBatchOutcome = {
+  succeeded: { id: string }[];
+  skipped: { id: string; reason: string }[];
+  failed: { id: string; code: string; message: string }[];
+};
+
+/**
+ * Run a batch action and describe the outcome in the request's language.
+ * `error` is set, with no `result`, when the whole batch was refused (nothing
+ * selected, too many selected).
+ */
+export async function runDirectoryBatch(
+  request: Request,
+  run: () => Promise<BatchResult>,
+): Promise<
+  | { result: DirectoryBatchOutcome; error: null; status: 200 }
+  | { result: null; error: string; status: 400 }
+> {
+  let result: BatchResult;
+  try {
+    result = await run();
+  } catch (err) {
+    const conflict = directoryConflictFrom(request, err);
+    if (!conflict) throw err;
+    return { result: null, error: conflict.message, status: 400 };
+  }
+  const { conflicts } = directoryMessages(request);
+  return {
+    result: {
+      succeeded: result.succeeded.map(({ id }) => ({ id })),
+      skipped: result.skipped.map(({ id, reason }) => ({ id, reason })),
+      failed: result.failed.map(({ id, code }) => ({
+        id,
+        code,
+        message: conflicts[CONFLICT_CODES.find((c) => c === code) ?? "UNKNOWN"],
+      })),
+    },
+    error: null,
+    status: 200,
+  };
 }
 
 /**
