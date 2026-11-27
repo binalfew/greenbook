@@ -1,6 +1,13 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["server.js", "vite.config.ts", "mocks/**/*", "prisma/**/*", "app/generated/**/*"],
+  "include": [
+    "server.js",
+    "vite.config.ts",
+    "mocks/**/*",
+    "prisma/**/*",
+    "app/generated/**/*",
+    "app/utils/config/tenant-flag-membership.server.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "strict": true,
