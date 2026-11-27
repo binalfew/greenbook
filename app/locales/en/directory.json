@@ -342,14 +342,6 @@
     "delete": "Delete",
     "back": "Back"
   },
-  "submission": {
-    "createdSubmittedForReview": "Submitted for review",
-    "updatedSubmittedForReview": "Your edit was submitted for review",
-    "deletedSubmittedForReview": "Your delete request was submitted for review",
-    "createdPublished": "Created and published",
-    "updatedPublished": "Updated and published",
-    "deletedPublished": "Deleted"
-  },
   "conflicts": {
     "PENDING_REQUEST_EXISTS": "This record already has a change waiting for review. It can be edited again once that change is approved, rejected or withdrawn.",
     "DRAFT_EXISTS": "You already have a draft for this record. Edit, submit or discard that draft first.",

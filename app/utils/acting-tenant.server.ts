@@ -1,5 +1,4 @@
 import { data } from "react-router";
-import { RoleScope } from "~/generated/prisma/client";
 import {
   requireAuth,
   requirePermission,
@@ -7,6 +6,7 @@ import {
   type PermissionAction,
   type PermissionResource,
 } from "~/utils/auth/require-auth.server";
+import { isGlobalAdmin } from "~/utils/auth/user-access.server";
 import { resolveTenant } from "~/utils/tenant.server";
 
 // Tenant-scoped pages live under `/:tenant/...` and act on that tenant — the
@@ -38,11 +38,11 @@ function tenantSlugFromUrl(request: Request): string {
 export async function requireActingTenant(request: Request): Promise<ActingTenant> {
   const user = await requireAuth(request);
   const tenant = await resolveTenant(tenantSlugFromUrl(request));
-  const isGlobalAdmin = user.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
-  if (!isGlobalAdmin && user.tenantId !== tenant.id) {
+  const globalAdmin = isGlobalAdmin(user);
+  if (!globalAdmin && user.tenantId !== tenant.id) {
     throw data({ error: "You do not have access to this tenant" }, { status: 403 });
   }
-  return { user, tenantId: tenant.id, isGlobalAdmin };
+  return { user, tenantId: tenant.id, isGlobalAdmin: globalAdmin };
 }
 
 /** `requirePermission`, scoped to the acting tenant. */

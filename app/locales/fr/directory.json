@@ -342,14 +342,6 @@
     "delete": "Supprimer",
     "back": "Retour"
   },
-  "submission": {
-    "createdSubmittedForReview": "Soumis pour revue",
-    "updatedSubmittedForReview": "Votre modification a été soumise pour revue",
-    "deletedSubmittedForReview": "Votre demande de suppression a été soumise",
-    "createdPublished": "Créé et publié",
-    "updatedPublished": "Mis à jour et publié",
-    "deletedPublished": "Supprimé"
-  },
   "conflicts": {
     "PENDING_REQUEST_EXISTS": "Cette fiche a déjà une modification en attente de revue. Elle pourra être modifiée à nouveau une fois cette modification approuvée, rejetée ou retirée.",
     "DRAFT_EXISTS": "Vous avez déjà un brouillon pour cette fiche. Modifiez, soumettez ou supprimez d'abord ce brouillon.",
