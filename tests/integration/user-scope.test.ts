@@ -6,7 +6,6 @@ import { action as deleteAction } from "~/routes/$tenant/settings/security/users
 import { action as editAction } from "~/routes/$tenant/settings/security/users/$userId/edit";
 import { loader as detailLoader } from "~/routes/$tenant/settings/security/users/$userId/index";
 import { action as rolesAction } from "~/routes/$tenant/settings/security/users/$userId/roles";
-import { action as inviteAction } from "~/routes/$tenant/settings/security/users/invite";
 import { loader as roleDetailLoader } from "~/routes/$tenant/settings/security/roles/$roleId/index";
 import { csrf } from "~/utils/auth/csrf.server";
 import { createSessionCookie } from "./helpers/session";
@@ -158,17 +157,10 @@ describe("user management is scoped to the actor's tenant", () => {
     expect(after.userRoles.map((ur) => ur.roleId)).toEqual([a.roles.admin.id]);
   });
 
-  it("manager cannot grant a GLOBAL role, directly or through an invitation", async () => {
+  it("manager cannot grant a GLOBAL role", async () => {
     const a = await arrange();
     const grant = await post(a.managerCookie, [["roleIds", a.roles.admin.id]]);
     expect(await statusOf(rolesAction(args(grant, { userId: a.colleague.id })))).toBe(403);
-
-    const invite = await post(a.managerCookie, [
-      ["email", "friend@test.com"],
-      ["roleIds", a.roles.admin.id],
-    ]);
-    expect(await statusOf(inviteAction(args(invite, {})))).toBe(403);
-    expect(await prisma.invitation.count()).toBe(0);
   });
 
   it("manager can still re-role a colleague in their own tenant", async () => {

@@ -41,13 +41,6 @@ export const assignRolesSchema = z.object({
   roleIds: z.array(z.string()).optional(),
 });
 
-export const inviteUserSchema = z.object({
-  email: emailField,
-  firstName: nameField.optional(),
-  lastName: nameField.optional(),
-  roleIds: z.array(z.string()).optional(),
-});
-
 export const createRoleSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   description: z.string().max(500).optional(),

@@ -17,7 +17,6 @@ const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   "forgot-password",
   "reset-password",
   "change-expired-password",
-  "accept-invite",
   "verify",
   "sso",
   // Cross-tenant directory

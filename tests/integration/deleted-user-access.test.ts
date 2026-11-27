@@ -55,8 +55,8 @@ describe("a deleted user loses access", () => {
   });
 
   it("a session that outlives the deletion is still refused", async () => {
-    // Sessions can be minted outside softDeleteUser (SSO callback, invite
-    // acceptance), so the resolvers must not rely on them having been removed.
+    // Sessions can be minted outside softDeleteUser (the SSO callback, for
+    // one), so the resolvers must not rely on them having been removed.
     const a = await arrange();
     await prisma.user.update({ where: { id: a.user.id }, data: { deletedAt: new Date() } });
     expect(await prisma.session.count({ where: { userId: a.user.id } })).toBe(1);

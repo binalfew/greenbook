@@ -2,7 +2,7 @@ import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 
 /**
  * Tiny wrapper around emitDomainEvent for user-creation events. Centralises
- * the payload shape so callers (signup, invitation-accept, tenant-setup) can't
+ * the payload shape so callers (signup, tenant-setup) can't
  * drift.
  *
  * A tenantId is required — the domain-event bus is tenant-scoped, so user

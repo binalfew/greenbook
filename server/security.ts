@@ -190,6 +190,5 @@ export const AUTH_LIMITED_PATHS = [
   "/reset-password",
   "/verify",
   "/change-expired-password",
-  "/accept-invite",
   "/sso/callback",
 ].flatMap((path) => [path, `${path}.data`]);

@@ -1,4 +1,4 @@
-import { Mail, Pencil, Plus, Shield, Trash2, User, Users } from "lucide-react";
+import { Pencil, Plus, Shield, Trash2, User, Users } from "lucide-react";
 import { Link, data } from "react-router";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef, PaginationMeta } from "~/components/data-table/data-table-types";
@@ -156,13 +156,6 @@ export default function UsersListPage({ loaderData }: Route.ComponentProps) {
         searchConfig={{ placeholder: "Search users…" }}
         toolbarActions={[
           {
-            label: "Invite user",
-            icon: Mail,
-            href: `${basePath}/invite`,
-            variant: "outline",
-            permission: "user:create",
-          },
-          {
             label: "New user",
             icon: Plus,
             href: `${basePath}/new`,
@@ -193,7 +186,7 @@ export default function UsersListPage({ loaderData }: Route.ComponentProps) {
         emptyState={{
           icon: Users,
           title: "No users yet",
-          description: "Add users or send email invitations to get started.",
+          description: "Add the first user to get started.",
         }}
       />
     </div>

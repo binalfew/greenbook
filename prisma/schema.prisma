@@ -58,7 +58,6 @@ model User {
   sessions         Session[]
   password         Password?
   passwordHistory  PasswordHistory[]
-  invitationsSent  Invitation[]
   notifications    Notification[]
   ssoConnections   SSOConnection[]
   submittedChanges ChangeRequest[]   @relation("ChangeSubmitter")
@@ -190,13 +189,6 @@ enum RoleScope {
   EVENT
 }
 
-enum InvitationStatus {
-  PENDING
-  ACCEPTED
-  REVOKED
-  EXPIRED
-}
-
 model Tenant {
   id         String  @id @default(cuid())
   name       String  @unique @db.VarChar(255)
@@ -217,7 +209,6 @@ model Tenant {
 
   users               User[]
   roles               Role[]
-  invitations         Invitation[]
   systemSettings      SystemSetting[]
   notifications       Notification[]
   organizations       Organization[]
@@ -263,26 +254,6 @@ model PasswordHistory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)])
-}
-
-model Invitation {
-  id          String           @id @default(cuid())
-  email       String           @db.VarChar(255)
-  tenantId    String
-  roleIds     String[]
-  token       String           @unique @db.VarChar(128)
-  status      InvitationStatus @default(PENDING)
-  invitedById String
-  expiresAt   DateTime
-  createdAt   DateTime         @default(now())
-
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  invitedBy User   @relation(fields: [invitedById], references: [id])
-
-  @@index([token])
-  @@index([tenantId])
-  @@index([email])
-  @@index([status])
 }
 
 model SystemSetting {

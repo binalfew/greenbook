@@ -8,7 +8,7 @@ The African Union Commission's staff directory (the "Blue Book"): organizations,
 - **Editorial workflow** — a focal person's edit becomes a change request (draft, then pending) that a manager approves or rejects; a rejected request can be reopened and resubmitted, and a pending one withdrawn. A manager's own edits apply at once and leave an approved change request behind.
 - **Directory search** — a login-gated people search at `/` that spans every tenant opted in through `FF_PUBLIC_DIRECTORY`, with a profile page per person.
 - **Multi-tenancy** — every workspace route lives under `$tenant/`. The `system` tenant is the global admin's home and holds no directory records.
-- **Auth + RBAC** — cookie sessions backed by the database, email verification codes, password history and expiry, invitations, impersonation, and the `requirePermission` / `requireRole` / `requireAnyRole` / `requireFeature` helpers.
+- **Auth + RBAC** — cookie sessions backed by the database, email verification codes, password history and expiry, impersonation, and the `requirePermission` / `requireRole` / `requireAnyRole` / `requireFeature` helpers.
 - **SSO** — OpenID Connect and SAML 2.0, configured per tenant under Settings, Security.
 - **Reference data** — `Title`, `RegionalGroup`, `MemberState`, `OrganizationType` and `PositionType`, shared by every tenant and edited by the global admin.
 - **Notifications** — an in-app bell and list, with read state stored per user. The bell refreshes when the page loads or revalidates; nothing is pushed to the browser.
@@ -91,7 +91,7 @@ greenbook/
 │   ├── locales/                 # en/*.json + fr/*.json, registered in utils/i18n.ts
 │   ├── middleware/              # correlation.server.ts
 │   ├── routes/                  # File-based via react-router-auto-routes
-│   │   ├── _auth/               # login, password reset, verify, accept-invite, sso
+│   │   ├── _auth/               # login, password reset, verify, sso
 │   │   ├── _public/             # Directory search at / and person profiles
 │   │   └── $tenant/             # Workspace: directory, settings, logs, notifications, profile, tenants
 │   ├── services/                # Business logic (one file per domain, *.server.ts)
@@ -158,7 +158,7 @@ Flags live in the `FeatureFlag` table and are seeded by `prisma/seed.ts`; the se
 
 | Key                   | Scope  | Seeded state       | What it gates                                      |
 | --------------------- | ------ | ------------------ | -------------------------------------------------- |
-| `FF_DIRECTORY`        | tenant | on for new tenants | The `/$tenant/directory/*` workspace               |
+| `FF_DIRECTORY`        | tenant | on for new tenants | The `/$tenant/_directory/*` workspace              |
 | `FF_PUBLIC_DIRECTORY` | tenant | on for new tenants | Whether the tenant's records appear in the search  |
 | `FF_NOTIFICATIONS`    | tenant | on for new tenants | In-app notification bell + list                    |
 | `FF_PWA`              | global | off                | Service worker + manifest + install/update prompts |

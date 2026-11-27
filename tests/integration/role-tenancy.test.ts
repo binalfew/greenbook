@@ -4,7 +4,6 @@ import { prisma } from "../setup/integration-setup";
 
 import { action as newRoleAction } from "~/routes/$tenant/settings/security/roles/new";
 import { loader as userRolesLoader } from "~/routes/$tenant/settings/security/users/$userId/roles";
-import { loader as inviteLoader } from "~/routes/$tenant/settings/security/users/invite";
 import { loader as newUserLoader } from "~/routes/$tenant/settings/security/users/new";
 import { csrf } from "~/utils/auth/csrf.server";
 import { createSessionCookie } from "./helpers/session";
@@ -123,11 +122,6 @@ describe("a tenant-scope role created by an admin", () => {
       args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
     );
     expect(names(newUser.data.roles)).toEqual(["editor", "focal", "manager"]);
-
-    const invite = await inviteLoader(
-      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
-    );
-    expect(names(invite.data.roles)).toEqual(["editor", "focal", "manager"]);
 
     const userRoles = await userRolesLoader(args(get(a.managerCookie), { userId: a.colleague.id }));
     expect(names(userRoles.data.allRoles)).toEqual(["editor", "focal", "manager"]);

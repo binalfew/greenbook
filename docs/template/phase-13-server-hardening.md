@@ -42,12 +42,12 @@ log.info({ action: "create" }, "creating record"); // automatically tagged with 
 
 Four limiters in `server/security.ts`, all mounted in `server/app.ts`:
 
-| Name              | Window | Limit | Scope                      | Mounted                                                                                                              |
-| ----------------- | ------ | ----- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `generalLimiter`  | 15 min | 300   | Every request              | Globally via `app.use(generalLimiter)` in server/app.ts                                                              |
-| `mutationLimiter` | 1 min  | 50    | POST/PUT/PATCH/DELETE only | Globally via `app.use(mutationLimiter)`                                                                              |
-| `authLimiter`     | 1 min  | 10    | Non-GET requests           | On `AUTH_LIMITED_PATHS` — login, forgot/reset password, verify, change-expired-password, accept-invite, SSO callback |
-| `searchLimiter`   | 1 min  | 15    | Every request              | On `/api/search-people`                                                                                              |
+| Name              | Window | Limit | Scope                      | Mounted                                                                                               |
+| ----------------- | ------ | ----- | -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `generalLimiter`  | 15 min | 300   | Every request              | Globally via `app.use(generalLimiter)` in server/app.ts                                               |
+| `mutationLimiter` | 1 min  | 50    | POST/PUT/PATCH/DELETE only | Globally via `app.use(mutationLimiter)`                                                               |
+| `authLimiter`     | 1 min  | 10    | Non-GET requests           | On `AUTH_LIMITED_PATHS` — login, forgot/reset password, verify, change-expired-password, SSO callback |
+| `searchLimiter`   | 1 min  | 15    | Every request              | On `/api/search-people`                                                                               |
 
 Limits are keyed per-user when authenticated, per-IP otherwise. Health checks (`/up`, `/healthz`) are skipped. Override `generalLimiter` via `RATE_LIMIT_WINDOW_MS` + `RATE_LIMIT_MAX_REQUESTS`, and `searchLimiter` via `RATE_LIMIT_SEARCH_WINDOW_MS` + `RATE_LIMIT_SEARCH_MAX`.
 

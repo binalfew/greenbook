@@ -13,7 +13,6 @@ What is in the code today: a domain-event emitter that writes to the structured 
 Events emitted today:
 
 - `tenant.created` / `tenant.updated` / `tenant.deleted` — `~/services/tenants.server.ts`
-- `invitation.created` / `invitation.accepted` / `invitation.revoked` — `~/services/invitations.server.ts`
 - `user.created` — through `emitUserCreated(user, tenantId, extra?)` in `~/utils/events/emit-user-created.server.ts`, which fixes the payload shape
 - `settings.changed` — `~/utils/config/settings.server.ts`
 - `change.submitted` / `change.approved` / `change.rejected` / `change.withdrawn`, and the entity events (`organization.created`, `person.updated`, `position.assigned`, …) that fire when a change is approved — `~/services/directory-changes.server.ts`
