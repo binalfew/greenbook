@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
-import { loader as directoryOverviewLoader } from "~/routes/$tenant/directory/index";
-import { loader as peopleLoader } from "~/routes/$tenant/directory/people/index";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { loader as peopleLoader } from "~/routes/$tenant/_directory/people/index";
+import { loader as dashboardLoader } from "~/routes/$tenant/index";
 import { loader as logDetailLoader } from "~/routes/$tenant/logs/$logId/index";
 import { loader as logsLoader } from "~/routes/$tenant/logs/index";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
@@ -113,7 +113,7 @@ function get(cookie: string, path: string): Request {
 }
 
 function postOrg(cookie: string, slug: string, typeId: string, name: string): Request {
-  return new Request(`http://localhost/${slug}/directory/organizations/new`, {
+  return new Request(`http://localhost/${slug}/organogram/new`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
     body: new URLSearchParams({ name, typeId, isActive: "true", sortOrder: "0" }).toString(),
@@ -137,7 +137,7 @@ describe("global admin acts on the tenant in the URL", () => {
     const slug = a.other.slug;
 
     const result = (await peopleLoader({
-      request: get(a.adminCookie, `/${slug}/directory/people`),
+      request: get(a.adminCookie, `/${slug}/people`),
       params: { tenant: slug },
       context: {},
     } as never)) as unknown as PeopleData;
@@ -145,20 +145,22 @@ describe("global admin acts on the tenant in the URL", () => {
     expect(result.data.people.map((p) => p.lastName)).toEqual(["Other"]);
   });
 
-  it("counts the URL tenant's records on the directory overview", async () => {
+  it("counts the URL tenant's records on the dashboard", async () => {
     const a = await arrange();
     const slug = a.other.slug;
     await prisma.person.create({
       data: { tenantId: a.other.id, firstName: "Second", lastName: "Other" },
     });
 
-    const result = (await directoryOverviewLoader({
-      request: get(a.adminCookie, `/${slug}/directory`),
+    const result = (await dashboardLoader({
+      request: get(a.adminCookie, `/${slug}`),
       params: { tenant: slug },
       context: {},
-    } as never)) as unknown as { data: { counts: { personCount: number } } };
+    } as never)) as unknown as {
+      data: { directory: { counts: { personCount: number } } | null };
+    };
 
-    expect(result.data.counts.personCount).toBe(2);
+    expect(result.data.directory?.counts.personCount).toBe(2);
   });
 
   it("creates an organization in the URL tenant", async () => {
@@ -220,7 +222,7 @@ describe("global admin acts on the tenant in the URL", () => {
 
     const status = await statusOf(() =>
       peopleLoader({
-        request: get(a.adminCookie, "/no-such-tenant/directory/people"),
+        request: get(a.adminCookie, "/no-such-tenant/people"),
         params: { tenant: "no-such-tenant" },
         context: {},
       } as never),
@@ -236,7 +238,7 @@ describe("a manager or focal person is confined to their own tenant", () => {
     const slug = a.home.slug;
 
     const result = (await peopleLoader({
-      request: get(a.managerCookie, `/${slug}/directory/people`),
+      request: get(a.managerCookie, `/${slug}/people`),
       params: { tenant: slug },
       context: {},
     } as never)) as unknown as PeopleData;
@@ -252,7 +254,7 @@ describe("a manager or focal person is confined to their own tenant", () => {
 
       const status = await statusOf(() =>
         peopleLoader({
-          request: get(a[who], `/${slug}/directory/people`),
+          request: get(a[who], `/${slug}/people`),
           params: { tenant: slug },
           context: {},
         } as never),

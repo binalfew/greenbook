@@ -104,8 +104,8 @@ export type PersonPayload = z.infer<typeof personPayloadSchema>;
 
 export const positionPayloadSchema = z.object({
   organizationId: z
-    .string({ error: "Organization is required" })
-    .min(1, "Organization is required"),
+    .string({ error: "Organizational unit is required" })
+    .min(1, "Organizational unit is required"),
   typeId: z.string({ error: "Type is required" }).min(1, "Type is required"),
   title: z.string().trim().min(1, "Title is required").max(255),
   reportsToId: nullableCuid(),
@@ -206,7 +206,7 @@ export const organizationFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(1, "Name is required").max(255),
   acronym: formText(50),
-  typeId: z.string().min(1, "Type is required"),
+  typeId: z.string({ error: "Type is required" }).min(1, "Type is required"),
   parentId: z.string().optional(),
   description: formText(10_000),
   mandate: formText(10_000),
@@ -253,8 +253,10 @@ export type PersonFormInput = z.infer<typeof personFormSchema>;
 
 export const positionFormSchema = z.object({
   id: z.string().optional(),
-  organizationId: z.string().min(1, "Organization is required"),
-  typeId: z.string().min(1, "Type is required"),
+  organizationId: z
+    .string({ error: "Organizational unit is required" })
+    .min(1, "Organizational unit is required"),
+  typeId: z.string({ error: "Type is required" }).min(1, "Type is required"),
   title: z.string().trim().min(1, "Title is required").max(255),
   reportsToId: z.string().optional(),
   description: formText(10_000),
@@ -267,7 +269,7 @@ export type PositionFormInput = z.infer<typeof positionFormSchema>;
 export const assignPersonFormSchema = z.object({
   positionId: z.string().min(1),
   personId: z.string().min(1, "Pick a person"),
-  startDate: z.string().min(1, "Start date is required"),
+  startDate: z.string({ error: "Start date is required" }).min(1, "Start date is required"),
   notes: formText(2000),
 });
 export type AssignPersonFormInput = z.infer<typeof assignPersonFormSchema>;
@@ -277,7 +279,7 @@ export const endAssignmentFormSchema = z.object({
   positionId: z.string().min(1),
   personId: z.string().min(1),
   startDate: z.string().min(1),
-  endDate: z.string().min(1, "End date is required"),
+  endDate: z.string({ error: "End date is required" }).min(1, "End date is required"),
   notes: formText(2000),
 });
 export type EndAssignmentFormInput = z.infer<typeof endAssignmentFormSchema>;

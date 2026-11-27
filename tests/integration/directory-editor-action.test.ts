@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -113,7 +113,7 @@ async function arrange(): Promise<Seeded> {
 function buildRequest(cookie: string, body: Record<string, string>): Request {
   const form = new URLSearchParams();
   for (const [k, v] of Object.entries(body)) form.set(k, v);
-  return new Request("http://localhost/medical/directory/organizations/new", {
+  return new Request("http://localhost/medical/organogram/new", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",

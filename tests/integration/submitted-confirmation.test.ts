@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
-import { action as deleteOrganizationAction } from "~/routes/$tenant/directory/organizations/$orgId.delete";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { loader as submissionsLoader } from "~/routes/$tenant/directory/submissions";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { createSessionCookie } from "./helpers/session";
@@ -104,7 +104,7 @@ async function arrange(): Promise<Seeded> {
 }
 
 function get(a: Seeded, cookie: string, path: string): Request {
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, { headers: { cookie } });
+  return new Request(`http://localhost/${a.slug}/${path}`, { headers: { cookie } });
 }
 
 function post(
@@ -117,7 +117,7 @@ function post(
   for (const [k, v] of Object.entries(body)) {
     for (const item of Array.isArray(v) ? v : [v]) form.append(k, item);
   }
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, {
+  return new Request(`http://localhost/${a.slug}/${path}`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
     body: form.toString(),
@@ -152,7 +152,7 @@ function orgForm(a: Seeded, name: string, extra: Record<string, string> = {}) {
 function saveNewOrg(a: Seeded, cookie: string, name: string) {
   return run(() =>
     organizationEditorAction({
-      request: post(a, cookie, "organizations/new", orgForm(a, name)),
+      request: post(a, cookie, "organogram/new", orgForm(a, name)),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -196,7 +196,7 @@ describe("submitted-for-review confirmation", () => {
         request: post(
           a,
           a.focal.cookie,
-          `organizations/${toRename.id}/edit`,
+          `organogram/${toRename.id}/edit`,
           orgForm(a, "Renamed", { id: toRename.id, baseVersion: String(toRename.version) }),
         ),
         params: { tenant: a.slug, orgId: toRename.id },
@@ -205,7 +205,7 @@ describe("submitted-for-review confirmation", () => {
     );
     await run(() =>
       deleteOrganizationAction({
-        request: post(a, a.focal.cookie, `organizations/${toDelete.id}/delete`),
+        request: post(a, a.focal.cookie, `organogram/${toDelete.id}/delete`),
         params: { tenant: a.slug, orgId: toDelete.id },
         context: {},
       } as never),
@@ -217,7 +217,7 @@ describe("submitted-for-review confirmation", () => {
 
     expect(confirmation).toEqual({
       count: 3,
-      submissionsHref: `/${a.slug}/directory/submissions`,
+      submissionsHref: `/${a.slug}/submissions`,
     });
 
     // The link lands on the author's own list, where the submitted changes are.
@@ -254,9 +254,7 @@ describe("submitted-for-review confirmation", () => {
 
     expect(statusOf(response)).toBe(302);
     const org = await prisma.organization.findFirstOrThrow({ where: { name: "Direct Org" } });
-    expect((response as Response).headers.get("location")).toBe(
-      `/${a.slug}/directory/organizations/${org.id}`,
-    );
+    expect((response as Response).headers.get("location")).toBe(`/${a.slug}/organogram/${org.id}`);
     expect(await draftIds(a)).toEqual([]);
 
     // Another person's draft is not the manager's to submit.

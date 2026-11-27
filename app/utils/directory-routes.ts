@@ -10,7 +10,7 @@ import type { DirectoryEntity } from "~/generated/prisma/client.js";
 // segment and callers are expected to append the position id.
 
 const SEGMENT: Record<DirectoryEntity, string> = {
-  ORGANIZATION: "organizations",
+  ORGANIZATION: "organogram",
   PERSON: "people",
   POSITION: "positions",
   POSITION_ASSIGNMENT: "positions",
@@ -22,7 +22,7 @@ export function directoryEntitySegment(entity: DirectoryEntity): string {
 
 /** URL of a person photo on the tenant's admin pages (see `photos.$photoId.tsx`). */
 export function personPhotoPath(tenantSlug: string, photoId: string): string {
-  return `/${tenantSlug}/directory/photos/${photoId}`;
+  return `/${tenantSlug}/photos/${photoId}`;
 }
 
 // Query param carrying the id of the draft an editor page is resuming. The
@@ -32,7 +32,7 @@ export const DRAFT_PARAM = "draft";
 
 /** The approvals queue; batch actions and change requests live under it. */
 export function approvalsPath(tenantSlug: string): string {
-  return `/${tenantSlug}/directory/approvals`;
+  return `/${tenantSlug}/approvals`;
 }
 
 /** The detail page of one change request; its dialogs are `<path>/<verb>`. */
@@ -42,7 +42,7 @@ export function changePath(tenantSlug: string, changeId: string): string {
 
 /** The author's own submissions list (drafts and everything they sent for review). */
 export function submissionsPath(tenantSlug: string): string {
-  return `/${tenantSlug}/directory/submissions`;
+  return `/${tenantSlug}/submissions`;
 }
 
 /**
@@ -53,7 +53,7 @@ export type SubmittedConfirmation = { count: number; submissionsHref: string };
 
 /** Where the author goes after saving a draft: their drafts, ready to submit. */
 export function draftsPath(tenantSlug: string): string {
-  return `/${tenantSlug}/directory/submissions?status=DRAFT`;
+  return `/${tenantSlug}/submissions?status=DRAFT`;
 }
 
 /**
@@ -65,7 +65,7 @@ export function draftEditPath(
   draft: { id: string; entityType: DirectoryEntity; operation: string; entityId: string | null },
 ): string | null {
   if (draft.entityType === "POSITION_ASSIGNMENT") return null;
-  const base = `/${tenantSlug}/directory/${SEGMENT[draft.entityType]}`;
+  const base = `/${tenantSlug}/${SEGMENT[draft.entityType]}`;
   const query = `?${DRAFT_PARAM}=${draft.id}`;
   if (draft.operation === "CREATE") return `${base}/new${query}`;
   if (draft.operation === "UPDATE" && draft.entityId) {

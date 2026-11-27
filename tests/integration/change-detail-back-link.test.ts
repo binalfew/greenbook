@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
+import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -82,7 +82,7 @@ async function arrange() {
     sortOrder: "0",
   });
   await organizationEditorAction({
-    request: new Request(`http://localhost/${tenant.slug}/directory/organizations/new`, {
+    request: new Request(`http://localhost/${tenant.slug}/organogram/new`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie: focalSession },
       body: form.toString(),
@@ -96,7 +96,7 @@ async function arrange() {
     where: { tenantId: tenant.id, status: "DRAFT" },
   });
   await submitDraftsAction({
-    request: new Request(`http://localhost/${tenant.slug}/directory/approvals/submit-drafts`, {
+    request: new Request(`http://localhost/${tenant.slug}/approvals/submit-drafts`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie: focalSession },
       body: new URLSearchParams({ "ids[]": change.id }).toString(),
@@ -110,7 +110,7 @@ async function arrange() {
 
 async function loadChangeDetail(slug: string, changeId: string, cookie: string) {
   const result = await changeDetailLoader({
-    request: new Request(`http://localhost/${slug}/directory/approvals/${changeId}`, {
+    request: new Request(`http://localhost/${slug}/approvals/${changeId}`, {
       headers: { cookie },
     }),
     params: { tenant: slug, changeId },
@@ -125,7 +125,7 @@ describe("change detail page Back link", () => {
 
     const detail = await loadChangeDetail(a.slug, a.changeId, a.focalSession);
 
-    expect(detail.backHref).toBe(`/${a.slug}/directory/submissions`);
+    expect(detail.backHref).toBe(`/${a.slug}/submissions`);
   });
 
   it("returns a manager to the approvals queue", async () => {
@@ -133,6 +133,6 @@ describe("change detail page Back link", () => {
 
     const detail = await loadChangeDetail(a.slug, a.changeId, a.managerSession);
 
-    expect(detail.backHref).toBe(`/${a.slug}/directory/approvals`);
+    expect(detail.backHref).toBe(`/${a.slug}/approvals`);
   });
 });

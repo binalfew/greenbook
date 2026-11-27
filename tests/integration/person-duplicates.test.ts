@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { action as personEditorAction } from "~/routes/$tenant/directory/people/+shared/person-editor.server";
+import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -105,7 +105,7 @@ function post(
   for (const [k, v] of Object.entries(body)) {
     for (const item of Array.isArray(v) ? v : [v]) form.append(k, item);
   }
-  return new Request(`http://localhost/${w.slug}/directory/${path}`, {
+  return new Request(`http://localhost/${w.slug}/${path}`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
     body: form.toString(),
@@ -385,7 +385,7 @@ describe("possible duplicate people — change detail page", () => {
   async function loadDetail(w: Workspace, cookie: string, changeId: string) {
     const result = await run(() =>
       changeDetailLoader({
-        request: new Request(`http://localhost/${w.slug}/directory/approvals/${changeId}`, {
+        request: new Request(`http://localhost/${w.slug}/approvals/${changeId}`, {
           headers: { cookie },
         }),
         params: { tenant: w.slug, changeId },

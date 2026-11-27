@@ -1,41 +1,32 @@
 {
   "title": "Répertoire",
-  "subtitle": "Organisations, personnes et postes qui les relient. Chaque modification passe par la file d'attente d'approbation avant d'apparaître publiquement.",
-  "tabs": {
-    "home": "Aperçu",
-    "organizations": "Organisations",
-    "people": "Personnes",
-    "positions": "Postes",
-    "approvals": "Approbations",
-    "submissions": "Soumissions",
-    "history": "Historique"
-  },
+  "subtitle": "L'organigramme, les personnes et les postes qui les relient. Chaque modification passe par la file d'attente d'approbation avant d'apparaître publiquement.",
   "kpi": {
-    "organizations": "Organisations",
+    "organizations": "Unités organisationnelles",
     "people": "Personnes",
     "positions": "Postes",
     "pendingChanges": "En attente de revue",
     "mySubmissions": "Mes soumissions"
   },
   "organizations": {
-    "title": "Organisations",
-    "title_one": "Organisation",
-    "title_other": "Organisations",
-    "subtitle": "L'arbre organisationnel — UA, organes principaux, départements, bureaux et unités.",
-    "searchPlaceholder": "Rechercher des organisations...",
-    "emptyTitle": "Aucune organisation",
-    "emptyDescription": "Soumettez la première organisation pour peupler l'arbre.",
-    "new": "Nouvelle organisation",
-    "newSubtitle": "Soumettez une nouvelle organisation pour revue.",
-    "edit": "Modifier l'organisation",
+    "title": "Organigramme",
+    "title_one": "Unité organisationnelle",
+    "title_other": "Unités organisationnelles",
+    "subtitle": "La structure de l'UA — organes principaux, départements, bureaux et unités.",
+    "searchPlaceholder": "Rechercher des unités organisationnelles...",
+    "emptyTitle": "Aucune unité organisationnelle",
+    "emptyDescription": "Soumettez la première unité organisationnelle pour peupler l'organigramme.",
+    "new": "Nouvelle unité organisationnelle",
+    "newSubtitle": "Soumettez une nouvelle unité organisationnelle pour revue.",
+    "edit": "Modifier l'unité organisationnelle",
     "editSubtitle": "Votre modification passera par la file d'approbation avant de devenir publique.",
-    "deleteTitle": "Supprimer cette organisation ?",
-    "deleteDescription": "L'organisation sera supprimée (soft-delete) après approbation. Les enfants doivent d'abord être réaffectés.",
+    "deleteTitle": "Supprimer cette unité organisationnelle ?",
+    "deleteDescription": "L'unité organisationnelle sera supprimée (soft-delete) après approbation. Ses unités enfants doivent d'abord être réaffectées.",
     "deleteButton": "Enregistrer la suppression comme brouillon",
     "deleteButtonDirect": "Supprimer maintenant",
     "deleteReasonLabel": "Motif (optionnel)",
-    "deleteBlockedChildren_one": "Impossible de supprimer — {{count}} organisation enfant doit d'abord être réaffectée.",
-    "deleteBlockedChildren_other": "Impossible de supprimer — {{count}} organisations enfants doivent d'abord être réaffectées.",
+    "deleteBlockedChildren_one": "Impossible de supprimer — {{count}} unité enfant doit d'abord être réaffectée.",
+    "deleteBlockedChildren_other": "Impossible de supprimer — {{count}} unités enfants doivent d'abord être réaffectées.",
     "fields": {
       "name": "Nom",
       "namePlaceholder": "ex. Département des infrastructures et de l'énergie",
@@ -61,9 +52,9 @@
       "metadata": "Métadonnées"
     },
     "tree": {
-      "title": "Arborescence des organisations",
+      "title": "Vue en arbre",
       "subtitle": "Vue en lecture seule de la hiérarchie publiée. Utilisez la vue en liste pour soumettre des modifications.",
-      "subtitleManager": "Glissez une organisation sur une autre pour la rattacher. Les déplacements sont appliqués immédiatement et consignés dans l'historique d'approbation.",
+      "subtitleManager": "Glissez une unité sur une autre pour la rattacher. Les déplacements sont appliqués immédiatement et consignés dans l'historique d'approbation.",
       "viewList": "Vue en liste",
       "viewTree": "Vue en arbre",
       "loadingChildren": "Chargement des éléments enfants…",
@@ -141,7 +132,7 @@
   },
   "positions": {
     "title": "Postes",
-    "subtitle": "Postes formels dans une organisation — hiérarchie et titulaires actuels.",
+    "subtitle": "Postes formels dans une unité organisationnelle — hiérarchie et titulaires actuels.",
     "searchPlaceholder": "Rechercher des postes...",
     "emptyTitle": "Aucun poste",
     "emptyDescription": "Soumettez le premier poste pour peupler le répertoire.",
@@ -159,8 +150,8 @@
     "fields": {
       "title": "Titre",
       "titlePlaceholder": "ex. Directeur des infrastructures",
-      "organization": "Organisation",
-      "organizationPlaceholder": "Sélectionner une organisation",
+      "organization": "Unité organisationnelle",
+      "organizationPlaceholder": "Sélectionner une unité organisationnelle",
       "type": "Type",
       "typePlaceholder": "Sélectionner un type de poste",
       "reportsTo": "Rattachement hiérarchique",
@@ -234,7 +225,7 @@
       "status": "Statut"
     },
     "entityLabel": {
-      "ORGANIZATION": "Organisation",
+      "ORGANIZATION": "Unité organisationnelle",
       "PERSON": "Personne",
       "POSITION": "Poste",
       "POSITION_ASSIGNMENT": "Affectation"

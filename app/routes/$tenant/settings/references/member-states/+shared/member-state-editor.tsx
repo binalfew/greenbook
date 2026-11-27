@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
 import {
+  DatePickerField,
   SelectField,
   SwitchField,
   getFormProps,
@@ -145,10 +146,7 @@ export function MemberStateEditor({
               required
               errors={fields.dateJoined.errors}
             >
-              <Input
-                {...getInputProps(fields.dateJoined, { type: "date" })}
-                key={fields.dateJoined.key}
-              />
+              <DatePickerField meta={fields.dateJoined} />
             </FieldRow>
             <FieldRow
               id={fields.predecessorOrg.id}

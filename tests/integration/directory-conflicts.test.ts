@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
-import { loader as personDetailLoader } from "~/routes/$tenant/directory/people/$personId._layout";
-import { action as personDeleteAction } from "~/routes/$tenant/directory/people/$personId.delete";
-import { action as personEditorAction } from "~/routes/$tenant/directory/people/+shared/person-editor.server";
+import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
+import { loader as personDetailLoader } from "~/routes/$tenant/_directory/people/$personId._layout";
+import { action as personDeleteAction } from "~/routes/$tenant/_directory/people/$personId.delete";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -113,7 +113,7 @@ async function arrange() {
 }
 
 function post(cookie: string, body: Record<string, string>, lang?: "en" | "fr"): Request {
-  return new Request("http://localhost/medical/directory", {
+  return new Request("http://localhost/medical", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -124,7 +124,7 @@ function post(cookie: string, body: Record<string, string>, lang?: "en" | "fr"):
 }
 
 function get(cookie: string): Request {
-  return new Request("http://localhost/medical/directory", { headers: { cookie } });
+  return new Request("http://localhost/medical", { headers: { cookie } });
 }
 
 type DataResult = { data: unknown; init: { status?: number } | null };

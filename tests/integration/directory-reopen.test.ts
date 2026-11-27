@@ -3,16 +3,16 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
-import { loader as editOrganizationLoader } from "~/routes/$tenant/directory/organizations/$orgId_/edit";
-import { loader as newOrganizationLoader } from "~/routes/$tenant/directory/organizations/new";
-import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
-import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
-import { action as reopenAction } from "~/routes/$tenant/directory/approvals/$changeId.reopen";
-import { action as batchApproveAction } from "~/routes/$tenant/directory/approvals/batch-approve";
-import { loader as historyLoader } from "~/routes/$tenant/directory/approvals/history";
-import { loader as approvalQueueLoader } from "~/routes/$tenant/directory/approvals/index";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { loader as editOrganizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId_/edit";
+import { loader as newOrganizationLoader } from "~/routes/$tenant/_directory/organogram/new";
+import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
+import { action as reopenAction } from "~/routes/$tenant/_directory/approvals/$changeId.reopen";
+import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
+import { loader as historyLoader } from "~/routes/$tenant/_directory/approvals/history";
+import { loader as approvalQueueLoader } from "~/routes/$tenant/_directory/approvals/index";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -105,7 +105,7 @@ async function arrange(): Promise<Seeded> {
 }
 
 function get(a: Seeded, cookie: string, path: string): Request {
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, { headers: { cookie } });
+  return new Request(`http://localhost/${a.slug}/${path}`, { headers: { cookie } });
 }
 
 function post(
@@ -118,7 +118,7 @@ function post(
   for (const [k, v] of Object.entries(body)) {
     for (const item of Array.isArray(v) ? v : [v]) form.append(k, item);
   }
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, {
+  return new Request(`http://localhost/${a.slug}/${path}`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
     body: form.toString(),
@@ -157,7 +157,7 @@ function orgForm(a: Seeded, name: string, extra: Record<string, string> = {}) {
 async function saveOrgDraft(a: Seeded, cookie: string, name: string) {
   const response = await run(() =>
     organizationEditorAction({
-      request: post(a, cookie, "organizations/new", orgForm(a, name)),
+      request: post(a, cookie, "organogram/new", orgForm(a, name)),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -181,7 +181,7 @@ async function saveRename(
       request: post(
         a,
         cookie,
-        `organizations/${org.id}/edit`,
+        `organogram/${org.id}/edit`,
         orgForm(a, name, { id: org.id, baseVersion: String(org.version) }),
       ),
       params: { tenant: a.slug, orgId: org.id },
@@ -213,7 +213,7 @@ async function queueIds(a: Seeded, cookie: string) {
 async function publishedOrg(a: Seeded, cookie: string, name: string) {
   await run(() =>
     organizationEditorAction({
-      request: post(a, cookie, "organizations/new", orgForm(a, name)),
+      request: post(a, cookie, "organogram/new", orgForm(a, name)),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -297,12 +297,12 @@ describe("reopening a rejected request", () => {
     const draft = drafts[0];
     expect(draft.id).not.toBe(rejectedId);
     expect(draft.submittedById).toBe(a.focal.id);
-    expect(locationOf(response)).toBe(`/${a.slug}/directory/organizations/new?draft=${draft.id}`);
+    expect(locationOf(response)).toBe(`/${a.slug}/organogram/new?draft=${draft.id}`);
 
     // The editor resumes the draft with the submitted values and shows why
     // the earlier request was rejected.
     const loaded = await newOrganizationLoader({
-      request: get(a, a.focal.cookie, `organizations/new?draft=${draft.id}`),
+      request: get(a, a.focal.cookie, `organogram/new?draft=${draft.id}`),
       params: { tenant: a.slug },
       context: {},
     } as never);
@@ -331,7 +331,7 @@ describe("reopening a rejected request", () => {
     const a = await arrange();
     const draft = await saveOrgDraft(a, a.focal.cookie, "Plain Draft");
     const loaded = await newOrganizationLoader({
-      request: get(a, a.focal.cookie, `organizations/new?draft=${draft.id}`),
+      request: get(a, a.focal.cookie, `organogram/new?draft=${draft.id}`),
       params: { tenant: a.slug },
       context: {},
     } as never);
@@ -352,7 +352,7 @@ describe("reopening a rejected request", () => {
         request: post(
           a,
           a.focal.cookie,
-          `organizations/new?draft=${draft.id}`,
+          `organogram/new?draft=${draft.id}`,
           orgForm(a, "Bureau of Statistics", { acronym: "BOS" }),
         ),
         params: { tenant: a.slug },
@@ -432,12 +432,10 @@ describe("reopening a rejected request", () => {
 
     const response = await reopen(a, a.focal.cookie, rejectedId);
     const [draft] = await draftsOf(a);
-    expect(locationOf(response)).toBe(
-      `/${a.slug}/directory/organizations/${org.id}/edit?draft=${draft.id}`,
-    );
+    expect(locationOf(response)).toBe(`/${a.slug}/organogram/${org.id}/edit?draft=${draft.id}`);
 
     const loaded = await editOrganizationLoader({
-      request: get(a, a.focal.cookie, `organizations/${org.id}/edit?draft=${draft.id}`),
+      request: get(a, a.focal.cookie, `organogram/${org.id}/edit?draft=${draft.id}`),
       params: { tenant: a.slug, orgId: org.id },
       context: {},
     } as never);

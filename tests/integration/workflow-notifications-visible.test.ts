@@ -3,11 +3,11 @@ import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from
 import { prisma } from "../setup/integration-setup";
 
 import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
-import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
-import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
-import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
+import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
+import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { loader as openNotificationLoader } from "~/routes/$tenant/notifications/$notificationId.open";
 import { loader as inboxLoader } from "~/routes/$tenant/notifications/index";
 import { action as markAllReadAction } from "~/routes/$tenant/notifications/mark-all-read";
@@ -164,7 +164,7 @@ async function submitAsFocal(a: Arranged, names = ["Proposed Org"]): Promise<str
   for (const name of names) {
     await run(async () =>
       organizationEditorAction({
-        request: await post(`/${SLUG}/directory/organizations/new`, a.focal.cookie, {
+        request: await post(`/${SLUG}/organogram/new`, a.focal.cookie, {
           name,
           typeId: a.orgTypeId,
           isActive: "true",
@@ -182,7 +182,7 @@ async function submitAsFocal(a: Arranged, names = ["Proposed Org"]): Promise<str
   const body = new URLSearchParams(drafts.map((d) => ["ids[]", d.id]));
   await run(() =>
     submitDraftsAction({
-      request: new Request(`http://localhost/${SLUG}/directory/approvals/submit-drafts`, {
+      request: new Request(`http://localhost/${SLUG}/approvals/submit-drafts`, {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -202,11 +202,7 @@ async function decide(a: Arranged, changeId: string, verb: "approve" | "reject")
   const body: Record<string, string> = verb === "reject" ? { notes: "Already registered" } : {};
   const result = await run(async () =>
     action({
-      request: await post(
-        `/${SLUG}/directory/approvals/${changeId}/${verb}`,
-        a.manager.cookie,
-        body,
-      ),
+      request: await post(`/${SLUG}/approvals/${changeId}/${verb}`, a.manager.cookie, body),
       params: { tenant: SLUG, changeId },
       context: {},
     } as never),
@@ -234,7 +230,7 @@ describe("in a tenant created through the UI", () => {
     expect(shown.recent[0]).toMatchObject({ type: "directory.change.submitted", read: false });
 
     const destination = await open(a.manager.cookie, shown.recent[0].id);
-    expect(destination).toBe(`/${SLUG}/directory/approvals/${changeId}`);
+    expect(destination).toBe(`/${SLUG}/approvals/${changeId}`);
     expect(await changePage(a.manager.cookie, destination)).toMatchObject({
       status: 200,
       change: { id: changeId, status: "PENDING" },
@@ -249,7 +245,7 @@ describe("in a tenant created through the UI", () => {
     const shown = await bell(a.manager.cookie);
     expect(shown.unreadCount).toBe(1);
 
-    expect(await open(a.manager.cookie, shown.recent[0].id)).toBe(`/${SLUG}/directory/approvals`);
+    expect(await open(a.manager.cookie, shown.recent[0].id)).toBe(`/${SLUG}/approvals`);
   });
 
   it("an approval reaches the focal person, who can open the change from it", async () => {

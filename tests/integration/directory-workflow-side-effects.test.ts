@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
-import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
-import { action as withdrawAction } from "~/routes/$tenant/directory/approvals/$changeId.withdraw";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
+import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
+import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
+import { action as withdrawAction } from "~/routes/$tenant/_directory/approvals/$changeId.withdraw";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
@@ -134,7 +134,7 @@ async function auditTrail(a: Arranged, changeId: string) {
 async function submitAsFocal(a: Arranged): Promise<string> {
   await run(() =>
     organizationEditorAction({
-      request: post(`/${a.slug}/directory/organizations/new`, a.focalSession, {
+      request: post(`/${a.slug}/organogram/new`, a.focalSession, {
         name: "Proposed Org",
         typeId: a.orgTypeId,
         isActive: "true",
@@ -150,7 +150,7 @@ async function submitAsFocal(a: Arranged): Promise<string> {
   });
   await run(() =>
     submitDraftsAction({
-      request: post(`/${a.slug}/directory/approvals/submit-drafts`, a.focalSession, {
+      request: post(`/${a.slug}/approvals/submit-drafts`, a.focalSession, {
         "ids[]": change.id,
       }),
       params: { tenant: a.slug },
@@ -193,7 +193,7 @@ describe("directory workflow notifications and audit trail", () => {
 
     const response = await run(() =>
       withdrawAction({
-        request: post(`/${a.slug}/directory/approvals/${changeId}/withdraw`, a.focalSession, {}),
+        request: post(`/${a.slug}/approvals/${changeId}/withdraw`, a.focalSession, {}),
         params: { tenant: a.slug, changeId },
         context: {},
       } as Parameters<typeof withdrawAction>[0]),
@@ -212,7 +212,7 @@ describe("directory workflow notifications and audit trail", () => {
 
     const response = await run(() =>
       approveAction({
-        request: post(`/${a.slug}/directory/approvals/${changeId}/approve`, a.managerSession, {}),
+        request: post(`/${a.slug}/approvals/${changeId}/approve`, a.managerSession, {}),
         params: { tenant: a.slug, changeId },
         context: {},
       } as Parameters<typeof approveAction>[0]),
@@ -244,7 +244,7 @@ describe("directory workflow notifications and audit trail", () => {
 
     const response = await run(() =>
       rejectAction({
-        request: post(`/${a.slug}/directory/approvals/${changeId}/reject`, a.managerSession, {
+        request: post(`/${a.slug}/approvals/${changeId}/reject`, a.managerSession, {
           notes: "Duplicate of an existing office",
         }),
         params: { tenant: a.slug, changeId },

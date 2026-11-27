@@ -5,11 +5,11 @@
   "notes": "Notes",
   "notifications": "Notifications",
   "directory": "Répertoire",
-  "orgs": "Organisations",
+  "orgs": "Organigramme",
   "people": "Personnes",
   "positions": "Postes",
   "approvals": "Approbations",
-  "mySubs": "Mes soumissions",
+  "mySubs": "Soumissions",
   "logOut": "Se déconnecter",
   "globalAdmin": "Super administrateur",
   "impersonating": "Usurpation",
@@ -21,5 +21,6 @@
   "featureFlags": "Fonctionnalités",
   "sso": "SSO",
   "security": "Sécurité",
-  "references": "Références"
+  "references": "Références",
+  "history": "Historique"
 }

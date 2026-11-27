@@ -25,8 +25,17 @@ function isSegmentPrefix(pathname: string, url: string): boolean {
   return pathname.startsWith(url) && (url.endsWith("/") || pathname[url.length] === "/");
 }
 
-function isPathActive(pathname: string, url: string, end?: boolean): boolean {
-  return end ? pathname === url : isSegmentPrefix(pathname, url);
+// A top-level item is active on its own URL and anything below it, unless a
+// sibling with a longer URL claims the path: on `/approvals/history` only
+// History lights up, not Approvals as well.
+function isPathActive(
+  pathname: string,
+  item: { url: string; end?: boolean },
+  siblings: { url: string }[],
+): boolean {
+  if (item.end) return pathname === item.url;
+  if (!isSegmentPrefix(pathname, item.url)) return false;
+  return !siblings.some((s) => s.url.length > item.url.length && isSegmentPrefix(pathname, s.url));
 }
 
 function isChildActive(pathname: string, child: NavChild, siblings: NavChild[]): boolean {
@@ -130,7 +139,7 @@ export function NavMain({
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     tooltip={item.tKey ? t(item.tKey) : item.title}
-                    isActive={isPathActive(location.pathname, item.url, item.end)}
+                    isActive={isPathActive(location.pathname, item, group.items)}
                     asChild
                   >
                     <NavLink to={item.url} end={item.end}>

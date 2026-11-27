@@ -315,7 +315,7 @@ export interface HierarchyTreeProps<T extends HierarchyNode> {
   /** Raw data from the loader (roots only) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rawData: any[];
-  /** Base URL for building node IDs (e.g. "/$tenant/directory/organizations") */
+  /** Base URL for building node IDs (e.g. "/$tenant/_directory/organogram") */
   baseUrl: string;
   /** Transform raw data + lazy cache into typed tree nodes */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

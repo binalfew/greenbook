@@ -47,7 +47,7 @@ export function AssignmentTimeline({
   entries: TimelineEntry[];
   mode: TimelineMode;
   /**
-   * Base URL prefix for links — e.g. `/{tenant}/directory/positions` when
+   * Base URL prefix for links — e.g. `/{tenant}/positions` when
    * mode="byPerson" (rows link to the position), or the people prefix when
    * mode="byPosition" (rows link to the person).
    */

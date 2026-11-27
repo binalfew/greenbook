@@ -3,7 +3,7 @@ import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from
 import { prisma } from "../setup/integration-setup";
 
 import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
-import { loader as directoryLayoutLoader } from "~/routes/$tenant/directory/_layout";
+import { loader as directoryLayoutLoader } from "~/routes/$tenant/_directory/_layout";
 import { action as editUserAction } from "~/routes/$tenant/settings/security/users/$userId/edit";
 import { action as userRolesAction } from "~/routes/$tenant/settings/security/users/$userId/roles";
 import { action as newUserAction } from "~/routes/$tenant/settings/security/users/new";
@@ -215,7 +215,7 @@ describe("the system tenant has no directory", () => {
   function openDirectory(cookie: string, slug: string) {
     return outcome(() =>
       directoryLayoutLoader({
-        request: get(`/${slug}/directory`, cookie),
+        request: get(`/${slug}`, cookie),
         params: { tenant: slug },
         context: {},
       } as never),

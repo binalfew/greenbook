@@ -39,5 +39,6 @@
   "name": "Name",
   "email": "Email",
   "password": "Password",
-  "profile": "Profile"
+  "profile": "Profile",
+  "pickDate": "Pick a date"
 }

@@ -3,7 +3,7 @@ import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from
 import { prisma } from "../setup/integration-setup";
 
 import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
-import { loader as directoryLayoutLoader } from "~/routes/$tenant/directory/_layout";
+import { loader as directoryLayoutLoader } from "~/routes/$tenant/_directory/_layout";
 import {
   action as tenantFeaturesAction,
   loader as tenantFeaturesLoader,
@@ -110,7 +110,7 @@ async function setTenantFlag(cookie: string, tenantId: string, flagKey: string, 
 function openDirectory(cookie: string, slug: string) {
   return statusOf(() =>
     directoryLayoutLoader({
-      request: get(`/${slug}/directory`, cookie),
+      request: get(`/${slug}`, cookie),
       params: { tenant: slug },
       context: {},
     } as never),

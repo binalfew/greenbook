@@ -191,7 +191,7 @@ function OrgNodeRenderer({ node, dragHandle, style }: NodeRendererProps<OrgNode>
               e.stopPropagation();
               navigate(detailRoute(node.data.rawId, baseUrl));
             }}
-            title="Open organization details"
+            title="Open organizational unit details"
           >
             <ExternalLink className="size-3.5" />
           </button>
@@ -252,10 +252,10 @@ function OrgEmptyState({ message }: { message?: string }) {
       <div className="bg-muted flex size-16 items-center justify-center rounded-full">
         <Network className="text-muted-foreground size-8" />
       </div>
-      <h3 className="mt-4 text-lg font-semibold">No organizations yet</h3>
+      <h3 className="mt-4 text-lg font-semibold">No organizational units yet</h3>
       <p className="text-muted-foreground mt-1 max-w-sm text-sm">
         {message ??
-          "Organizations will appear here as a hierarchy. Create a root organization to start."}
+          "Organizational units will appear here as a hierarchy. Create a root unit to start."}
       </p>
     </div>
   );
@@ -295,7 +295,7 @@ export function OrganizationHierarchyTree({
       transformNodes={transformOrgNodes}
       nodeRenderer={OrgNodeRenderer}
       searchMatch={orgSearchMatch}
-      searchPlaceholder={searchPlaceholder ?? "Filter organizations..."}
+      searchPlaceholder={searchPlaceholder ?? "Filter organizational units..."}
       emptyState={<OrgEmptyState message={emptyMessage} />}
       moveIdField={canMove ? "organizationId" : undefined}
       moveParentField={canMove ? "parentId" : undefined}

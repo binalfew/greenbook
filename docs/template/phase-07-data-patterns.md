@@ -6,7 +6,7 @@ What does exist in this area:
 
 ## List pages
 
-Tenant-scoped lists read their search, filter, sort and page state from the URL and pass it to a paginated service function. `app/routes/$tenant/directory/organizations/index.tsx` is the example to copy; the `DataTable` it renders is described in [phase-05-components.md](phase-05-components.md).
+Tenant-scoped lists read their search, filter, sort and page state from the URL and pass it to a paginated service function. `app/routes/$tenant/_directory/organogram/index.tsx` is the example to copy; the `DataTable` it renders is described in [phase-05-components.md](phase-05-components.md).
 
 ## Search
 

@@ -16,7 +16,7 @@ export function PossibleDuplicates({
   forSave = false,
 }: {
   duplicates: PossibleDuplicate[];
-  /** Tenant people list URL, e.g. `/acme/directory/people`. */
+  /** Tenant people list URL, e.g. `/acme/people`. */
   peopleHref: string;
   /** Shown in an editor after a save was held back, rather than on a review page. */
   forSave?: boolean;

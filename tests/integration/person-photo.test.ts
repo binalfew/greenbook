@@ -5,15 +5,15 @@ import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as publicPhotoLoader } from "~/routes/_public/people/$personId_.photo";
-import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
-import { action as discardAction } from "~/routes/$tenant/directory/approvals/$changeId.discard";
-import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
-import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
-import { action as reopenAction } from "~/routes/$tenant/directory/approvals/$changeId.reopen";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { action as personEditorAction } from "~/routes/$tenant/directory/people/+shared/person-editor.server";
-import { loader as editPersonLoader } from "~/routes/$tenant/directory/people/$personId_/edit";
-import { loader as tenantPhotoLoader } from "~/routes/$tenant/directory/photos.$photoId";
+import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
+import { action as discardAction } from "~/routes/$tenant/_directory/approvals/$changeId.discard";
+import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
+import { action as reopenAction } from "~/routes/$tenant/_directory/approvals/$changeId.reopen";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
+import { loader as editPersonLoader } from "~/routes/$tenant/_directory/people/$personId_/edit";
+import { loader as tenantPhotoLoader } from "~/routes/$tenant/_directory/photos.$photoId";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
@@ -118,7 +118,7 @@ function get(a: Seeded, cookie: string | null, path: string): Request {
 function post(a: Seeded, cookie: string, path: string, body: Record<string, string | File>) {
   const form = new FormData();
   for (const [k, v] of Object.entries(body)) form.append(k, v);
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, {
+  return new Request(`http://localhost/${a.slug}/${path}`, {
     method: "POST",
     headers: { cookie },
     body: form,
@@ -167,7 +167,7 @@ async function savePerson(
 async function tenantPhoto(a: Seeded, cookie: string | null, photoId: string) {
   return (await run(() =>
     tenantPhotoLoader({
-      request: get(a, cookie, `${a.slug}/directory/photos/${photoId}`),
+      request: get(a, cookie, `${a.slug}/photos/${photoId}`),
       params: { tenant: a.slug, photoId },
       context: {},
     } as never),
@@ -194,7 +194,7 @@ async function submit(a: Seeded, cookie: string, changeId: string) {
   const form = new URLSearchParams({ "ids[]": changeId });
   await run(() =>
     submitDraftsAction({
-      request: new Request(`http://localhost/${a.slug}/directory/approvals/submit-drafts`, {
+      request: new Request(`http://localhost/${a.slug}/approvals/submit-drafts`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded", cookie },
         body: form.toString(),
@@ -396,7 +396,7 @@ describe("person photo: who can see it", () => {
     expect((await tenantPhoto(a, a.manager.cookie, photoId)).status).toBe(200);
     expect((await tenantPhoto(a, a.otherFocal.cookie, photoId)).status).toBe(404);
     const detail = await changeDetailLoader({
-      request: get(a, a.manager.cookie, `${a.slug}/directory/approvals/${draft.id}`),
+      request: get(a, a.manager.cookie, `${a.slug}/approvals/${draft.id}`),
       params: { tenant: a.slug, changeId: draft.id },
       context: {},
     } as never);
@@ -437,7 +437,7 @@ describe("person photo: approval", () => {
     );
     expect(during.equals(before)).toBe(true);
     const detail = await changeDetailLoader({
-      request: get(a, a.manager.cookie, `${a.slug}/directory/approvals/${draft.id}`),
+      request: get(a, a.manager.cookie, `${a.slug}/approvals/${draft.id}`),
       params: { tenant: a.slug, changeId: draft.id },
       context: {},
     } as never);
@@ -558,11 +558,7 @@ describe("person photo: cleanup", () => {
     const draft = await onlyDraft(a);
 
     const loaded = await editPersonLoader({
-      request: get(
-        a,
-        a.focal.cookie,
-        `${a.slug}/directory/people/${person.id}/edit?draft=${draft.id}`,
-      ),
+      request: get(a, a.focal.cookie, `${a.slug}/people/${person.id}/edit?draft=${draft.id}`),
       params: { tenant: a.slug, personId: person.id },
       context: {},
     } as never);

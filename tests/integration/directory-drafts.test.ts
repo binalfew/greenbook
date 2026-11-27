@@ -3,16 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
-import { loader as editOrganizationLoader } from "~/routes/$tenant/directory/organizations/$orgId_/edit";
-import { loader as newOrganizationLoader } from "~/routes/$tenant/directory/organizations/new";
-import { action as deleteOrganizationAction } from "~/routes/$tenant/directory/organizations/$orgId.delete";
-import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
-import { action as discardAction } from "~/routes/$tenant/directory/approvals/$changeId.discard";
-import { action as batchApproveAction } from "~/routes/$tenant/directory/approvals/batch-approve";
-import { loader as approvalQueueLoader } from "~/routes/$tenant/directory/approvals/index";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { loader as submissionsLoader } from "~/routes/$tenant/directory/submissions";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { loader as editOrganizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId_/edit";
+import { loader as newOrganizationLoader } from "~/routes/$tenant/_directory/organogram/new";
+import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
+import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
+import { action as discardAction } from "~/routes/$tenant/_directory/approvals/$changeId.discard";
+import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
+import { loader as approvalQueueLoader } from "~/routes/$tenant/_directory/approvals/index";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
 import { createSessionCookie } from "./helpers/session";
@@ -113,7 +113,7 @@ async function arrange(): Promise<Seeded> {
 }
 
 function get(a: Seeded, cookie: string, path: string): Request {
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, { headers: { cookie } });
+  return new Request(`http://localhost/${a.slug}/${path}`, { headers: { cookie } });
 }
 
 function post(
@@ -126,7 +126,7 @@ function post(
   for (const [k, v] of Object.entries(body)) {
     for (const item of Array.isArray(v) ? v : [v]) form.append(k, item);
   }
-  return new Request(`http://localhost/${a.slug}/directory/${path}`, {
+  return new Request(`http://localhost/${a.slug}/${path}`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
     body: form.toString(),
@@ -161,7 +161,7 @@ function orgForm(a: Seeded, name: string, extra: Record<string, string> = {}) {
 async function saveOrgDraft(a: Seeded, cookie: string, name: string) {
   const response = await run(() =>
     organizationEditorAction({
-      request: post(a, cookie, "organizations/new", orgForm(a, name)),
+      request: post(a, cookie, "organogram/new", orgForm(a, name)),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -187,7 +187,7 @@ async function saveRename(
       request: post(
         a,
         cookie,
-        `organizations/${org.id}/edit`,
+        `organogram/${org.id}/edit`,
         orgForm(a, name, { id: org.id, baseVersion: String(org.version) }),
       ),
       params: { tenant: a.slug, orgId: org.id },
@@ -227,7 +227,7 @@ async function queueIds(a: Seeded, cookie: string) {
 async function publishedOrg(a: Seeded, cookie: string, name: string) {
   await run(() =>
     organizationEditorAction({
-      request: post(a, cookie, "organizations/new", orgForm(a, name)),
+      request: post(a, cookie, "organogram/new", orgForm(a, name)),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -307,7 +307,7 @@ describe("drafts: editing and discarding", () => {
     const draft = await saveOrgDraft(a, a.focal.cookie, "First Name");
 
     const loaded = await newOrganizationLoader({
-      request: get(a, a.focal.cookie, `organizations/new?draft=${draft.id}`),
+      request: get(a, a.focal.cookie, `organogram/new?draft=${draft.id}`),
       params: { tenant: a.slug },
       context: {},
     } as never);
@@ -320,7 +320,7 @@ describe("drafts: editing and discarding", () => {
         request: post(
           a,
           a.focal.cookie,
-          `organizations/new?draft=${draft.id}`,
+          `organogram/new?draft=${draft.id}`,
           orgForm(a, "Second Name"),
         ),
         params: { tenant: a.slug },
@@ -345,7 +345,7 @@ describe("drafts: editing and discarding", () => {
         request: post(
           a,
           a.otherFocal.cookie,
-          `organizations/new?draft=${draft.id}`,
+          `organogram/new?draft=${draft.id}`,
           orgForm(a, "Hijacked"),
         ),
         params: { tenant: a.slug },
@@ -370,18 +370,18 @@ describe("drafts: editing and discarding", () => {
 
     const bare = await run(() =>
       editOrganizationLoader({
-        request: get(a, a.focal.cookie, `organizations/${org.id}/edit`),
+        request: get(a, a.focal.cookie, `organogram/${org.id}/edit`),
         params: { tenant: a.slug, orgId: org.id },
         context: {},
       } as never),
     );
     expect(statusOf(bare)).toBe(302);
     expect((bare as Response).headers.get("location")).toBe(
-      `/${a.slug}/directory/organizations/${org.id}/edit?draft=${draft.id}`,
+      `/${a.slug}/organogram/${org.id}/edit?draft=${draft.id}`,
     );
 
     const resumed = await editOrganizationLoader({
-      request: get(a, a.focal.cookie, `organizations/${org.id}/edit?draft=${draft.id}`),
+      request: get(a, a.focal.cookie, `organogram/${org.id}/edit?draft=${draft.id}`),
       params: { tenant: a.slug, orgId: org.id },
       context: {},
     } as never);
@@ -591,7 +591,7 @@ describe("drafts: submitting", () => {
 
     const second = await run(() =>
       deleteOrganizationAction({
-        request: post(a, a.focal.cookie, `organizations/${org.id}/delete`, { reason: "dup" }),
+        request: post(a, a.focal.cookie, `organogram/${org.id}/delete`, { reason: "dup" }),
         params: { tenant: a.slug, orgId: org.id },
         context: {},
       } as never),

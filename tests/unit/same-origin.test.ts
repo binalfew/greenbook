@@ -19,13 +19,11 @@ const host = "greenbook.example.org";
 
 describe("requireSameOrigin", () => {
   it("allows a write from the site's own pages", () => {
-    expect(run("POST", "/t/directory/people/new", { host, origin: `https://${host}` })).toBe(
-      "allowed",
-    );
+    expect(run("POST", "/t/people/new", { host, origin: `https://${host}` })).toBe("allowed");
   });
 
   it("refuses a write posted from another site", () => {
-    expect(run("POST", "/t/directory/people/new", { host, origin: "https://evil.example" })).toBe(
+    expect(run("POST", "/t/people/new", { host, origin: "https://evil.example" })).toBe(
       "refused 403",
     );
     expect(run("POST", "/resources/impersonate", { host, origin: "null" })).toBe("refused 403");

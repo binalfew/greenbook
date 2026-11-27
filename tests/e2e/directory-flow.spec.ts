@@ -45,13 +45,13 @@ test.skip("focal submits → manager approves → public page renders", async ({
 
   // 1. Focal person: submit a new organization.
   await login(page, "focal@example.com", "focal123");
-  await page.goto("/system/directory/organizations/new");
+  await page.goto("/system/organogram/new");
   await page.getByLabel(/^name/i).first().fill(orgName);
   // `typeId` is a SelectField rendered as a native select; the first real
   // option is at index 1 (index 0 is the placeholder).
   await page.getByLabel(/^type/i).first().selectOption({ index: 1 });
   await Promise.all([
-    page.waitForURL((u) => u.pathname.startsWith("/system/directory/organizations")),
+    page.waitForURL((u) => u.pathname.startsWith("/system/organogram")),
     page
       .getByRole("button", { name: /submit|save/i })
       .first()
@@ -65,11 +65,11 @@ test.skip("focal submits → manager approves → public page renders", async ({
   // detail, reads the diff, and approves. We identify the right row by
   // pulling the most recent PENDING ORGANIZATION + CREATE entry.
   await login(page, "manager@example.com", "manager123");
-  await page.goto("/system/directory/approvals");
+  await page.goto("/system/approvals");
   // The first column is a link to the change detail. Click the first row
   // — with a clean seed this is the change we just submitted.
   await Promise.all([
-    page.waitForURL(/\/system\/directory\/approvals\/[^/]+$/),
+    page.waitForURL(/\/system\/approvals\/[^/]+$/),
     page
       .getByRole("link", { name: /organization/i })
       .first()

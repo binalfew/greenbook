@@ -1,41 +1,32 @@
 {
   "title": "Directory",
-  "subtitle": "Organizations, people, and the positions that connect them. Every change flows through the approval queue before it appears publicly.",
-  "tabs": {
-    "home": "Overview",
-    "organizations": "Organizations",
-    "people": "People",
-    "positions": "Positions",
-    "approvals": "Approvals",
-    "submissions": "Submissions",
-    "history": "History"
-  },
+  "subtitle": "The organogram, people, and the positions that connect them. Every change flows through the approval queue before it appears publicly.",
   "kpi": {
-    "organizations": "Organizations",
+    "organizations": "Organizational units",
     "people": "People",
     "positions": "Positions",
     "pendingChanges": "Pending review",
     "mySubmissions": "My submissions"
   },
   "organizations": {
-    "title": "Organizations",
-    "title_one": "Organization",
-    "title_other": "Organizations",
-    "subtitle": "The org tree — AU, main organs, departments, offices, and units.",
-    "searchPlaceholder": "Search organizations...",
-    "emptyTitle": "No organizations yet",
-    "emptyDescription": "Submit the first organization to populate the tree.",
-    "new": "New organization",
-    "newSubtitle": "Submit a new organization for review.",
-    "edit": "Edit organization",
+    "title": "Organogram",
+    "title_one": "Organizational unit",
+    "title_other": "Organizational units",
+    "subtitle": "The AU structure — main organs, departments, offices, and units.",
+    "searchPlaceholder": "Search organizational units...",
+    "emptyTitle": "No organizational units yet",
+    "emptyDescription": "Submit the first organizational unit to populate the organogram.",
+    "new": "New organizational unit",
+    "newSubtitle": "Submit a new organizational unit for review.",
+    "edit": "Edit organizational unit",
     "editSubtitle": "Your edit will go to the approval queue before becoming public.",
-    "deleteTitle": "Delete this organization?",
-    "deleteDescription": "The organization will be soft-deleted after the change is approved. Children must be reparented first.",
+    "deleteTitle": "Delete this organizational unit?",
+    "deleteDescription": "The organizational unit will be soft-deleted after the change is approved. Its child units must be reparented first.",
     "deleteButton": "Save deletion as draft",
     "deleteButtonDirect": "Delete now",
     "deleteReasonLabel": "Reason (optional)",
-    "deleteBlockedChildren_one": "Cannot delete — {{count}} child organization must be reparented first.",
-    "deleteBlockedChildren_other": "Cannot delete — {{count}} child organizations must be reparented first.",
+    "deleteBlockedChildren_one": "Cannot delete — {{count}} child unit must be reparented first.",
+    "deleteBlockedChildren_other": "Cannot delete — {{count}} child units must be reparented first.",
     "fields": {
       "name": "Name",
       "namePlaceholder": "e.g. Department of Infrastructure and Energy",
@@ -61,9 +52,9 @@
       "metadata": "Metadata"
     },
     "tree": {
-      "title": "Organization tree",
+      "title": "Tree view",
       "subtitle": "Read-only view of the current published hierarchy. Use the list view to submit changes.",
-      "subtitleManager": "Drag any organization onto another to reparent. Moves are applied immediately and recorded in the approval history.",
+      "subtitleManager": "Drag any unit onto another to reparent. Moves are applied immediately and recorded in the approval history.",
       "viewList": "List view",
       "viewTree": "Tree view",
       "loadingChildren": "Loading children…",
@@ -141,7 +132,7 @@
   },
   "positions": {
     "title": "Positions",
-    "subtitle": "Formal posts inside an organization — who reports to whom and who currently holds them.",
+    "subtitle": "Formal posts inside an organizational unit — who reports to whom and who currently holds them.",
     "searchPlaceholder": "Search positions...",
     "emptyTitle": "No positions yet",
     "emptyDescription": "Submit the first position to populate the directory.",
@@ -159,8 +150,8 @@
     "fields": {
       "title": "Title",
       "titlePlaceholder": "e.g. Director of Infrastructure",
-      "organization": "Organization",
-      "organizationPlaceholder": "Select an organization",
+      "organization": "Organizational unit",
+      "organizationPlaceholder": "Select an organizational unit",
       "type": "Type",
       "typePlaceholder": "Select a position type",
       "reportsTo": "Reports to",
@@ -234,7 +225,7 @@
       "status": "Status"
     },
     "entityLabel": {
-      "ORGANIZATION": "Organization",
+      "ORGANIZATION": "Organizational unit",
       "PERSON": "Person",
       "POSITION": "Position",
       "POSITION_ASSIGNMENT": "Assignment"

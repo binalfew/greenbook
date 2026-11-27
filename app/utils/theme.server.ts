@@ -39,7 +39,7 @@ export const brandCookie = createCookie("brand", {
  * When no cookie is present (first-time visitors), `fallbackSlug` is
  * consulted so the site still shows its baseline brand — for Greenbook,
  * the `system` tenant's `brandTheme` is "auc" which gives the AU look
- * on /login and /directory out of the box. Pass `null` to opt out.
+ * on /login and  out of the box. Pass `null` to opt out.
  */
 export async function resolveBrandTheme(
   request: Request,

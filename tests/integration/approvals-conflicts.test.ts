@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../setup/integration-setup";
 
-import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
-import { action as discardAction } from "~/routes/$tenant/directory/approvals/$changeId.discard";
-import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
-import { action as withdrawAction } from "~/routes/$tenant/directory/approvals/$changeId.withdraw";
-import { action as batchApproveAction } from "~/routes/$tenant/directory/approvals/batch-approve";
-import { action as batchRejectAction } from "~/routes/$tenant/directory/approvals/batch-reject";
-import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
+import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
+import { action as discardAction } from "~/routes/$tenant/_directory/approvals/$changeId.discard";
+import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
+import { action as withdrawAction } from "~/routes/$tenant/_directory/approvals/$changeId.withdraw";
+import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
+import { action as batchRejectAction } from "~/routes/$tenant/_directory/approvals/batch-reject";
+import { action as submitDraftsAction } from "~/routes/$tenant/_directory/approvals/submit-drafts";
+import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { seedDirectoryActors, type DirectoryActors } from "./helpers/directory-actors";
 import { payloadOf, post, routeArgs, run, statusOf, type FormBody } from "./helpers/requests";
@@ -36,7 +36,7 @@ async function act(
   body: FormBody = {},
   params: Record<string, string> = {},
 ) {
-  const request = await post(`/${a.slug}/directory/${path}`, cookie, body);
+  const request = await post(`/${a.slug}/${path}`, cookie, body);
   return run(() => action(routeArgs(request, { tenant: a.slug, ...params })));
 }
 
@@ -57,7 +57,7 @@ async function draftOrg(a: DirectoryActors, name: string) {
   await act(
     a,
     organizationEditorAction as Action,
-    "organizations/new",
+    "organogram/new",
     a.focal.cookie,
     orgForm(a, name),
   );
@@ -249,7 +249,7 @@ describe("batch actions", () => {
     await act(
       a,
       organizationEditorAction as Action,
-      "organizations/new",
+      "organogram/new",
       a.manager.cookie,
       orgForm(a, "Version One"),
     );
@@ -258,7 +258,7 @@ describe("batch actions", () => {
       act(
         a,
         organizationEditorAction as Action,
-        `organizations/${org.id}/edit`,
+        `organogram/${org.id}/edit`,
         cookie,
         orgForm(a, name, { id: org.id, baseVersion: String(org.version) }),
         { orgId: org.id },

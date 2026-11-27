@@ -3,7 +3,7 @@ import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from
 import { prisma } from "../setup/integration-setup";
 
 import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
-import { loader as directoryLayoutLoader } from "~/routes/$tenant/directory/_layout";
+import { loader as directoryLayoutLoader } from "~/routes/$tenant/_directory/_layout";
 import { action as newTenantAction, loader as newTenantLoader } from "~/routes/$tenant/tenants/new";
 import { loader as searchPageLoader } from "~/routes/_public/index";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
@@ -121,7 +121,7 @@ async function openWorkspace(cookie: string, slug: string) {
 
 async function directoryAccess(cookie: string, slug: string) {
   return (await directoryLayoutLoader({
-    request: get(cookie, `/${slug}/directory`),
+    request: get(cookie, `/${slug}`),
     params: { tenant: slug },
     context: {},
   } as never)) as { canReview: boolean; canSubmit: boolean };

@@ -5,15 +5,15 @@ import { prisma } from "../setup/integration-setup";
 import {
   action as organizationAction,
   loader as newOrganizationLoader,
-} from "~/routes/$tenant/directory/organizations/new";
+} from "~/routes/$tenant/_directory/organogram/new";
 import {
   action as personAction,
   loader as newPersonLoader,
-} from "~/routes/$tenant/directory/people/new";
+} from "~/routes/$tenant/_directory/people/new";
 import {
   action as positionAction,
   loader as newPositionLoader,
-} from "~/routes/$tenant/directory/positions/new";
+} from "~/routes/$tenant/_directory/positions/new";
 import {
   action as deleteOrganizationTypeAction,
   loader as deleteOrganizationTypeLoader,
@@ -118,7 +118,7 @@ describe("a tenant created through the UI", () => {
     const params = { tenant: "peacefund" };
 
     const orgForm = (await newOrganizationLoader(
-      args(get(cookie, "/peacefund/directory/organizations/new"), params),
+      args(get(cookie, "/peacefund/organogram/new"), params),
     )) as unknown as { data: { types: { id: string; code: string }[] } };
     expect(orgForm.data.types.map((t) => t.code).sort()).toEqual([
       "DEPARTMENT",
@@ -129,7 +129,7 @@ describe("a tenant created through the UI", () => {
     ]);
 
     const personForm = (await newPersonLoader(
-      args(get(cookie, "/peacefund/directory/people/new"), params),
+      args(get(cookie, "/peacefund/people/new"), params),
     )) as unknown as {
       data: { memberStates: { id: string; abbreviation: string }[]; titles: { name: string }[] };
     };
@@ -137,14 +137,14 @@ describe("a tenant created through the UI", () => {
     expect(personForm.data.titles.length).toBeGreaterThan(0);
 
     const positionForm = (await newPositionLoader(
-      args(get(cookie, "/peacefund/directory/positions/new"), params),
+      args(get(cookie, "/peacefund/positions/new"), params),
     )) as unknown as { data: { types: { id: string }[] } };
     expect(positionForm.data.types.length).toBeGreaterThan(0);
 
     const orgSaved = await outcomeOf(async () =>
       organizationAction(
         args(
-          await post(cookie, "/peacefund/directory/organizations/new", {
+          await post(cookie, "/peacefund/organogram/new", {
             name: "Peace Fund Secretariat",
             typeId: orgForm.data.types.find((t) => t.code === "OFFICE")!.id,
             isActive: "true",
@@ -162,7 +162,7 @@ describe("a tenant created through the UI", () => {
     const positionSaved = await outcomeOf(async () =>
       positionAction(
         args(
-          await post(cookie, "/peacefund/directory/positions/new", {
+          await post(cookie, "/peacefund/positions/new", {
             title: "Executive Secretary",
             organizationId: org.id,
             typeId: positionForm.data.types[0].id,
@@ -182,7 +182,7 @@ describe("a tenant created through the UI", () => {
     const personSaved = await outcomeOf(async () =>
       personAction(
         args(
-          await post(cookie, "/peacefund/directory/people/new", {
+          await post(cookie, "/peacefund/people/new", {
             firstName: "Selam",
             lastName: "Tesfaye",
             honorific: personForm.data.titles[0].name,

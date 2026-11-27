@@ -1,7 +1,7 @@
 import { csrf } from "~/utils/auth/csrf.server";
 
 // Request builders and result readers for tests that call a route's loader or
-// action directly. Paths are absolute (`/medical/directory/people`), so the
+// action directly. Paths are absolute (`/medical/people`), so the
 // first segment is the tenant the request acts on.
 
 export type FormBody = Record<string, string | string[]> | [string, string][];

@@ -24,6 +24,7 @@ import {
 import { parseWithZod } from "@conform-to/zod/v4";
 import { getZodConstraint } from "@conform-to/zod/v4";
 import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
 import { CalendarIcon } from "lucide-react";
 import type { z } from "zod/v4";
 
@@ -243,11 +244,14 @@ export type DatePickerFieldProps = {
   className?: string;
 };
 
-export function DatePickerField({
-  meta,
-  placeholder = "Pick a date",
-  className,
-}: DatePickerFieldProps) {
+// A date-only value ("2024-05-01") is a calendar day, not an instant: parse it
+// in local time so the picker never shows the day before west of UTC.
+function parseDateValue(value: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
+}
+
+export function DatePickerField({ meta, placeholder, className }: DatePickerFieldProps) {
+  const { t } = useTranslation("common");
   const [open, setOpen] = React.useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const control = useControl({
@@ -255,7 +259,7 @@ export function DatePickerField({
     initialValue: str(meta.initialValue) ?? meta.defaultValue,
   });
 
-  const dateValue = control.value ? new Date(control.value) : undefined;
+  const dateValue = control.value ? parseDateValue(control.value) : undefined;
   const isValid = dateValue && !isNaN(dateValue.getTime());
 
   return (
@@ -289,7 +293,7 @@ export function DatePickerField({
             )}
           >
             <CalendarIcon className="mr-2 size-4" />
-            {isValid ? format(dateValue, "PPP") : <span>{placeholder}</span>}
+            {isValid ? format(dateValue, "PPP") : <span>{placeholder ?? t("pickDate")}</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">

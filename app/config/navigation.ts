@@ -1,5 +1,17 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, ClipboardList, Bell, Building2, Network, Settings } from "lucide-react";
+import {
+  Bell,
+  BriefcaseBusiness,
+  Building2,
+  ClipboardList,
+  History,
+  Inbox,
+  LayoutDashboard,
+  ListChecks,
+  Network,
+  Settings,
+  Users,
+} from "lucide-react";
 
 export type Permission = { resource: string; action: string };
 
@@ -72,54 +84,62 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           icon: LayoutDashboard,
           end: true,
         },
+        // The directory's sections sit at the top level, matching their URLs
+        // (`/<tenant>/people`, not `/<tenant>/directory/people`). Each is
+        // hidden where the tenant has no directory or the user cannot read it.
         {
-          // The whole Directory group is hidden if the user has no read
-          // perm on any directory entity — keeps the sidebar tidy for
-          // tenant admins (who only do user CRUD per platform policy).
-          title: "Directory",
-          tKey: "directory",
-          description: "AU organizations, people, and the positions that connect them.",
-          url: `${basePrefix}/directory`,
+          title: "Organogram",
+          tKey: "orgs",
+          description: "Organs, departments, offices and units, and how they fit together.",
+          url: `${basePrefix}/organogram`,
           icon: Network,
           featureFlag: "FF_DIRECTORY",
           permission: "organization:read",
-          children: [
-            {
-              title: "Organizations",
-              tKey: "orgs",
-              url: `${basePrefix}/directory/organizations`,
-              featureFlag: "FF_DIRECTORY",
-              permission: "organization:read",
-            },
-            {
-              title: "People",
-              tKey: "people",
-              url: `${basePrefix}/directory/people`,
-              featureFlag: "FF_DIRECTORY",
-              permission: "person:read",
-            },
-            {
-              title: "Positions",
-              tKey: "positions",
-              url: `${basePrefix}/directory/positions`,
-              featureFlag: "FF_DIRECTORY",
-              permission: "position:read",
-            },
-            {
-              title: "Approvals",
-              tKey: "approvals",
-              url: `${basePrefix}/directory/approvals`,
-              featureFlag: "FF_DIRECTORY",
-              permission: "directory-change:read-all",
-            },
-            {
-              title: "My submissions",
-              tKey: "mySubs",
-              url: `${basePrefix}/directory/submissions`,
-              featureFlag: "FF_DIRECTORY",
-              permission: "directory-change:submit",
-            },
-          ],
+        },
+        {
+          title: "People",
+          tKey: "people",
+          description: "The people listed in the directory.",
+          url: `${basePrefix}/people`,
+          icon: Users,
+          featureFlag: "FF_DIRECTORY",
+          permission: "person:read",
+        },
+        {
+          title: "Positions",
+          tKey: "positions",
+          description: "Formal posts and who holds them.",
+          url: `${basePrefix}/positions`,
+          icon: BriefcaseBusiness,
+          featureFlag: "FF_DIRECTORY",
+          permission: "position:read",
+        },
+        {
+          title: "Approvals",
+          tKey: "approvals",
+          description: "Changes waiting for review.",
+          url: `${basePrefix}/approvals`,
+          icon: ListChecks,
+          featureFlag: "FF_DIRECTORY",
+          permission: "directory-change:read-all",
+        },
+        {
+          title: "Submissions",
+          tKey: "mySubs",
+          description: "Your drafts and the changes you sent for review.",
+          url: `${basePrefix}/submissions`,
+          icon: Inbox,
+          featureFlag: "FF_DIRECTORY",
+          permission: "directory-change:submit",
+        },
+        {
+          title: "History",
+          tKey: "history",
+          description: "Changes that were approved, rejected or withdrawn.",
+          url: `${basePrefix}/approvals/history`,
+          icon: History,
+          featureFlag: "FF_DIRECTORY",
+          permission: "directory-change:read-all",
         },
         {
           title: "Logs",
