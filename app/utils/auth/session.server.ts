@@ -79,7 +79,6 @@ export async function requireUser(request: Request) {
       tenantId: true,
       userRoles: {
         select: {
-          eventId: true,
           role: {
             select: {
               id: true,

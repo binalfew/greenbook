@@ -14,7 +14,6 @@ export interface AuthRole {
   id: string;
   name: string;
   scope: RoleScope;
-  eventId: string | null;
 }
 
 export interface AuthPermission {
@@ -22,7 +21,6 @@ export interface AuthPermission {
   action: PermissionAction;
   access: string; // "own" | "any"
   roleScope: RoleScope;
-  eventId: string | null;
 }
 
 export interface AuthUser {
@@ -48,7 +46,6 @@ async function loadAuthUser(request: Request): Promise<AuthUser> {
     id: ur.role.id,
     name: ur.role.name,
     scope: ur.role.scope,
-    eventId: ur.eventId,
   }));
 
   const permissions: AuthPermission[] = user.userRoles.flatMap((ur) =>
@@ -57,7 +54,6 @@ async function loadAuthUser(request: Request): Promise<AuthUser> {
       action: rp.permission.action as PermissionAction,
       access: rp.access,
       roleScope: ur.role.scope,
-      eventId: ur.eventId,
     })),
   );
 

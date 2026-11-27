@@ -4,10 +4,6 @@ import "./sentry.js";
 import "react-router";
 import { createRequestHandler } from "@react-router/express";
 import express from "express";
-// Side-effect import — registers send-email and other job handlers on the
-// in-process job queue. Must happen before startJobProcessor() runs.
-import "~/utils/events/job-handlers.server";
-import { startJobProcessor, stopJobProcessor } from "~/utils/events/job-queue.server";
 import { correlationMiddleware } from "./correlation.js";
 import { logger } from "./logger.js";
 import { requestLogger } from "./request-logger.js";
@@ -84,19 +80,11 @@ app.use(
   }),
 );
 
-// ─── Job processor ───────────────────────────────────────
-// Single-instance, in-process job queue. Started once per Node process.
-// The startJobProcessor guard is idempotent under Vite HMR.
-startJobProcessor(5000);
-
-// Register shutdown hooks — flush audit buffer + stop job processor.
+// Register shutdown hooks — flush the audit buffer.
 // Any additional subsystems (redis, tracing exporters, etc.) add themselves
 // via onShutdown(fn) so the single SIGTERM/SIGINT handler drains everything.
 onShutdown(() => {
   flushRateLimitBuffer();
-});
-onShutdown(() => {
-  stopJobProcessor();
 });
 
 let shuttingDown = false;

@@ -15,7 +15,6 @@ export async function getUser(userId: string) {
       tenantId: true,
       userRoles: {
         select: {
-          eventId: true,
           role: {
             select: {
               id: true,

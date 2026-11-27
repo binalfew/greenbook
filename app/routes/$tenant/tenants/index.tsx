@@ -132,7 +132,6 @@ export default function TenantsListPage({ loaderData }: Route.ComponentProps) {
             label: "New tenant",
             icon: Plus,
             href: `${base}/tenants/new`,
-            permission: "tenant:create",
           },
         ]}
         rowActions={[
@@ -145,14 +144,12 @@ export default function TenantsListPage({ loaderData }: Route.ComponentProps) {
             label: "Edit",
             icon: Pencil,
             href: (row) => `${base}/tenants/${row.id}/edit`,
-            permission: "tenant:update",
           },
           {
             label: "Delete",
             icon: Trash2,
             href: (row) => `${base}/tenants/${row.id}/delete`,
             variant: "destructive",
-            permission: "tenant:delete",
           },
         ]}
         pagination={pagination}

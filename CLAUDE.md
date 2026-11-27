@@ -73,7 +73,7 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
 - **UI:** shadcn/ui + Radix primitives + Tailwind CSS 4 + lucide-react
 - **Forms:** Conform (`@conform-to/react` + `@conform-to/zod/v4`) with Zod v4
 - **Auth:** Cookie-based sessions with DB backing, API keys with rate-limit tiers, SSO (OIDC + SAML)
-- **Events/jobs:** in-process Postgres-backed queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain events, SSE for real-time UI
+- **Events:** domain events, SSE for real-time UI
 - **Observability:** pino logger, AsyncLocalStorage correlation IDs, Sentry (client + server), rate-limit audit trail
 - **i18n:** i18next with en + fr, cookie-persisted, 13 namespaces
 - **PWA:** service worker (cache-first static / network-first API / offline fallback), install + update prompts, IndexedDB sync queue
@@ -89,7 +89,7 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
   - `app/utils/db/` — Prisma client with Postgres adapter wiring
   - `app/utils/email/` — email sending via Resend
   - `app/utils/config/` — environment variable parsing, settings SDK, feature-flag SDK + client-safe keys
-  - `app/utils/events/` — job queue, domain events, idempotency
+  - `app/utils/events/` — domain events
   - `app/utils/monitoring/` — pino logger + Sentry (client + server)
   - `app/utils/offline/` — service-worker registration + IndexedDB sync queue
   - `app/utils/schemas/` — cross-cutting Zod schemas (privacy, sso, directory, tenant)
@@ -126,7 +126,6 @@ Task-based quick index for common work:
 | Trailing-underscore escape          | `app/routes/$tenant/directory/organizations/$orgId_/edit.tsx`                | "Directory" section below                    |
 | Cascading selects                   | `app/hooks/use-cascade.ts` + existing consumers                              | `docs/template/phase-05-components.md`       |
 | Tenant-scoped list with filters     | `app/routes/$tenant/directory/organizations/index.tsx`                       | `docs/template/phase-07-data-patterns.md`    |
-| Background job                      | `app/utils/events/job-handlers.server.ts`                                    | `docs/template/phase-06-events-jobs.md`      |
 | Gate by feature flag                | `requireFeature(request, "FF_NAME")`                                         | Phase 3 services in table above              |
 | RBAC check                          | `requirePermission(request, "resource", "action")`                           | Phase 1 services in table above              |
 | Structured logging with correlation | `getRequestLogger()` from `~/middleware/correlation.server`                  | `docs/template/phase-13-server-hardening.md` |
