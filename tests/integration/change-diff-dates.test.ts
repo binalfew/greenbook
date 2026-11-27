@@ -53,7 +53,7 @@ async function arrange() {
   const manager = await mkUser(managerRole.id);
 
   const orgType = await prisma.organizationType.create({
-    data: { tenantId: tenant.id, code: "ROOT", name: "Root", level: 0 },
+    data: { code: "ROOT", name: "Root", level: 0 },
   });
   const org = await prisma.organization.create({
     data: {

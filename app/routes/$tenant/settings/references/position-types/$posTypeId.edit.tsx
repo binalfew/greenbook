@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { data } from "react-router";
 import { getPositionType, ReferenceDataError } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import { PositionTypeEditor } from "./+shared/position-type-editor";
 import type { Route } from "./+types/$posTypeId.edit";
 
@@ -10,13 +10,9 @@ export const handle = { breadcrumb: "Edit" };
 export { action } from "./+shared/position-type-editor.server";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "write");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requireReferenceDataAdmin(request);
   try {
-    const positionType = await getPositionType(params.posTypeId, tenantId);
+    const positionType = await getPositionType(params.posTypeId);
     return data({ positionType });
   } catch (err) {
     if (err instanceof ReferenceDataError) {
