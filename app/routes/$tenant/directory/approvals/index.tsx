@@ -21,6 +21,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { listPendingChanges } from "~/services/directory-changes.server";
 import { directoryEntityValues } from "~/utils/schemas/directory";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
+import { approvalsPath, submissionsPath } from "~/utils/directory-routes";
 import type { Route } from "./+types/index";
 import type { action as batchApproveAction } from "./batch-approve";
 import type { action as batchRejectAction } from "./batch-reject";
@@ -31,7 +32,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const { tenantId, canReview, canSubmit } = await requireDirectoryAccess(request);
   if (!canReview) {
     // Focal-person-only users land on the "my submissions" view.
-    if (canSubmit) return redirect(`/${params.tenant}/directory/submissions`);
+    if (canSubmit) return redirect(submissionsPath(params.tenant));
     throw new Response("Forbidden", { status: 403 });
   }
 
@@ -65,7 +66,7 @@ export default function PendingChangesIndex({ loaderData, params }: Route.Compon
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const { changes, pagination } = loaderData;
-  const base = `/${params.tenant}/directory/approvals`;
+  const base = approvalsPath(params.tenant);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [rejectOpen, setRejectOpen] = useState(false);

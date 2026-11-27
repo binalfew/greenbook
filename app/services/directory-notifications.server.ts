@@ -1,3 +1,4 @@
+import { approvalsPath, changePath } from "~/utils/directory-routes";
 import { createNotification } from "~/services/notifications.server";
 import { prisma } from "~/utils/db/db.server";
 import { logger } from "~/utils/monitoring/logger.server";
@@ -132,17 +133,17 @@ export async function notifySubmitterOfDecision(
 }
 
 /**
- * The page, relative to the tenant, that a workflow notification is about:
- * the change itself, or the approval queue when one notification covers a
- * whole submission. Null for a notification this module did not send.
+ * The page a workflow notification is about: the change itself, or the
+ * approval queue when one notification covers a whole submission. Null for a
+ * notification this module did not send.
  */
-export function directoryNotificationPath(notification: {
-  type: string;
-  data: unknown;
-}): string | null {
+export function directoryNotificationPath(
+  tenantSlug: string,
+  notification: { type: string; data: unknown },
+): string | null {
   if (!notification.type.startsWith("directory.change.")) return null;
   const data = (notification.data ?? {}) as { changeId?: unknown; changeIds?: unknown };
-  if (typeof data.changeId === "string") return `/directory/approvals/${data.changeId}`;
-  if (Array.isArray(data.changeIds)) return "/directory/approvals";
+  if (typeof data.changeId === "string") return changePath(tenantSlug, data.changeId);
+  if (Array.isArray(data.changeIds)) return approvalsPath(tenantSlug);
   return null;
 }

@@ -7,6 +7,7 @@ import type { FilterDef, PaginationMeta } from "~/components/data-table/data-tab
 import { listChangeHistory } from "~/services/directory-changes.server";
 import { directoryEntityValues } from "~/utils/schemas/directory";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
+import { approvalsPath } from "~/utils/directory-routes";
 import type { Route } from "./+types/history";
 
 export const handle = { breadcrumb: "History" };
@@ -44,7 +45,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function ChangeHistory({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { changes, pagination } = loaderData;
-  const base = `/${params.tenant}/directory/approvals`;
+  const base = approvalsPath(params.tenant);
 
   const columns = useChangeColumns(base, [
     "entity",

@@ -1,6 +1,6 @@
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Form, data, redirect, useNavigate, useParams } from "react-router";
+import { Form, data, redirect, useNavigate } from "react-router";
 import { FormError } from "~/components/directory/form-error";
 import { Button } from "~/components/ui/button";
 import {
@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/dialog";
 import { reopenRejectedChange } from "~/services/directory-changes.server";
 import { requireSubmitContext } from "~/utils/directory-access.server";
-import { draftEditPath } from "~/utils/directory-routes";
+import { changePath, draftEditPath } from "~/utils/directory-routes";
 import { directoryDialogConflict } from "~/utils/directory-submit.server";
 import type { Route } from "./+types/$changeId.reopen";
 
@@ -30,9 +30,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     const draft = await reopenRejectedChange(params.changeId, ctx);
     // Straight into the editor, where the rejection notes are shown. Requests
     // without an editor (delete, move, assignments) land on the draft itself.
-    return redirect(
-      draftEditPath(params.tenant, draft) ?? `/${params.tenant}/directory/approvals/${draft.id}`,
-    );
+    return redirect(draftEditPath(params.tenant, draft) ?? changePath(params.tenant, draft.id));
   } catch (err) {
     return data({ error: directoryDialogConflict(request, err).message }, { status: 409 });
   }
@@ -42,8 +40,7 @@ export default function ReopenChangeDialog({ params, actionData }: Route.Compone
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
-  const { tenant } = useParams();
-  const base = `/${tenant}/directory/approvals/${params.changeId}`;
+  const base = changePath(params.tenant, params.changeId);
   const handleClose = () => navigate(base, { replace: true });
 
   return (

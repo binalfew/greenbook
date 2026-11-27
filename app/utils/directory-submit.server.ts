@@ -9,7 +9,9 @@ import {
   getReopenedFrom,
   saveDraft,
   submitAndApply,
+  toDraftRejection,
   type BatchResult,
+  type DraftRejection,
   type SubmitInput,
 } from "~/services/directory-changes.server";
 import {
@@ -193,13 +195,6 @@ export async function dispatchDirectoryDelete(
   });
 }
 
-/** Why the request a draft was reopened from was rejected. */
-export type DraftRejection = {
-  changeId: string;
-  notes: string | null;
-  reviewerName: string | null;
-};
-
 export type EditorDraft = {
   id: string;
   values: Record<string, unknown>;
@@ -244,17 +239,7 @@ export async function loadEditorDraft(
   ) {
     throw new Response("Not Found", { status: 404 });
   }
-  const rejected = await getReopenedFrom(draft);
-  const rejection = rejected
-    ? {
-        changeId: rejected.id,
-        notes: rejected.reviewerNotes,
-        reviewerName: rejected.reviewedBy
-          ? `${rejected.reviewedBy.firstName} ${rejected.reviewedBy.lastName}`.trim() ||
-            rejected.reviewedBy.email
-          : null,
-      }
-    : null;
+  const rejection = toDraftRejection(await getReopenedFrom(draft));
   return { id: draft.id, values: draftFormValues(draft.payload), rejection };
 }
 

@@ -10,6 +10,7 @@ import type { FilterDef, PaginationMeta } from "~/components/data-table/data-tab
 import { Button } from "~/components/ui/button";
 import { listMyChanges } from "~/services/directory-changes.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
+import { approvalsPath } from "~/utils/directory-routes";
 import type { Route } from "./+types/submissions";
 import type { action as submitDraftsAction } from "./approvals/submit-drafts";
 
@@ -50,7 +51,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function MyChanges({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { changes, pagination } = loaderData;
-  const base = `/${params.tenant}/directory/approvals`;
+  const base = approvalsPath(params.tenant);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const submitFetcher = useFetcher<typeof submitDraftsAction>();

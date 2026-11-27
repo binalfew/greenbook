@@ -526,6 +526,28 @@ export async function getReopenedFrom(change: { tenantId: string; clonedFromId: 
   });
 }
 
+/** Why the request a draft was reopened from was rejected. */
+export type DraftRejection = {
+  changeId: string;
+  notes: string | null;
+  reviewerName: string | null;
+};
+
+/** What the pages show of `getReopenedFrom`'s result. */
+export function toDraftRejection(
+  rejected: Awaited<ReturnType<typeof getReopenedFrom>>,
+): DraftRejection | null {
+  if (!rejected) return null;
+  const reviewer = rejected.reviewedBy;
+  return {
+    changeId: rejected.id,
+    notes: rejected.reviewerNotes,
+    reviewerName: reviewer
+      ? `${reviewer.firstName} ${reviewer.lastName}`.trim() || reviewer.email
+      : null,
+  };
+}
+
 /** Whether `viewerId` may reopen this change: their own, rejected, no live follow-up. */
 export async function canReopenChange(
   change: { id: string; tenantId: string; status: string; submittedById: string },

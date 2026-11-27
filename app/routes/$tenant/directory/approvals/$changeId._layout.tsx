@@ -27,13 +27,19 @@ import {
   computeDiff,
   getChange,
   getReopenedFrom,
+  toDraftRejection,
 } from "~/services/directory-changes.server";
 import {
   findPossibleDuplicatePeople,
   type DuplicateCandidate,
 } from "~/services/person-duplicates.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
-import { directoryEntitySegment, draftEditPath } from "~/utils/directory-routes";
+import {
+  approvalsPath,
+  directoryEntitySegment,
+  draftEditPath,
+  submissionsPath,
+} from "~/utils/directory-routes";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$changeId._layout";
 import type { action as submitDraftsAction } from "./submit-drafts";
@@ -62,9 +68,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const diffs = await computeDiff(change);
   // Reviewers go back to the approvals queue; a submitter without review
   // access goes back to their own submissions list.
-  const backHref = canReview
-    ? `/${params.tenant}/directory/approvals`
-    : `/${params.tenant}/directory/submissions`;
+  const backHref = canReview ? approvalsPath(params.tenant) : submissionsPath(params.tenant);
   // The advisory check the person editor runs on save, repeated here so a
   // reviewer sees it before approving. Only while the change is still open.
   const isOpenPersonChange =
@@ -83,16 +87,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     getReopenedFrom(change),
     canSubmit ? canReopenChange(change, user.id) : false,
   ]);
-  const reopenedFrom = rejected
-    ? {
-        changeId: rejected.id,
-        notes: rejected.reviewerNotes,
-        reviewerName: rejected.reviewedBy
-          ? `${rejected.reviewedBy.firstName} ${rejected.reviewedBy.lastName}`.trim() ||
-            rejected.reviewedBy.email
-          : null,
-      }
-    : null;
+  const reopenedFrom = toDraftRejection(rejected);
   return data({
     change,
     diffs,
@@ -117,7 +112,7 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
     canReopen,
     reopenedFrom,
   } = loaderData;
-  const base = `/${params.tenant}/directory/approvals`;
+  const base = approvalsPath(params.tenant);
   const entitySegment = directoryEntitySegment(change.entityType);
   const entityHref = change.entityId
     ? `/${params.tenant}/directory/${entitySegment}/${change.entityId}`

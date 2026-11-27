@@ -1,6 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Form, data, redirect, useNavigate, useParams } from "react-router";
+import { Form, data, redirect, useNavigate } from "react-router";
 import { FormError } from "~/components/directory/form-error";
 import { Button } from "~/components/ui/button";
 import {
@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/dialog";
 import { discardDraft } from "~/services/directory-changes.server";
 import { requireSubmitContext } from "~/utils/directory-access.server";
-import { draftsPath } from "~/utils/directory-routes";
+import { changePath, draftsPath } from "~/utils/directory-routes";
 import { directoryDialogConflict } from "~/utils/directory-submit.server";
 import type { Route } from "./+types/$changeId.discard";
 
@@ -38,8 +38,7 @@ export default function DiscardDraftDialog({ params, actionData }: Route.Compone
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
-  const { tenant } = useParams();
-  const base = `/${tenant}/directory/approvals/${params.changeId}`;
+  const base = changePath(params.tenant, params.changeId);
   const handleClose = () => navigate(base, { replace: true });
 
   return (
