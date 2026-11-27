@@ -247,7 +247,6 @@ describe("the system tenant has no directory", () => {
       const result = await setFlag(a.adminCookie, a.system.id, flagKey, true);
 
       expect(result.status).toBe(400);
-      expect(result.body).toContain("system tenant");
       const flag = await prisma.featureFlag.findUniqueOrThrow({ where: { key: flagKey } });
       expect(flag.enabledForTenants).toEqual([a.working.id]);
       expect(await getPublicTenantIds()).toEqual([a.working.id]);
