@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
-import { getTenantById, updateTenant } from "~/services/tenants.server";
+import { TenantSlugError, getTenantById, updateTenant } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -44,7 +44,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const ctx = buildServiceContext(request, user, params.tenantId);
-  await updateTenant(params.tenantId, submission.value, ctx);
+  try {
+    await updateTenant(params.tenantId, submission.value, ctx);
+  } catch (error) {
+    if (error instanceof TenantSlugError) {
+      return data(submission.reply({ fieldErrors: { slug: [error.message] } }), { status: 400 });
+    }
+    throw error;
+  }
 
   return redirect(`/${params.tenant}/tenants/${params.tenantId}`);
 }

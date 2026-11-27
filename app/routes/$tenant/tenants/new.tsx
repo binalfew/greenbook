@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
-import { createTenant } from "~/services/tenants.server";
+import { TenantSlugError, createTenant } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
@@ -50,16 +50,23 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const ctx = buildServiceContext(request, user);
-  await createTenant(
-    {
-      ...submission.value,
-      address: submission.value.address ?? "",
-      city: submission.value.city ?? "",
-      state: submission.value.state ?? "",
-      initialAdminUserId: submission.value.initialAdminUserId,
-    },
-    ctx,
-  );
+  try {
+    await createTenant(
+      {
+        ...submission.value,
+        address: submission.value.address ?? "",
+        city: submission.value.city ?? "",
+        state: submission.value.state ?? "",
+        initialAdminUserId: submission.value.initialAdminUserId,
+      },
+      ctx,
+    );
+  } catch (error) {
+    if (error instanceof TenantSlugError) {
+      return data(submission.reply({ fieldErrors: { slug: [error.message] } }), { status: 400 });
+    }
+    throw error;
+  }
 
   return redirect(`/${params.tenant}/tenants`);
 }
