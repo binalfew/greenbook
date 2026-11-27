@@ -83,7 +83,7 @@ export function NotificationBell({ tenantSlug, unreadCount, recent }: Notificati
         ) : (
           recent.map((n) => (
             <DropdownMenuItem key={n.id} asChild>
-              <Link to={base} className="flex flex-col items-start gap-0.5">
+              <Link to={`${base}/${n.id}/open`} className="flex flex-col items-start gap-0.5">
                 <div className="flex w-full items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", !n.read && "font-medium")}>
                     {n.title}

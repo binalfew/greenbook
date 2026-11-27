@@ -84,6 +84,17 @@ export async function markAsRead(id: string, userId: string) {
   });
 }
 
+/**
+ * Mark the user's notification read and return it, or null when the user has
+ * no such notification.
+ */
+export async function openNotification(id: string, userId: string) {
+  const notification = await prisma.notification.findFirst({ where: { id, userId } });
+  if (!notification) return null;
+  if (!notification.read) await markAsRead(id, userId);
+  return notification;
+}
+
 export async function markAllAsRead(userId: string) {
   return prisma.notification.updateMany({
     where: { userId, read: false },

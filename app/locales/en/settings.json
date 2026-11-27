@@ -39,6 +39,8 @@
   "tenantFlagHelp_FF_DIRECTORY": "Managers and focal persons of this tenant can open the Directory section.",
   "tenantFlag_FF_PUBLIC_DIRECTORY": "Cross-tenant search",
   "tenantFlagHelp_FF_PUBLIC_DIRECTORY": "This tenant's approved people appear in the directory search.",
+  "tenantFlag_FF_NOTIFICATIONS": "Notifications",
+  "tenantFlagHelp_FF_NOTIFICATIONS": "Users of this tenant see the notification bell and inbox, where submissions, approvals and rejections are announced.",
   "businessHoursTitle": "Business hours",
   "businessHoursSubtitle": "Define when your tenant is open. Used to anchor SLA pause windows and scheduling.",
   "newProfile": "New profile",

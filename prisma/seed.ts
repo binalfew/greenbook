@@ -2,7 +2,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
 import { pathToFileURL } from "node:url";
 import { PrismaClient } from "../app/generated/prisma/client";
-import { addTenantToNewTenantFlags } from "../app/utils/config/tenant-flag-membership.server";
+import {
+  addTenantToFlag,
+  addTenantToNewTenantFlags,
+} from "../app/utils/config/tenant-flag-membership.server";
 import { detachRolesFromTenants } from "./seed-role-tenancy";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
@@ -436,6 +439,22 @@ export async function runSeed() {
   await prisma.featureFlag.deleteMany({
     where: { key: { notIn: DEFAULT_FLAGS.map((f) => f.key) } },
   });
+
+  // Data move: workflow notifications used to be on for no tenant, so nobody
+  // they were addressed to saw the bell. While that is still the case, every
+  // tenant that uses the directory is opted in. Once any tenant is on the
+  // list this does nothing, so a later opt-out by hand is kept.
+  const notificationsFlag = await prisma.featureFlag.findUniqueOrThrow({
+    where: { key: "FF_NOTIFICATIONS" },
+  });
+  if (notificationsFlag.enabledForTenants.length === 0) {
+    const directoryFlag = await prisma.featureFlag.findUniqueOrThrow({
+      where: { key: "FF_DIRECTORY" },
+    });
+    for (const tenantId of directoryFlag.enabledForTenants) {
+      await addTenantToFlag(prisma, "FF_NOTIFICATIONS", tenantId);
+    }
+  }
 
   // Tenant-scoped flags with `enabled: true` are off by default until a
   // tenant is explicitly added to `enabledForTenants` (see evaluateFlag in

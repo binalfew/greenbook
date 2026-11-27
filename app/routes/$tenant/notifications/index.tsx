@@ -52,7 +52,12 @@ export default function NotificationsIndex({ loaderData, params }: Route.Compone
         <div className="flex items-start gap-2">
           {!row.read && <span className="bg-primary mt-1.5 size-2 shrink-0 rounded-full" />}
           <div className="min-w-0">
-            <p className={row.read ? "text-sm" : "text-sm font-medium"}>{row.title}</p>
+            <Link
+              to={`${base}/${row.id}/open`}
+              className={`text-sm underline-offset-4 hover:underline ${row.read ? "" : "font-medium"}`}
+            >
+              {row.title}
+            </Link>
             {row.message && <p className="text-muted-foreground truncate text-xs">{row.message}</p>}
           </div>
         </div>
