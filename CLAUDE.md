@@ -178,7 +178,7 @@ Four tenant-scoped entities with no cross-tenant references:
 - **`Position`** — formal post inside an org, with a `reportsToId` self-reference for internal reporting chains.
 - **`PositionAssignment`** — temporal link between a Person and a Position (`startDate`, `endDate`, `isCurrent`). Auto-closes the prior current assignment when a new one starts on the same position.
 
-Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 member states with region joins), `OrganizationType`, `PositionType`. Seeded into the system tenant by `seedDirectory(tenantId)` in `prisma/seed.ts`.
+Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 member states with region joins), `OrganizationType`, `PositionType`, plus `Title`. These tables have no `tenantId`: one set is shared by every tenant, seeded create-only by `seedDirectoryReference()` / `seedTitles()` in `prisma/seed.ts`, and only the global admin can edit it (`app/utils/reference-data-access.server.ts`).
 
 ### Editorial workflow (ChangeRequest engine)
 

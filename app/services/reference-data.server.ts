@@ -1,6 +1,6 @@
 import type { Prisma } from "~/generated/prisma/client.js";
 import { prisma } from "~/utils/db/db.server";
-import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
+import type { PaginatedQueryOptions } from "~/utils/types.server";
 
 // ─── Error ────────────────────────────────────────────────
 
@@ -17,6 +17,32 @@ export class ReferenceDataError extends Error {
 
 function handleDuplicate(entity: string): never {
   throw new ReferenceDataError(`A ${entity} with this code already exists`, 400, "DUPLICATE_CODE");
+}
+
+// The reference tables are one shared set, so a code is unique across the
+// whole table. Checked here rather than by a database constraint: databases
+// that predate the shared set hold one copy per tenant until the seed's
+// `mergeDuplicateReferenceData` step has collapsed them.
+const codeHolders = {
+  title: (code: string) => prisma.title.findFirst({ where: { code }, select: { id: true } }),
+  organizationType: (code: string) =>
+    prisma.organizationType.findFirst({ where: { code }, select: { id: true } }),
+  positionType: (code: string) =>
+    prisma.positionType.findFirst({ where: { code }, select: { id: true } }),
+  regionalGroup: (code: string) =>
+    prisma.regionalGroup.findFirst({ where: { code }, select: { id: true } }),
+  memberState: (code: string) =>
+    prisma.memberState.findFirst({ where: { abbreviation: code }, select: { id: true } }),
+};
+
+async function assertCodeAvailable(
+  model: keyof typeof codeHolders,
+  entity: string,
+  code: string,
+  exceptId?: string,
+) {
+  const holder = await codeHolders[model](code);
+  if (holder && holder.id !== exceptId) handleDuplicate(entity);
 }
 
 // ─── Input types ──────────────────────────────────────────
@@ -66,19 +92,18 @@ export type UpdateMemberStateInput = CreateMemberStateInput;
 
 // ─── Titles ───────────────────────────────────────────────
 
-export async function listTitles(tenantId: string, filter?: { isActive?: boolean }) {
+export async function listTitles(filter?: { isActive?: boolean }) {
   return prisma.title.findMany({
-    where: { tenantId, ...(filter?.isActive !== undefined && { isActive: filter.isActive }) },
+    where: { ...(filter?.isActive !== undefined && { isActive: filter.isActive }) },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 }
 
-export async function listTitlesPaginated(tenantId: string, options: PaginatedQueryOptions) {
+export async function listTitlesPaginated(options: PaginatedQueryOptions) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
   const search = where.search as string | undefined;
   const filter: Prisma.TitleWhereInput = {
-    tenantId,
     ...(search && {
       OR: [
         { code: { contains: search, mode: "insensitive" } },
@@ -101,63 +126,50 @@ export async function listTitlesPaginated(tenantId: string, options: PaginatedQu
   return { data, total };
 }
 
-export async function getTitle(id: string, tenantId: string) {
-  const title = await prisma.title.findFirst({ where: { id, tenantId } });
+export async function getTitle(id: string) {
+  const title = await prisma.title.findFirst({ where: { id } });
   if (!title) throw new ReferenceDataError("Title not found", 404, "NOT_FOUND");
   return title;
 }
 
-export async function createTitle(input: CreateTitleInput, ctx: TenantServiceContext) {
-  try {
-    return await prisma.title.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code: input.code.toUpperCase(),
-        name: input.name,
-        sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("title");
-    throw err;
-  }
+export async function createTitle(input: CreateTitleInput) {
+  await assertCodeAvailable("title", "title", input.code.toUpperCase());
+  return await prisma.title.create({
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      sortOrder: input.sortOrder ?? 0,
+      isActive: input.isActive ?? true,
+    },
+  });
 }
 
-export async function updateTitle(id: string, input: UpdateTitleInput, ctx: TenantServiceContext) {
-  await getTitle(id, ctx.tenantId);
-  try {
-    return await prisma.title.update({
-      where: { id },
-      data: {
-        code: input.code.toUpperCase(),
-        name: input.name,
-        sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("title");
-    throw err;
-  }
+export async function updateTitle(id: string, input: UpdateTitleInput) {
+  await getTitle(id);
+  await assertCodeAvailable("title", "title", input.code.toUpperCase(), id);
+  return await prisma.title.update({
+    where: { id },
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      sortOrder: input.sortOrder ?? 0,
+      isActive: input.isActive ?? true,
+    },
+  });
 }
 
-export async function deleteTitle(id: string, ctx: TenantServiceContext) {
-  await getTitle(id, ctx.tenantId);
+export async function deleteTitle(id: string) {
+  await getTitle(id);
   return prisma.title.delete({ where: { id } });
 }
 
 // ─── Organization Types ───────────────────────────────────
 
-export async function listOrganizationTypesPaginated(
-  tenantId: string,
-  options: PaginatedQueryOptions,
-) {
+export async function listOrganizationTypesPaginated(options: PaginatedQueryOptions) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
   const search = where.search as string | undefined;
   const filter: Prisma.OrganizationTypeWhereInput = {
-    tenantId,
     deletedAt: null,
     ...(search && {
       OR: [
@@ -182,62 +194,44 @@ export async function listOrganizationTypesPaginated(
   return { data, total };
 }
 
-export async function getOrganizationType(id: string, tenantId: string) {
+export async function getOrganizationType(id: string) {
   const row = await prisma.organizationType.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
   });
   if (!row) throw new ReferenceDataError("Organization type not found", 404, "NOT_FOUND");
   return row;
 }
 
-export async function createOrganizationType(
-  input: CreateOrganizationTypeInput,
-  ctx: TenantServiceContext,
-) {
-  try {
-    return await prisma.organizationType.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code: input.code.toUpperCase(),
-        name: input.name,
-        level: input.level,
-        description: input.description ?? null,
-        sortOrder: input.sortOrder ?? 0,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique"))
-      handleDuplicate("organization type");
-    throw err;
-  }
+export async function createOrganizationType(input: CreateOrganizationTypeInput) {
+  await assertCodeAvailable("organizationType", "organization type", input.code.toUpperCase());
+  return await prisma.organizationType.create({
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      level: input.level,
+      description: input.description ?? null,
+      sortOrder: input.sortOrder ?? 0,
+    },
+  });
 }
 
-export async function updateOrganizationType(
-  id: string,
-  input: UpdateOrganizationTypeInput,
-  ctx: TenantServiceContext,
-) {
-  await getOrganizationType(id, ctx.tenantId);
-  try {
-    return await prisma.organizationType.update({
-      where: { id },
-      data: {
-        code: input.code.toUpperCase(),
-        name: input.name,
-        level: input.level,
-        description: input.description ?? null,
-        sortOrder: input.sortOrder ?? 0,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique"))
-      handleDuplicate("organization type");
-    throw err;
-  }
+export async function updateOrganizationType(id: string, input: UpdateOrganizationTypeInput) {
+  await getOrganizationType(id);
+  await assertCodeAvailable("organizationType", "organization type", input.code.toUpperCase(), id);
+  return await prisma.organizationType.update({
+    where: { id },
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      level: input.level,
+      description: input.description ?? null,
+      sortOrder: input.sortOrder ?? 0,
+    },
+  });
 }
 
-export async function deleteOrganizationType(id: string, ctx: TenantServiceContext) {
-  await getOrganizationType(id, ctx.tenantId);
+export async function deleteOrganizationType(id: string) {
+  await getOrganizationType(id);
   return prisma.organizationType.update({
     where: { id },
     data: { deletedAt: new Date() },
@@ -246,12 +240,11 @@ export async function deleteOrganizationType(id: string, ctx: TenantServiceConte
 
 // ─── Position Types ───────────────────────────────────────
 
-export async function listPositionTypesPaginated(tenantId: string, options: PaginatedQueryOptions) {
+export async function listPositionTypesPaginated(options: PaginatedQueryOptions) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
   const search = where.search as string | undefined;
   const filter: Prisma.PositionTypeWhereInput = {
-    tenantId,
     deletedAt: null,
     ...(search && {
       OR: [
@@ -275,58 +268,42 @@ export async function listPositionTypesPaginated(tenantId: string, options: Pagi
   return { data, total };
 }
 
-export async function getPositionType(id: string, tenantId: string) {
+export async function getPositionType(id: string) {
   const row = await prisma.positionType.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
   });
   if (!row) throw new ReferenceDataError("Position type not found", 404, "NOT_FOUND");
   return row;
 }
 
-export async function createPositionType(
-  input: CreatePositionTypeInput,
-  ctx: TenantServiceContext,
-) {
-  try {
-    return await prisma.positionType.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code: input.code.toUpperCase(),
-        name: input.name,
-        description: input.description ?? null,
-        hierarchyLevel: input.hierarchyLevel ?? null,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("position type");
-    throw err;
-  }
+export async function createPositionType(input: CreatePositionTypeInput) {
+  await assertCodeAvailable("positionType", "position type", input.code.toUpperCase());
+  return await prisma.positionType.create({
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      description: input.description ?? null,
+      hierarchyLevel: input.hierarchyLevel ?? null,
+    },
+  });
 }
 
-export async function updatePositionType(
-  id: string,
-  input: UpdatePositionTypeInput,
-  ctx: TenantServiceContext,
-) {
-  await getPositionType(id, ctx.tenantId);
-  try {
-    return await prisma.positionType.update({
-      where: { id },
-      data: {
-        code: input.code.toUpperCase(),
-        name: input.name,
-        description: input.description ?? null,
-        hierarchyLevel: input.hierarchyLevel ?? null,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("position type");
-    throw err;
-  }
+export async function updatePositionType(id: string, input: UpdatePositionTypeInput) {
+  await getPositionType(id);
+  await assertCodeAvailable("positionType", "position type", input.code.toUpperCase(), id);
+  return await prisma.positionType.update({
+    where: { id },
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      description: input.description ?? null,
+      hierarchyLevel: input.hierarchyLevel ?? null,
+    },
+  });
 }
 
-export async function deletePositionType(id: string, ctx: TenantServiceContext) {
-  await getPositionType(id, ctx.tenantId);
+export async function deletePositionType(id: string) {
+  await getPositionType(id);
   return prisma.positionType.update({
     where: { id },
     data: { deletedAt: new Date() },
@@ -335,22 +312,18 @@ export async function deletePositionType(id: string, ctx: TenantServiceContext) 
 
 // ─── Regional Groups ──────────────────────────────────────
 
-export async function listRegionalGroups(tenantId: string) {
+export async function listRegionalGroups() {
   return prisma.regionalGroup.findMany({
-    where: { tenantId, deletedAt: null },
+    where: { deletedAt: null },
     orderBy: { name: "asc" },
   });
 }
 
-export async function listRegionalGroupsPaginated(
-  tenantId: string,
-  options: PaginatedQueryOptions,
-) {
+export async function listRegionalGroupsPaginated(options: PaginatedQueryOptions) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
   const search = where.search as string | undefined;
   const filter: Prisma.RegionalGroupWhereInput = {
-    tenantId,
     deletedAt: null,
     ...(search && {
       OR: [
@@ -373,56 +346,40 @@ export async function listRegionalGroupsPaginated(
   return { data, total };
 }
 
-export async function getRegionalGroup(id: string, tenantId: string) {
+export async function getRegionalGroup(id: string) {
   const row = await prisma.regionalGroup.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
   });
   if (!row) throw new ReferenceDataError("Regional group not found", 404, "NOT_FOUND");
   return row;
 }
 
-export async function createRegionalGroup(
-  input: CreateRegionalGroupInput,
-  ctx: TenantServiceContext,
-) {
-  try {
-    return await prisma.regionalGroup.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code: input.code.toUpperCase(),
-        name: input.name,
-        description: input.description ?? null,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("regional group");
-    throw err;
-  }
+export async function createRegionalGroup(input: CreateRegionalGroupInput) {
+  await assertCodeAvailable("regionalGroup", "regional group", input.code.toUpperCase());
+  return await prisma.regionalGroup.create({
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      description: input.description ?? null,
+    },
+  });
 }
 
-export async function updateRegionalGroup(
-  id: string,
-  input: UpdateRegionalGroupInput,
-  ctx: TenantServiceContext,
-) {
-  await getRegionalGroup(id, ctx.tenantId);
-  try {
-    return await prisma.regionalGroup.update({
-      where: { id },
-      data: {
-        code: input.code.toUpperCase(),
-        name: input.name,
-        description: input.description ?? null,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("regional group");
-    throw err;
-  }
+export async function updateRegionalGroup(id: string, input: UpdateRegionalGroupInput) {
+  await getRegionalGroup(id);
+  await assertCodeAvailable("regionalGroup", "regional group", input.code.toUpperCase(), id);
+  return await prisma.regionalGroup.update({
+    where: { id },
+    data: {
+      code: input.code.toUpperCase(),
+      name: input.name,
+      description: input.description ?? null,
+    },
+  });
 }
 
-export async function deleteRegionalGroup(id: string, ctx: TenantServiceContext) {
-  await getRegionalGroup(id, ctx.tenantId);
+export async function deleteRegionalGroup(id: string) {
+  await getRegionalGroup(id);
   return prisma.regionalGroup.update({
     where: { id },
     data: { deletedAt: new Date() },
@@ -431,12 +388,11 @@ export async function deleteRegionalGroup(id: string, ctx: TenantServiceContext)
 
 // ─── Member States ────────────────────────────────────────
 
-export async function listMemberStatesPaginated(tenantId: string, options: PaginatedQueryOptions) {
+export async function listMemberStatesPaginated(options: PaginatedQueryOptions) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
   const search = where.search as string | undefined;
   const filter: Prisma.MemberStateWhereInput = {
-    tenantId,
     deletedAt: null,
     ...(search && {
       OR: [
@@ -464,9 +420,9 @@ export async function listMemberStatesPaginated(tenantId: string, options: Pagin
   return { data, total };
 }
 
-export async function getMemberState(id: string, tenantId: string) {
+export async function getMemberState(id: string) {
   const row = await prisma.memberState.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     include: {
       regions: {
         include: { regionalGroup: { select: { id: true, name: true, code: true } } },
@@ -477,11 +433,32 @@ export async function getMemberState(id: string, tenantId: string) {
   return row;
 }
 
-export async function createMemberState(input: CreateMemberStateInput, ctx: TenantServiceContext) {
-  try {
-    return await prisma.memberState.create({
+export async function createMemberState(input: CreateMemberStateInput) {
+  await assertCodeAvailable("memberState", "member state", input.abbreviation.toUpperCase());
+  return await prisma.memberState.create({
+    data: {
+      fullName: input.fullName,
+      abbreviation: input.abbreviation.toUpperCase(),
+      dateJoined: new Date(input.dateJoined),
+      isActive: input.isActive ?? true,
+      predecessorOrg: input.predecessorOrg ?? null,
+      notes: input.notes ?? null,
+      regions: input.regionIds?.length
+        ? { create: input.regionIds.map((regionalGroupId) => ({ regionalGroupId })) }
+        : undefined,
+    },
+  });
+}
+
+export async function updateMemberState(id: string, input: UpdateMemberStateInput) {
+  await getMemberState(id);
+  await assertCodeAvailable("memberState", "member state", input.abbreviation.toUpperCase(), id);
+  // Replace regions wholesale — simpler than diffing and keeps the UI honest.
+  return await prisma.$transaction(async (tx) => {
+    await tx.memberStateRegion.deleteMany({ where: { memberStateId: id } });
+    return tx.memberState.update({
+      where: { id },
       data: {
-        tenantId: ctx.tenantId,
         fullName: input.fullName,
         abbreviation: input.abbreviation.toUpperCase(),
         dateJoined: new Date(input.dateJoined),
@@ -493,45 +470,11 @@ export async function createMemberState(input: CreateMemberStateInput, ctx: Tena
           : undefined,
       },
     });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("member state");
-    throw err;
-  }
+  });
 }
 
-export async function updateMemberState(
-  id: string,
-  input: UpdateMemberStateInput,
-  ctx: TenantServiceContext,
-) {
-  await getMemberState(id, ctx.tenantId);
-  try {
-    // Replace regions wholesale — simpler than diffing and keeps the UI honest.
-    return await prisma.$transaction(async (tx) => {
-      await tx.memberStateRegion.deleteMany({ where: { memberStateId: id } });
-      return tx.memberState.update({
-        where: { id },
-        data: {
-          fullName: input.fullName,
-          abbreviation: input.abbreviation.toUpperCase(),
-          dateJoined: new Date(input.dateJoined),
-          isActive: input.isActive ?? true,
-          predecessorOrg: input.predecessorOrg ?? null,
-          notes: input.notes ?? null,
-          regions: input.regionIds?.length
-            ? { create: input.regionIds.map((regionalGroupId) => ({ regionalGroupId })) }
-            : undefined,
-        },
-      });
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("member state");
-    throw err;
-  }
-}
-
-export async function deleteMemberState(id: string, ctx: TenantServiceContext) {
-  await getMemberState(id, ctx.tenantId);
+export async function deleteMemberState(id: string) {
+  await getMemberState(id);
   return prisma.memberState.update({
     where: { id },
     data: { deletedAt: new Date() },
@@ -540,14 +483,14 @@ export async function deleteMemberState(id: string, ctx: TenantServiceContext) {
 
 // ─── Counts for dashboard ─────────────────────────────────
 
-export async function getReferenceDataCounts(tenantId: string) {
+export async function getReferenceDataCounts() {
   const [titles, organizationTypes, positionTypes, regionalGroups, memberStates] =
     await Promise.all([
-      prisma.title.count({ where: { tenantId } }),
-      prisma.organizationType.count({ where: { tenantId, deletedAt: null } }),
-      prisma.positionType.count({ where: { tenantId, deletedAt: null } }),
-      prisma.regionalGroup.count({ where: { tenantId, deletedAt: null } }),
-      prisma.memberState.count({ where: { tenantId, deletedAt: null } }),
+      prisma.title.count(),
+      prisma.organizationType.count({ where: { deletedAt: null } }),
+      prisma.positionType.count({ where: { deletedAt: null } }),
+      prisma.regionalGroup.count({ where: { deletedAt: null } }),
+      prisma.memberState.count({ where: { deletedAt: null } }),
     ]);
   return {
     titles,

@@ -70,13 +70,11 @@ async function arrange() {
     },
   });
 
-  const [homeOrgType, otherOrgType] = await Promise.all(
-    [home, other].map((t) =>
-      prisma.organizationType.create({
-        data: { tenantId: t.id, code: "ROOT", name: "Root", level: 0 },
-      }),
-    ),
-  );
+  // Reference data is one set shared by every tenant.
+  const homeOrgType = await prisma.organizationType.create({
+    data: { code: "ROOT", name: "Root", level: 0 },
+  });
+  const otherOrgType = homeOrgType;
 
   await prisma.person.create({
     data: { tenantId: home.id, firstName: "Hana", lastName: "Home" },

@@ -8,20 +8,15 @@ import {
   getMemberState,
   ReferenceDataError,
 } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
-import { buildServiceContext } from "~/utils/request-context.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import type { Route } from "./+types/$memberStateId.delete";
 
 export const handle = { breadcrumb: "Delete" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requireReferenceDataAdmin(request);
   try {
-    const memberState = await getMemberState(params.memberStateId, tenantId);
+    const memberState = await getMemberState(params.memberStateId);
     return data({ memberState });
   } catch (err) {
     if (err instanceof ReferenceDataError) {
@@ -32,13 +27,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "reference-data", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
-  const ctx = buildServiceContext(request, user, tenantId);
-  await deleteMemberState(params.memberStateId, ctx);
+  await requireReferenceDataAdmin(request);
+  await deleteMemberState(params.memberStateId);
   return redirect(`/${params.tenant}/settings/references/member-states`);
 }
 
