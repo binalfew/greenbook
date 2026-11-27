@@ -86,11 +86,11 @@ A single `SIGTERM` / `SIGINT` handler in `server/app.ts` runs every hook in regi
 
 ## Logger sweep
 
-Every `console.info/warn/error/debug` in server-only files from phases 6–12 got rewritten to `logger.*`. 8 files touched:
+Every `console.info/warn/error/debug` in server-only files from phases 6–12 got rewritten to `logger.*`. Files touched (the webhook services swept at the time have since been removed):
 
-- `app/services/sso.server.ts`, `app/services/webhook-delivery.server.ts`, `app/services/webhook-dispatcher.server.ts`
+- `app/services/sso.server.ts`
 - `app/utils/auth/audit.server.ts`, `app/utils/auth/sso-state.server.ts`
-- `app/utils/events/job-handlers.server.ts`, `app/utils/events/job-queue.server.ts`, `app/utils/events/webhook-emitter.server.ts`
+- `app/utils/events/job-handlers.server.ts`, `app/utils/events/job-queue.server.ts`
 
 Files outside `app/` (namely `public/sw.js` and `tests/**`) were deliberately NOT touched.
 

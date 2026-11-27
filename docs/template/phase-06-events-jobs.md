@@ -1,6 +1,6 @@
 # Events & Jobs (Phase 6)
 
-The template ships a background-jobs, SSE, webhook, and notification stack. Entry points:
+The template ships a background-jobs, SSE, and notification stack. Entry points:
 
 ## Job queue
 
@@ -26,7 +26,7 @@ await enqueueJob("my-job", { id: "abc" }, { maxAttempts: 5, delay: 60_000 });
 
 ## Domain events
 
-Services emit domain events through `emitDomainEvent(tenantId, eventType, data)` from `app/utils/events/emit-domain-event.server.ts`. This is **fire-and-forget** — it calls `emitSSE` (real-time UI) and `emitWebhookEvent` (external consumers) and suppresses errors so the caller's write path never blocks on a slow webhook.
+Services emit domain events through `emitDomainEvent(tenantId, eventType, data)` from `app/utils/events/emit-domain-event.server.ts`. This is **fire-and-forget** — it records the event in the structured log (debug level) and never throws, so the caller's write path is never blocked. There is no outbound delivery: the in-process consumers (notifications, audit trail) are called by the emitting service next to the `emitDomainEvent` call. Event names live in `app/utils/events/domain-events.ts`.
 
 **Rule: services emit, routes never emit directly.** Keep the routes thin.
 
@@ -35,12 +35,6 @@ Services emit domain events through `emitDomainEvent(tenantId, eventType, data)`
 await prisma.user.create({ data: { ... } });
 emitDomainEvent(tenantId, "user.created", { id: user.id, email: user.email });
 ```
-
-## Webhook subscriptions
-
-`app/services/webhooks.server.ts` — subscription CRUD + pause/resume + rotate-secret + test-endpoint. `webhook-dispatcher.server.ts` fans an event out to matching subscriptions and fires `deliverWebhook` asynchronously. `webhook-delivery.server.ts` signs the payload with HMAC-SHA256, POSTs with timeout, retries with per-subscription backoff, and opens a circuit breaker after `CIRCUIT_BREAKER_THRESHOLD` consecutive failures. Event names the template emits live in `app/utils/events/webhook-events.ts` — apps extend this catalog with their own.
-
-Feature flag: `FF_WEBHOOKS` (default **off**). The emitter short-circuits when disabled.
 
 ## SSE
 
@@ -65,11 +59,8 @@ Phase 6b activated the Phase 6a infrastructure:
 - **Emission wiring.** `emitDomainEvent` now fires from `tenants.server.ts` (tenant.created / updated / deleted), `api-keys.server.ts` (api_key.created / revoked / rotated), `invitations.server.ts` (invitation.created / accepted / revoked), and `settings.server.ts` (settings.changed, tenant-scope only). A shared `emit-user-created.server.ts` helper fires `user.created` from `signup()` and the invitation-accept route.
 - **Notification bell + listener** mounted in the tenant top-nav (`~/components/notification-bell`, `~/components/notification-listener`). Bell reads `unreadCount` + 5 recent notifications from the layout loader; listener wraps `useSSE` and surfaces notifications as `toast.info`. Both gated: bell on `FF_NOTIFICATIONS`, listener on `FF_SSE`.
 - **Notifications routes** at `$tenant/notifications/` — DataTable list with status filter, row actions for mark-as-read + delete, toolbar action for mark-all-read. All gated on `FF_NOTIFICATIONS` via `requireFeature`.
-- **Webhook admin** at `$tenant/settings/webhooks/` — list, new, detail (2/3 deliveries + 1/3 info with test-ping button), edit (standalone escape route), delete + rotate-secret dialogs. Uses the Phase 5 shared-editor pattern (`+shared/webhook-editor.tsx` + `.server.tsx`). Rotate reveals the new secret exactly once; creation reveals via `?secretRevealed=1` query flag.
-- **Settings sidebar** gained a "Webhooks" entry that conditionally renders based on the per-tenant `FF_WEBHOOKS` flag (evaluated in the settings `_layout.tsx` loader).
-- **i18n:** `notifications.json` fleshed out (20 keys); new `webhooks.json` namespace (40 keys) registered in `~/utils/i18n.ts`.
-- **Permissions:** `notification:{read,write,delete}` + `webhook:{read,write,delete}` added to the seed UNIQUE_PERMISSIONS list (admin role gets them automatically via the seed's "all permissions" assignment).
-- **Webhook event catalog** grew: `tenant.created`, `tenant.deleted` added alongside the existing `tenant.updated`.
+- **i18n:** `notifications.json` fleshed out (20 keys).
+- **Permissions:** `notification:{read,write,delete}` added to the seed UNIQUE_PERMISSIONS list (admin role gets them automatically via the seed's "all permissions" assignment).
 
 ## Deviations
 

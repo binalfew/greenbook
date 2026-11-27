@@ -1,6 +1,6 @@
 import type { Prisma } from "~/generated/prisma/client.js";
 import { prisma } from "~/utils/db/db.server";
-import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
+import type { PaginatedQueryOptions } from "~/utils/types.server";
 
 // ─── Error ────────────────────────────────────────────────
 
@@ -54,15 +54,6 @@ export interface CreateTitleInput {
   isActive?: boolean;
 }
 export type UpdateTitleInput = CreateTitleInput;
-
-export interface CreateLanguageInput {
-  code: string;
-  name: string;
-  nativeName?: string | null;
-  sortOrder?: number;
-  isActive?: boolean;
-}
-export type UpdateLanguageInput = CreateLanguageInput;
 
 export interface CreateOrganizationTypeInput {
   code: string;
@@ -170,95 +161,6 @@ export async function updateTitle(id: string, input: UpdateTitleInput) {
 export async function deleteTitle(id: string) {
   await getTitle(id);
   return prisma.title.delete({ where: { id } });
-}
-
-// ─── Languages ────────────────────────────────────────────
-
-export async function listLanguages(tenantId: string, filter?: { isActive?: boolean }) {
-  return prisma.language.findMany({
-    where: { tenantId, ...(filter?.isActive !== undefined && { isActive: filter.isActive }) },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
-}
-
-export async function listLanguagesPaginated(tenantId: string, options: PaginatedQueryOptions) {
-  const { page, pageSize, where = {}, orderBy } = options;
-  const skip = (page - 1) * pageSize;
-  const search = where.search as string | undefined;
-  const filter: Prisma.LanguageWhereInput = {
-    tenantId,
-    ...(search && {
-      OR: [
-        { code: { contains: search, mode: "insensitive" } },
-        { name: { contains: search, mode: "insensitive" } },
-      ],
-    }),
-  };
-  const [data, total] = await Promise.all([
-    prisma.language.findMany({
-      where: filter,
-      orderBy: (orderBy as Prisma.LanguageOrderByWithRelationInput[] | undefined) ?? [
-        { sortOrder: "asc" },
-        { name: "asc" },
-      ],
-      skip,
-      take: pageSize,
-    }),
-    prisma.language.count({ where: filter }),
-  ]);
-  return { data, total };
-}
-
-export async function getLanguage(id: string, tenantId: string) {
-  const language = await prisma.language.findFirst({ where: { id, tenantId } });
-  if (!language) throw new ReferenceDataError("Language not found", 404, "NOT_FOUND");
-  return language;
-}
-
-export async function createLanguage(input: CreateLanguageInput, ctx: TenantServiceContext) {
-  try {
-    return await prisma.language.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code: input.code.toLowerCase(),
-        name: input.name,
-        nativeName: input.nativeName ?? null,
-        sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("language");
-    throw err;
-  }
-}
-
-export async function updateLanguage(
-  id: string,
-  input: UpdateLanguageInput,
-  ctx: TenantServiceContext,
-) {
-  await getLanguage(id, ctx.tenantId);
-  try {
-    return await prisma.language.update({
-      where: { id },
-      data: {
-        code: input.code.toLowerCase(),
-        name: input.name,
-        nativeName: input.nativeName ?? null,
-        sortOrder: input.sortOrder ?? 0,
-        isActive: input.isActive ?? true,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Unique")) handleDuplicate("language");
-    throw err;
-  }
-}
-
-export async function deleteLanguage(id: string, ctx: TenantServiceContext) {
-  await getLanguage(id, ctx.tenantId);
-  return prisma.language.delete({ where: { id } });
 }
 
 // ─── Organization Types ───────────────────────────────────
@@ -581,11 +483,10 @@ export async function deleteMemberState(id: string) {
 
 // ─── Counts for dashboard ─────────────────────────────────
 
-export async function getReferenceDataCounts(tenantId: string) {
-  const [titles, languages, organizationTypes, positionTypes, regionalGroups, memberStates] =
+export async function getReferenceDataCounts() {
+  const [titles, organizationTypes, positionTypes, regionalGroups, memberStates] =
     await Promise.all([
       prisma.title.count(),
-      prisma.language.count({ where: { tenantId } }),
       prisma.organizationType.count({ where: { deletedAt: null } }),
       prisma.positionType.count({ where: { deletedAt: null } }),
       prisma.regionalGroup.count({ where: { deletedAt: null } }),
@@ -593,7 +494,6 @@ export async function getReferenceDataCounts(tenantId: string) {
     ]);
   return {
     titles,
-    languages,
     organizationTypes,
     positionTypes,
     regionalGroups,

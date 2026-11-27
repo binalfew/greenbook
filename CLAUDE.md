@@ -17,7 +17,7 @@ The extraction plan that produced this template (`docs/superpowers/specs/2026-04
 | 3     | Settings + feature flags + business hours                     | `app/services/{settings,business-hours}.server.ts`, `app/utils/config/{settings,feature-flags}.server.ts`                                                                                                                                                   | —                                                                                        |
 | 4     | i18n                                                          | `app/utils/i18n.ts`, `app/locales/`, `app/utils/i18n-cookie.server.ts`                                                                                                                                                                                      | See "i18n" below                                                                         |
 | 5     | Components library                                            | `app/components/form.tsx`, `app/components/data-table/`, `app/hooks/use-cascade.ts`                                                                                                                                                                         | [docs/template/phase-05-components.md](docs/template/phase-05-components.md)             |
-| 6     | Events + jobs + webhooks + SSE + notifications                | `app/utils/events/`, `app/services/{webhooks,webhook-dispatcher,webhook-delivery,notifications}.server.ts`, `server/sse.ts`                                                                                                                                 | [docs/template/phase-06-events-jobs.md](docs/template/phase-06-events-jobs.md)           |
+| 6     | Events + jobs + SSE + notifications                           | `app/utils/events/`, `app/services/notifications.server.ts`, `server/sse.ts`                                                                                                                                                                                | [docs/template/phase-06-events-jobs.md](docs/template/phase-06-events-jobs.md)           |
 | 7     | Saved views + custom fields + search + export                 | `app/services/{saved-views,custom-fields,search,data-export,view-filters}.server.ts`                                                                                                                                                                        | [docs/template/phase-07-data-patterns.md](docs/template/phase-07-data-patterns.md)       |
 | 8     | Reference data (Country/Title/Language/Currency)              | `app/services/reference-data.server.ts`, `app/routes/$tenant/settings/references/`                                                                                                                                                                          | [docs/template/phase-08-reference-data.md](docs/template/phase-08-reference-data.md)     |
 | 9     | Privacy (DSAR + consent) + audit-log UI                       | `app/services/privacy.server.ts`, `app/routes/$tenant/settings/privacy/`, `app/routes/$tenant/logs/`                                                                                                                                                        | [docs/template/phase-09-privacy-audit.md](docs/template/phase-09-privacy-audit.md)       |
@@ -73,7 +73,7 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
 - **UI:** shadcn/ui + Radix primitives + Tailwind CSS 4 + lucide-react
 - **Forms:** Conform (`@conform-to/react` + `@conform-to/zod/v4`) with Zod v4
 - **Auth:** Cookie-based sessions with DB backing, optional 2FA (TOTP + recovery codes), API keys with rate-limit tiers, SSO (OIDC + SAML)
-- **Events/jobs:** in-process Postgres-backed queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain events, webhooks with HMAC signatures, SSE for real-time UI
+- **Events/jobs:** in-process Postgres-backed queue (`FOR UPDATE SKIP LOCKED`), idempotency keys, domain events, SSE for real-time UI
 - **Observability:** pino logger, AsyncLocalStorage correlation IDs, Sentry (client + server), rate-limit audit trail
 - **i18n:** i18next with en + fr, cookie-persisted, 13 namespaces
 - **PWA:** service worker (cache-first static / network-first API / offline fallback), install + update prompts, IndexedDB sync queue
@@ -89,7 +89,7 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
   - `app/utils/db/` — Prisma client with Postgres adapter wiring
   - `app/utils/email/` — email sending via Resend
   - `app/utils/config/` — environment variable parsing, settings SDK, feature-flag SDK + client-safe keys
-  - `app/utils/events/` — job queue, domain event bus, webhook emitter, idempotency
+  - `app/utils/events/` — job queue, domain events, idempotency
   - `app/utils/monitoring/` — pino logger + Sentry (client + server)
   - `app/utils/offline/` — service-worker registration + IndexedDB sync queue
   - `app/utils/schemas/` — cross-cutting Zod schemas (privacy, sso, directory, tenant)
@@ -127,7 +127,6 @@ Task-based quick index for common work:
 | Cascading selects                   | `app/hooks/use-cascade.ts` + existing consumers                              | `docs/template/phase-05-components.md`       |
 | Tenant-scoped list with filters     | `app/routes/$tenant/directory/organizations/index.tsx`                       | `docs/template/phase-07-data-patterns.md`    |
 | Background job                      | `app/utils/events/job-handlers.server.ts`                                    | `docs/template/phase-06-events-jobs.md`      |
-| Webhook emission                    | `app/services/webhooks.server.ts`                                            | `docs/template/phase-06-events-jobs.md`      |
 | Gate by feature flag                | `requireFeature(request, "FF_NAME")`                                         | Phase 3 services in table above              |
 | RBAC check                          | `requirePermission(request, "resource", "action")`                           | Phase 1 services in table above              |
 | Structured logging with correlation | `getRequestLogger()` from `~/middleware/correlation.server`                  | `docs/template/phase-13-server-hardening.md` |
@@ -190,7 +189,7 @@ Every mutation flows through `app/services/directory-changes.server.ts`. The rea
 - **One PENDING per `(entityType, entityId)`** enforced in service (future partial unique DB index).
 - **Approval runs in a single `$transaction`** — `_applyCreate/Update/Move/SoftDelete` writers each accept an optional `tx: Prisma.TransactionClient` so guards, writes, and the ChangeRequest update commit atomically.
 - **Batch approve/reject** via `approveChanges(ids, ...)` / `rejectChanges(ids, ...)` — per-id atomic loop, capped at `MAX_BATCH_SIZE = 100`. NOT_FOUND / NOT_PENDING become `skipped` in the `BatchResult` rather than `failed`.
-- **Domain events** — entity-level events (`organization.created`, etc.) fire **only on approval**; a parallel event stream (`change.submitted`, `change.approved`, `change.rejected`, `change.withdrawn`) drives workflow consumers. Catalog in `app/utils/events/webhook-events.ts`.
+- **Domain events** — entity-level events (`organization.created`, etc.) fire **only on approval**; a parallel event stream (`change.submitted`, `change.approved`, `change.rejected`, `change.withdrawn`) drives workflow consumers. Catalog in `app/utils/events/domain-events.ts`.
 
 ### Cross-tenant directory tier (Phase D — shipped, login-gated since the post-demo change)
 

@@ -10,7 +10,6 @@ import enNav from "~/locales/en/nav.json";
 import enSettings from "~/locales/en/settings.json";
 import enUsers from "~/locales/en/users.json";
 import enNotifications from "~/locales/en/notifications.json";
-import enWebhooks from "~/locales/en/webhooks.json";
 import enReferences from "~/locales/en/references.json";
 import enLogs from "~/locales/en/logs.json";
 import enSso from "~/locales/en/sso.json";
@@ -26,7 +25,6 @@ import frNav from "~/locales/fr/nav.json";
 import frSettings from "~/locales/fr/settings.json";
 import frUsers from "~/locales/fr/users.json";
 import frNotifications from "~/locales/fr/notifications.json";
-import frWebhooks from "~/locales/fr/webhooks.json";
 import frReferences from "~/locales/fr/references.json";
 import frLogs from "~/locales/fr/logs.json";
 import frSso from "~/locales/fr/sso.json";
@@ -66,7 +64,6 @@ const resources = {
     settings: enSettings,
     users: enUsers,
     notifications: enNotifications,
-    webhooks: enWebhooks,
     references: enReferences,
     logs: enLogs,
     sso: enSso,
@@ -82,7 +79,6 @@ const resources = {
     settings: frSettings,
     users: frUsers,
     notifications: frNotifications,
-    webhooks: frWebhooks,
     references: frReferences,
     logs: frLogs,
     sso: frSso,
@@ -100,7 +96,6 @@ export const NAMESPACES = [
   "settings",
   "users",
   "notifications",
-  "webhooks",
   "references",
   "logs",
   "sso",

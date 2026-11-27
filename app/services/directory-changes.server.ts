@@ -116,6 +116,21 @@ export type ChangeListRow = ChangeRequest & {
 
 // ─── Guards ─────────────────────────────────────────────────────────────
 
+// The change that currently blocks a new edit or delete of this record, if
+// any. Detail pages use it to show the pending badge and to disable Edit and
+// Delete, so its notion of "blocking" must stay in step with the submit guard
+// (`lockEntityAndAssertNoPending`) below.
+export async function findPendingChange(
+  tenantId: string,
+  entityType: DirectoryEntityKey,
+  entityId: string,
+) {
+  return prisma.changeRequest.findFirst({
+    where: { tenantId, entityType, entityId, status: "PENDING" },
+    select: { id: true, submittedById: true, submittedAt: true },
+  });
+}
+
 export async function assertNoPendingConflict(
   tenantId: string,
   entityType: DirectoryEntityKey,
@@ -1115,6 +1130,9 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a == null || b == null) return a === b;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  // A stored date against the payload's ISO string: compare the instants.
+  if (a instanceof Date && typeof b === "string") return a.getTime() === Date.parse(b);
+  if (typeof a === "string" && b instanceof Date) return Date.parse(a) === b.getTime();
   if (typeof a !== typeof b) return false;
   if (typeof a !== "object") return a === b;
   if (Array.isArray(a) !== Array.isArray(b)) return false;

@@ -15,7 +15,7 @@ import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import { PLAN_OPTIONS, createTenantSchema } from "~/utils/schemas/tenant";
+import { createTenantSchema } from "~/utils/schemas/tenant";
 import type { Route } from "./+types/new";
 
 export const handle = { breadcrumb: "New Tenant" };
@@ -216,25 +216,6 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
                 {fields.state.errors && <FieldError>{fields.state.errors}</FieldError>}
               </Field>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Subscription</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field>
-              <FieldLabel htmlFor={fields.subscriptionPlan.id}>Plan</FieldLabel>
-              <SelectField
-                meta={fields.subscriptionPlan}
-                options={PLAN_OPTIONS}
-                placeholder="Select plan"
-              />
-              {fields.subscriptionPlan.errors && (
-                <FieldError>{fields.subscriptionPlan.errors}</FieldError>
-              )}
-            </Field>
           </CardContent>
         </Card>
 

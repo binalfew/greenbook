@@ -77,7 +77,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (!(error instanceof EmailTakenError)) throw error;
     return data(submission.reply({ fieldErrors: { email: [error.message] } }), { status: 400 });
   }
-  if (isGlobalAdmin) {
+  // A form without the tenant field is not a request to clear the tenant;
+  // only an explicit value ("" included) from the picker reassigns.
+  if (isGlobalAdmin && formData.has("tenantId")) {
     await setUserTenantAssignment(params.userId, targetTenantId, ctx);
   }
 

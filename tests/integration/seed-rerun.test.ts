@@ -27,7 +27,6 @@ async function directorySnapshot() {
       orderBy: [{ memberStateId: "asc" }, { regionalGroupId: "asc" }],
     }),
     titles: await prisma.title.findMany(byId),
-    languages: await prisma.language.findMany(byId),
   };
 }
 

@@ -23,6 +23,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     entityId: hasId ? id : undefined,
     payload,
   });
+  if (outcome.conflict) {
+    return data(submission.reply({ formErrors: [outcome.conflict.message] }), { status: 409 });
+  }
 
   // SELF_APPROVED lands on the entity; REVIEWED sends the user to the list
   // with a ?submitted=1 banner since the entity doesn't exist yet.

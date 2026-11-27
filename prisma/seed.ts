@@ -51,9 +51,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "notification", action: "read", module: "events", description: "Read notifications" },
   { resource: "notification", action: "write", module: "events", description: "Manage notifications" },
   { resource: "notification", action: "delete", module: "events", description: "Delete notifications" },
-  { resource: "webhook", action: "read", module: "events", description: "Read webhook subscriptions" },
-  { resource: "webhook", action: "write", module: "events", description: "Manage webhook subscriptions" },
-  { resource: "webhook", action: "delete", module: "events", description: "Delete webhook subscriptions" },
   { resource: "saved-view", action: "read", module: "data", description: "Read saved views" },
   { resource: "saved-view", action: "write", module: "data", description: "Manage saved views" },
   { resource: "saved-view", action: "delete", module: "data", description: "Delete saved views" },
@@ -153,6 +150,11 @@ export async function runSeed() {
         brandTheme: "auc",
       },
     }));
+
+  // Webhooks were removed from the product: drop their permissions (role
+  // grants cascade) and any stored settings left behind in older databases.
+  await prisma.permission.deleteMany({ where: { resource: "webhook" } });
+  await prisma.systemSetting.deleteMany({ where: { key: { startsWith: "webhooks." } } });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -388,12 +390,6 @@ export async function runSeed() {
       description: "Allow global admins to impersonate tenant users",
     },
     {
-      key: "FF_WEBHOOKS",
-      scope: "tenant",
-      enabled: false,
-      description: "Allow tenant to register webhook subscriptions",
-    },
-    {
       key: "FF_NOTIFICATIONS",
       scope: "tenant",
       enabled: true,
@@ -467,7 +463,6 @@ export async function runSeed() {
   console.log("Seeding shared reference data...");
   await seedTitles();
   await seedDirectoryReference();
-  await seedLanguages(tenant.id);
 
   // Seed directory baseline for the system tenant: starter org tree. Demo
   // focal/manager user accounts go to the working tenant (misd if provisioned, else
@@ -480,15 +475,6 @@ export async function runSeed() {
     managerRoleId: managerRole.id,
     userTenantId: workingTenant.id,
   });
-
-  // Languages are still stored per tenant.
-  const otherTenants = await prisma.tenant.findMany({
-    where: { deletedAt: null, id: { not: tenant.id } },
-    select: { id: true, slug: true },
-  });
-  for (const t of otherTenants) {
-    await seedLanguages(t.id);
-  }
 
   console.log("✅ Seeding completed!");
   console.log("🔑 Users created:");
@@ -516,26 +502,6 @@ async function seedTitles() {
     if (await isNewCode(prisma.title.findFirst({ where: { code: t.code }, select: { id: true } }))) {
       await prisma.title.create({ data: { sortOrder: i, ...t } });
     }
-  }
-}
-
-/** Per-tenant languages. Safe to re-run — each row upserts on `(tenantId, code)`. */
-async function seedLanguages(tenantId: string) {
-  const languages = [
-    { code: "en", name: "English", nativeName: "English" },
-    { code: "fr", name: "French", nativeName: "Français" },
-    { code: "de", name: "German", nativeName: "Deutsch" },
-    { code: "es", name: "Spanish", nativeName: "Español" },
-    { code: "ar", name: "Arabic", nativeName: "العربية" },
-    { code: "am", name: "Amharic", nativeName: "አማርኛ" },
-    { code: "zh", name: "Chinese", nativeName: "中文" },
-  ];
-  for (const [i, l] of languages.entries()) {
-    await prisma.language.upsert({
-      where: { tenantId_code: { tenantId, code: l.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...l },
-    });
   }
 }
 
