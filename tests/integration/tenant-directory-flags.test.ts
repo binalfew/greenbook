@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
+import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
@@ -43,17 +43,9 @@ async function arrange() {
   });
 
   // The system tenant is already on both lists, as the seed leaves it.
-  await prisma.featureFlag.createMany({
-    data: [
-      { key: "FF_DIRECTORY", scope: "tenant", enabled: true, enabledForTenants: [system.id] },
-      {
-        key: "FF_PUBLIC_DIRECTORY",
-        scope: "tenant",
-        enabled: true,
-        enabledForTenants: [system.id],
-      },
-      { key: "FF_IMPERSONATION", scope: "global", enabled: true },
-    ],
+  await seedNewTenantFlags(prisma, [system.id]);
+  await prisma.featureFlag.create({
+    data: { key: "FF_IMPERSONATION", scope: "global", enabled: true },
   });
 
   const admin = await prisma.user.create({
@@ -203,11 +195,11 @@ describe("the global admin changes a tenant's features", () => {
     const a = await arrange();
     const tenant = await prisma.tenant.create({ data: buildTenant() });
 
-    expect(await listedFlags(a.adminCookie, tenant.id)).toEqual({
-      FF_DIRECTORY: false,
-      FF_PUBLIC_DIRECTORY: false,
-    });
-    expect(await listedFlags(a.adminCookie, a.system.id)).toEqual({
+    const fresh = await listedFlags(a.adminCookie, tenant.id);
+    expect(fresh).toMatchObject({ FF_DIRECTORY: false, FF_PUBLIC_DIRECTORY: false });
+    // A global flag has no per-tenant enabled list, so it is not offered.
+    expect(fresh).not.toHaveProperty("FF_IMPERSONATION");
+    expect(await listedFlags(a.adminCookie, a.system.id)).toMatchObject({
       FF_DIRECTORY: true,
       FF_PUBLIC_DIRECTORY: true,
     });

@@ -50,9 +50,6 @@ const UNIQUE_PERMISSIONS = [
   { resource: "notification", action: "read", module: "events", description: "Read notifications" },
   { resource: "notification", action: "write", module: "events", description: "Manage notifications" },
   { resource: "notification", action: "delete", module: "events", description: "Delete notifications" },
-  { resource: "webhook", action: "read", module: "events", description: "Read webhook subscriptions" },
-  { resource: "webhook", action: "write", module: "events", description: "Manage webhook subscriptions" },
-  { resource: "webhook", action: "delete", module: "events", description: "Delete webhook subscriptions" },
   { resource: "saved-view", action: "read", module: "data", description: "Read saved views" },
   { resource: "saved-view", action: "write", module: "data", description: "Manage saved views" },
   { resource: "saved-view", action: "delete", module: "data", description: "Delete saved views" },
@@ -152,6 +149,11 @@ export async function runSeed() {
         brandTheme: "auc",
       },
     }));
+
+  // Webhooks were removed from the product: drop their permissions (role
+  // grants cascade) and any stored settings left behind in older databases.
+  await prisma.permission.deleteMany({ where: { resource: "webhook" } });
+  await prisma.systemSetting.deleteMany({ where: { key: { startsWith: "webhooks." } } });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -387,12 +389,6 @@ export async function runSeed() {
       description: "Allow global admins to impersonate tenant users",
     },
     {
-      key: "FF_WEBHOOKS",
-      scope: "tenant",
-      enabled: false,
-      description: "Allow tenant to register webhook subscriptions",
-    },
-    {
       key: "FF_NOTIFICATIONS",
       scope: "tenant",
       enabled: true,
@@ -510,23 +506,6 @@ async function seedReferenceData(tenantId: string) {
       where: { tenantId_code: { tenantId, code: t.code } },
       update: {},
       create: { tenantId, sortOrder: i, ...t },
-    });
-  }
-
-  const languages = [
-    { code: "en", name: "English", nativeName: "English" },
-    { code: "fr", name: "French", nativeName: "Français" },
-    { code: "de", name: "German", nativeName: "Deutsch" },
-    { code: "es", name: "Spanish", nativeName: "Español" },
-    { code: "ar", name: "Arabic", nativeName: "العربية" },
-    { code: "am", name: "Amharic", nativeName: "አማርኛ" },
-    { code: "zh", name: "Chinese", nativeName: "中文" },
-  ];
-  for (const [i, l] of languages.entries()) {
-    await prisma.language.upsert({
-      where: { tenantId_code: { tenantId, code: l.code } },
-      update: {},
-      create: { tenantId, sortOrder: i, ...l },
     });
   }
 }

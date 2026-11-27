@@ -67,9 +67,6 @@ export default function TenantDetailPage({ loaderData }: Route.ComponentProps) {
             <h2 className="text-foreground text-2xl font-bold">{tenant.name}</h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground text-sm">/{tenant.slug}</span>
-              <Badge variant="default" className="capitalize">
-                {tenant.subscriptionPlan}
-              </Badge>
             </div>
           </div>
         </div>
@@ -149,12 +146,6 @@ export default function TenantDetailPage({ loaderData }: Route.ComponentProps) {
               )}
             </div>
             <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Plan</span>
-                <Badge variant="default" className="capitalize">
-                  {tenant.subscriptionPlan}
-                </Badge>
-              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Theme</span>
                 <Badge variant="secondary">{brandLabel}</Badge>

@@ -1,5 +1,6 @@
 import { hash } from "bcryptjs";
 import type { PrismaClient } from "../../app/generated/prisma/client.js";
+import { NEW_TENANT_FLAGS } from "../../app/utils/config/tenant-flag-membership.server";
 
 // Test data factories. `buildX` functions return plain objects that callers
 // spread into `prisma.X.create({ data: ... })`. `seedX` helpers do the create
@@ -50,6 +51,22 @@ export async function seedActiveUserStatus(prisma: PrismaClient) {
     where: { code: "ACTIVE" },
     create: { code: "ACTIVE", name: "Active" },
     update: {},
+  });
+}
+
+/**
+ * Create the tenant-scoped flags that tenant creation opts a new tenant into.
+ * Any test that creates a tenant through the service or its route needs them,
+ * as the app does after a seed. `enabledForTenants` is the starting list.
+ */
+export async function seedNewTenantFlags(prisma: PrismaClient, enabledForTenants: string[] = []) {
+  await prisma.featureFlag.createMany({
+    data: NEW_TENANT_FLAGS.map((key) => ({
+      key,
+      scope: "tenant",
+      enabled: true,
+      enabledForTenants,
+    })),
   });
 }
 

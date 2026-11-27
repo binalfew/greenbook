@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
+import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { action as editTenantAction } from "~/routes/$tenant/tenants/$tenantId/edit";
@@ -24,12 +24,7 @@ async function arrange() {
     ],
   });
   // ...and opts the tenant into the directory flags, so those must exist too.
-  await prisma.featureFlag.createMany({
-    data: [
-      { key: "FF_DIRECTORY", scope: "tenant", enabled: true },
-      { key: "FF_PUBLIC_DIRECTORY", scope: "tenant", enabled: true },
-    ],
-  });
+  await seedNewTenantFlags(prisma);
   const admin = await prisma.user.create({
     data: {
       ...buildUser({ tenantId: system.id, userStatusId: status.id }),

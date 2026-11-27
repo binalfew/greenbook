@@ -171,13 +171,6 @@ export function buildSettingsChildren(basePrefix: string): NavChild[] {
       permission: "feature-flag:read",
     },
     {
-      title: "Webhooks",
-      tKey: "webhooks",
-      url: `${basePrefix}/settings/webhooks`,
-      featureFlag: "FF_WEBHOOKS",
-      permission: "webhook:read",
-    },
-    {
       title: "Security",
       tKey: "security",
       url: `${basePrefix}/settings/security`,
