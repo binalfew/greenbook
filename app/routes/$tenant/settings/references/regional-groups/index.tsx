@@ -4,23 +4,19 @@ import { data } from "react-router";
 import { DataTable } from "~/components/data-table/data-table";
 import type { ColumnDef } from "~/components/data-table/data-table-types";
 import { listRegionalGroupsPaginated } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireReferenceDataRead } from "~/utils/reference-data-access.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Regional groups" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "read");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  const { canEdit } = await requireReferenceDataRead(request);
 
   const url = new URL(request.url);
   const page = Number(url.searchParams.get("page") ?? "1");
   const search = url.searchParams.get("q") ?? undefined;
 
-  const result = await listRegionalGroupsPaginated(tenantId, {
+  const result = await listRegionalGroupsPaginated({
     page,
     pageSize: 25,
     where: { ...(search && { search }) },
@@ -28,6 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   return data({
     items: result.data,
+    canEdit,
     total: result.total,
     page,
     pageSize: 25,
@@ -46,14 +43,17 @@ export default function RegionalGroupsIndex({ loaderData, params }: Route.Compon
     {
       id: "name",
       header: t("name"),
-      cell: (row) => (
-        <a
-          href={`${base}/${row.id}/edit`}
-          className="text-sm font-medium underline-offset-4 hover:underline"
-        >
-          {row.name}
-        </a>
-      ),
+      cell: (row) =>
+        loaderData.canEdit ? (
+          <a
+            href={`${base}/${row.id}/edit`}
+            className="text-sm font-medium underline-offset-4 hover:underline"
+          >
+            {row.name}
+          </a>
+        ) : (
+          <span className="text-sm font-medium">{row.name}</span>
+        ),
     },
     {
       id: "code",
@@ -81,16 +81,22 @@ export default function RegionalGroupsIndex({ loaderData, params }: Route.Compon
         columns={columns}
         rowKey="id"
         searchConfig={{ paramKey: "q", placeholder: t("name") }}
-        toolbarActions={[{ label: t("new"), icon: Plus, href: `${base}/new` }]}
-        rowActions={[
-          { label: tc("edit"), icon: Pencil, href: (row) => `${base}/${row.id}/edit` },
-          {
-            label: tc("delete"),
-            icon: Trash2,
-            href: (row) => `${base}/${row.id}/delete`,
-            variant: "destructive",
-          },
-        ]}
+        toolbarActions={
+          loaderData.canEdit ? [{ label: t("new"), icon: Plus, href: `${base}/new` }] : []
+        }
+        rowActions={
+          loaderData.canEdit
+            ? [
+                { label: tc("edit"), icon: Pencil, href: (row) => `${base}/${row.id}/edit` },
+                {
+                  label: tc("delete"),
+                  icon: Trash2,
+                  href: (row) => `${base}/${row.id}/delete`,
+                  variant: "destructive",
+                },
+              ]
+            : []
+        }
         pagination={{
           page: loaderData.page,
           pageSize: loaderData.pageSize,

@@ -19,12 +19,12 @@ import { isPasswordExpired, login, requireAnonymous } from "~/utils/auth/auth.se
 import { writeAudit } from "~/utils/auth/audit.server";
 import { resolvePostLoginRedirect } from "~/utils/auth/post-login-redirect.server";
 import { prisma } from "~/utils/db/db.server";
-import { rememberMeSessionKey, sessionKey, unverifiedSessionIdKey } from "~/utils/auth/constants";
+import { sessionKey, unverifiedSessionIdKey } from "~/utils/auth/constants";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { checkHoneypot } from "~/utils/auth/honeypot.server";
 import { authSessionStorage } from "~/utils/auth/session.server";
 import { useIsPending } from "~/utils/misc";
-import { shouldRequestTwoFA, verifySessionStorage } from "~/utils/auth/verification.server";
+import { verifySessionStorage } from "~/utils/auth/verification.server";
 import type { Route } from "./+types/login";
 
 export function meta({}: Route.MetaArgs) {
@@ -155,34 +155,17 @@ export async function action({ request }: Route.ActionArgs) {
     });
   }
 
-  if (await shouldRequestTwoFA({ request, userId: session.userId })) {
-    const verifySession = await verifySessionStorage.getSession();
-    verifySession.set(unverifiedSessionIdKey, session.id);
-    verifySession.set(rememberMeSessionKey, remember);
+  const cookieSession = await authSessionStorage.getSession(request.headers.get("cookie"));
+  cookieSession.set(sessionKey, session.id);
 
-    const verifyUrl = new URL("/2fa-verify", new URL(request.url).origin);
-    if (redirectTo) {
-      verifyUrl.searchParams.set("redirectTo", redirectTo);
-    }
-
-    return redirect(verifyUrl.pathname + verifyUrl.search, {
-      headers: {
-        "set-cookie": await verifySessionStorage.commitSession(verifySession),
-      },
-    });
-  } else {
-    const cookieSession = await authSessionStorage.getSession(request.headers.get("cookie"));
-    cookieSession.set(sessionKey, session.id);
-
-    const destination = redirectTo || (await resolveDefaultRedirect(session.userId));
-    return redirect(safeRedirect(destination), {
-      headers: {
-        "set-cookie": await authSessionStorage.commitSession(cookieSession, {
-          expires: remember ? session.expiresAt : undefined,
-        }),
-      },
-    });
-  }
+  const destination = redirectTo || (await resolveDefaultRedirect(session.userId));
+  return redirect(safeRedirect(destination), {
+    headers: {
+      "set-cookie": await authSessionStorage.commitSession(cookieSession, {
+        expires: remember ? session.expiresAt : undefined,
+      }),
+    },
+  });
 }
 
 /**

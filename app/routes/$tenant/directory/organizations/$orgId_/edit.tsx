@@ -19,7 +19,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const [org, types, parents] = await Promise.all([
     getOrganization(params.orgId, tenantId),
     prisma.organizationType.findMany({
-      where: { tenantId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: [{ level: "asc" }, { name: "asc" }],
       select: { id: true, name: true, code: true, level: true },
     }),
