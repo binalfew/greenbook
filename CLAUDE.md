@@ -282,7 +282,7 @@ Seeded roles per tenant (in `prisma/seed.ts`):
 - `manager` — everything `focal` has + entity writes + `directory-change:{read-all, approve, reject}`
 - `admin` (existing) — picks up every permission via the seed's "all permissions" assignment
 
-Demo users: `focal@example.com / focal123`, `manager@example.com / manager123`.
+Demo users: `admin@africanunion.org / admin123`, `manager@africanunion.org / manager123`, `focal@africanunion.org / focal123`, and `user@africanunion.org / user123` (plain directory reader — lands on `/`, not a tenant workspace). The focal and manager accounts are created in the `misd` tenant when it has been provisioned, otherwise in `system`.
 
 ### Feature flags
 
