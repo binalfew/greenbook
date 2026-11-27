@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, ClipboardList, Bell, Network } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Bell, Building2, Network, Settings } from "lucide-react";
 
 export type Permission = { resource: string; action: string };
 
@@ -22,6 +22,8 @@ export type NavItem = {
   end?: boolean;
   permission?: string;
   featureFlag?: string;
+  /** Shown only to the global admin, whatever permissions a role carries. */
+  globalAdminOnly?: boolean;
   children?: NavChild[];
   /** Short one-line description rendered on module-grid cards. */
   description?: string;
@@ -52,11 +54,9 @@ function isVisibleEntry(
 /**
  * Template sidebar navigation.
  *
- * The template ships generic app shell surfaces — Dashboard, Notes, Logs,
- * Notifications — plus a Settings entry whose children render in the top-navbar
- * sub-nav when the user is under `/settings/*`. Fork the template and extend
- * this file with your domain modules (the facilities app replaces this entire
- * file with its FMS module list).
+ * Sidebar navigation: the workspace pages under "Main", then the admin
+ * pages (Tenants, Settings) under "Administration". The same list drives
+ * the module cards on the tenant dashboard.
  */
 export function buildNavigationGroups(basePrefix: string): NavGroup[] {
   return [
@@ -142,6 +142,30 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
         },
       ],
     },
+    {
+      label: "Administration",
+      tKey: "administration",
+      items: [
+        {
+          title: "Tenants",
+          tKey: "tenants",
+          description: "The organizations that keep their own part of the directory.",
+          url: `${basePrefix}/tenants`,
+          icon: Building2,
+          globalAdminOnly: true,
+        },
+        {
+          // Its tabs (General, Organization, Features, Security, References)
+          // render in the top bar once the user is under /settings.
+          title: "Settings",
+          tKey: "settings",
+          description: "Settings, features, users and roles, and reference data.",
+          url: `${basePrefix}/settings`,
+          icon: Settings,
+          permission: "settings:read",
+        },
+      ],
+    },
   ];
 }
 
@@ -156,12 +180,6 @@ export function buildSettingsChildren(basePrefix: string): NavChild[] {
       tKey: "general",
       url: `${basePrefix}/settings`,
       end: true,
-      permission: "settings:read",
-    },
-    {
-      title: "Organization",
-      tKey: "organization",
-      url: `${basePrefix}/settings/organization`,
       permission: "settings:read",
     },
     {
@@ -199,11 +217,13 @@ export function getVisibleGroups(
   permissions: Permission[],
   basePrefix = "/admin",
   enabledFeatures?: Record<string, boolean>,
+  isGlobalAdmin = false,
 ): NavGroup[] {
   return buildNavigationGroups(basePrefix)
     .map((group) => ({
       ...group,
       items: group.items
+        .filter((item) => !item.globalAdminOnly || isGlobalAdmin)
         .filter((item) => isVisibleEntry(item, permissions, enabledFeatures))
         .map((item) => ({
           ...item,

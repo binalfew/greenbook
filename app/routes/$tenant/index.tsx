@@ -17,6 +17,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 type LayoutData = {
   permissions: Permission[];
   enabledFeatures: Record<string, boolean>;
+  isGlobalAdmin: boolean;
 };
 
 export default function TenantDashboard({ params }: Route.ComponentProps) {
@@ -24,9 +25,10 @@ export default function TenantDashboard({ params }: Route.ComponentProps) {
   const basePrefix = `/${params.tenant}`;
   const permissions = layoutData?.permissions ?? [];
   const enabledFeatures = layoutData?.enabledFeatures;
+  const isGlobalAdmin = layoutData?.isGlobalAdmin ?? false;
   const navGroups = useMemo(
-    () => getVisibleGroups(permissions, basePrefix, enabledFeatures),
-    [permissions, basePrefix, enabledFeatures],
+    () => getVisibleGroups(permissions, basePrefix, enabledFeatures, isGlobalAdmin),
+    [permissions, basePrefix, enabledFeatures, isGlobalAdmin],
   );
 
   return <ModuleGrid groups={navGroups} hideUrl={basePrefix} />;

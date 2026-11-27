@@ -1,6 +1,6 @@
 import * as React from "react";
 import { NavMain } from "~/components/layout/nav-main";
-import { TenantSwitcher } from "~/components/layout/tenant-switcher";
+import { TenantBrand } from "~/components/layout/tenant-brand";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "~/components/ui/sidebar";
 import { getVisibleGroups, type Permission } from "~/config/navigation";
 
@@ -28,17 +28,12 @@ export function AppSidebar({
   enabledFeatures,
   ...props
 }: AppSidebarProps) {
-  const groups = getVisibleGroups(permissions, basePrefix, enabledFeatures);
+  const groups = getVisibleGroups(permissions, basePrefix, enabledFeatures, isSuperAdmin);
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="bg-primary text-primary-foreground h-12 justify-center p-0">
-        <TenantSwitcher
-          tenant={tenant}
-          basePrefix={basePrefix}
-          isSuperAdmin={isSuperAdmin}
-          permissions={permissions}
-        />
+        <TenantBrand tenant={tenant} basePrefix={basePrefix} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain groups={groups} groupState={groupState} />

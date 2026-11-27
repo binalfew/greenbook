@@ -1,4 +1,9 @@
 {
+  "contactInfoTitle": "Contact info",
+  "contactInfoHelp": "This tenant's name and how to reach it.",
+  "contactInfoName": "Name",
+  "contactInfoEmail": "Email",
+  "contactInfoPhone": "Phone",
   "title": "Settings",
   "subtitle": "System configuration for this tenant. User-scoped overrides win over tenant values, which in turn win over global defaults.",
   "navGeneral": "General",

@@ -1,15 +1,24 @@
+import { parseWithZod } from "@conform-to/zod/v4";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, LayoutList } from "lucide-react";
+import { LayoutDashboard, LayoutList, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Form, data, Link, useLocation } from "react-router";
+import { Form, data, Link, redirect, useLocation } from "react-router";
+import { AuthenticityTokenInput } from "remix-utils/csrf/react";
+import { getFormProps, getInputProps, useForm } from "~/components/form";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Field, FieldError, FieldLabel } from "~/components/ui/field";
+import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import { updateTenant } from "~/services/tenants.server";
+import { validateCSRF } from "~/utils/auth/csrf.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { getSettingCategories, getSettingDefinition } from "~/utils/config/settings-registry";
 import { getAllSettings } from "~/utils/config/settings.server";
 import type { LayoutMode } from "~/utils/layout-mode";
 import { getLayoutMode } from "~/utils/layout-mode.server";
+import { buildServiceContext } from "~/utils/request-context.server";
+import { contactInfoSchema } from "~/utils/schemas/organization";
 import { resolveTenant } from "~/utils/tenant.server";
 import type { Route } from "./+types/index";
 
@@ -31,7 +40,7 @@ const LAYOUT_OPTIONS: LayoutOption[] = [
     value: "navbar",
     icon: LayoutDashboard,
     title: "Navbar only",
-    description: "Top navbar only. Navigate via the dashboard's module grid.",
+    description: "No sidebar. The menu sits in the top bar.",
   },
 ];
 
@@ -50,17 +59,40 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   return data({
     tenantSlug: tenant.slug,
+    contact: { name: tenant.name, email: tenant.email, phone: tenant.phone },
     sortedCategories,
     grouped,
     layoutMode: getLayoutMode(request),
   });
 }
 
-export default function SettingsIndex({ loaderData }: Route.ComponentProps) {
-  const { sortedCategories, grouped, tenantSlug, layoutMode } = loaderData;
+/** Saves the tenant's contact info, the one form this page posts to itself. */
+export async function action({ request, params }: Route.ActionArgs) {
+  const user = await requirePermission(request, "settings", "write");
+  const tenant = await resolveTenant(params.tenant);
+
+  const formData = await request.formData();
+  await validateCSRF(formData, request.headers);
+
+  const submission = parseWithZod(formData, { schema: contactInfoSchema });
+  if (submission.status !== "success") {
+    return data(submission.reply(), { status: 400 });
+  }
+
+  await updateTenant(tenant.id, submission.value, buildServiceContext(request, user, tenant.id));
+
+  return redirect(`/${params.tenant}/settings`);
+}
+
+export default function SettingsIndex({ loaderData, actionData }: Route.ComponentProps) {
+  const { sortedCategories, grouped, tenantSlug, contact, layoutMode } = loaderData;
   const { t } = useTranslation("settings");
   const { t: tCommon } = useTranslation("common");
   const location = useLocation();
+  const { form, fields } = useForm(contactInfoSchema, {
+    lastResult: actionData,
+    defaultValue: contact,
+  });
 
   return (
     <div className="space-y-6">
@@ -102,17 +134,12 @@ export default function SettingsIndex({ loaderData }: Route.ComponentProps) {
               className="grid-cols-1 sm:grid-cols-2"
             >
               {LAYOUT_OPTIONS.map((opt) => {
-                const active = layoutMode === opt.value;
                 const Icon = opt.icon;
                 return (
                   <label
                     key={opt.value}
                     htmlFor={`layout-${opt.value}`}
-                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                      active
-                        ? "border-primary bg-primary/5 ring-primary/30 ring-1"
-                        : "border-border hover:bg-accent/40"
-                    }`}
+                    className="border-border hover:bg-accent/40 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 has-[[data-state=checked]]:ring-primary/30 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors has-[[data-state=checked]]:ring-1"
                   >
                     <RadioGroupItem value={opt.value} id={`layout-${opt.value}`} className="mt-1" />
                     <div className="flex-1">
@@ -128,6 +155,56 @@ export default function SettingsIndex({ loaderData }: Route.ComponentProps) {
             </RadioGroup>
             <Button type="submit" size="sm">
               Save preference
+            </Button>
+          </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-primary/10 flex size-8 items-center justify-center rounded-lg">
+              <Mail className="text-primary size-4" />
+            </div>
+            <div>
+              <CardTitle className="text-base">{t("contactInfoTitle")}</CardTitle>
+              <CardDescription>{t("contactInfoHelp")}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Form method="post" {...getFormProps(form)} className="space-y-4">
+            <AuthenticityTokenInput />
+
+            {form.errors && form.errors.length > 0 && (
+              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
+                {form.errors.map((error, i) => (
+                  <p key={i}>{error}</p>
+                ))}
+              </div>
+            )}
+
+            <Field>
+              <FieldLabel htmlFor={fields.name.id}>{t("contactInfoName")}</FieldLabel>
+              <Input {...getInputProps(fields.name, { type: "text" })} key={fields.name.key} />
+              {fields.name.errors && <FieldError>{fields.name.errors}</FieldError>}
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor={fields.email.id}>{t("contactInfoEmail")}</FieldLabel>
+                <Input {...getInputProps(fields.email, { type: "email" })} key={fields.email.key} />
+                {fields.email.errors && <FieldError>{fields.email.errors}</FieldError>}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={fields.phone.id}>{t("contactInfoPhone")}</FieldLabel>
+                <Input {...getInputProps(fields.phone, { type: "tel" })} key={fields.phone.key} />
+                {fields.phone.errors && <FieldError>{fields.phone.errors}</FieldError>}
+              </Field>
+            </div>
+
+            <Button type="submit" size="sm">
+              {tCommon("save")}
             </Button>
           </Form>
         </CardContent>

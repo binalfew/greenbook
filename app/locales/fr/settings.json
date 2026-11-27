@@ -1,4 +1,9 @@
 {
+  "contactInfoTitle": "Coordonnées",
+  "contactInfoHelp": "Le nom de cette organisation et comment la joindre.",
+  "contactInfoName": "Nom",
+  "contactInfoEmail": "E-mail",
+  "contactInfoPhone": "Téléphone",
   "title": "Paramètres",
   "subtitle": "Configuration système pour ce locataire. Les valeurs utilisateur l'emportent sur les valeurs locataire, qui l'emportent sur les valeurs par défaut globales.",
   "navGeneral": "Général",

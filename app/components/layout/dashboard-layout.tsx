@@ -3,7 +3,7 @@ import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 import { AppSidebar } from "~/components/layout/app-sidebar";
 import { TopNavbar } from "~/components/layout/top-navbar";
 import { Toaster } from "~/components/ui/sonner";
-import { getVisibleSettingsChildren, type Permission } from "~/config/navigation";
+import { getVisibleGroups, getVisibleSettingsChildren, type Permission } from "~/config/navigation";
 import { InstallPrompt } from "~/components/pwa/install-prompt";
 import { SwUpdatePrompt } from "~/components/pwa/sw-update-prompt";
 import { OfflineBanner } from "~/components/offline-banner";
@@ -87,10 +87,13 @@ export function DashboardLayout({
       unreadCount={unreadCount}
       notifications={recentNotifications}
       settingsChildren={settingsChildren}
-      permissions={permissions}
+      navGroups={
+        layoutMode === "navbar"
+          ? getVisibleGroups(permissions, basePrefix, enabledFeatures, isGlobalAdmin)
+          : undefined
+      }
       hideSidebarTrigger={layoutMode === "navbar"}
       brandTenant={layoutMode === "navbar" ? (tenant ?? null) : undefined}
-      brandIsSuperAdmin={isGlobalAdmin}
     />
   );
 

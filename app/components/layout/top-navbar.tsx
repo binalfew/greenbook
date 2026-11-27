@@ -19,7 +19,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { SidebarTrigger } from "~/components/ui/sidebar";
-import { TenantSwitcher } from "~/components/layout/tenant-switcher";
+import { TenantBrand } from "~/components/layout/tenant-brand";
 import { Avatar, AvatarImage, AvatarFallback } from "~/components/ui/avatar";
 import {
   DropdownMenu,
@@ -33,7 +33,7 @@ import { NotificationBell } from "~/components/notification-bell";
 import { LanguageSwitcher } from "~/components/language-switcher";
 import { ThemeSwitch } from "~/routes/resources/theme-switch";
 import { cn } from "~/utils/misc";
-import type { NavChild, Permission } from "~/config/navigation";
+import type { NavChild, NavGroup } from "~/config/navigation";
 import type { Theme } from "~/utils/theme.server";
 import type { SupportedLanguage } from "~/utils/i18n";
 
@@ -58,21 +58,22 @@ type TopNavbarProps = {
   supportedLangs?: string[];
   currentLanguage?: string;
   settingsChildren?: NavChild[];
-  permissions?: Permission[];
+  /**
+   * The menu the sidebar would carry. Passed in navbar-only mode, where it is
+   * shown in the bar itself in place of the breadcrumbs.
+   */
+  navGroups?: NavGroup[];
   /** In navbar-only layout mode there is no sidebar to toggle. */
   hideSidebarTrigger?: boolean;
   /**
-   * Tenant switcher rendered at the far left in navbar-only mode (replaces
-   * the sidebar header's tenant branding + dropdown). Omit to render no
-   * brand. Reuses the navbar's own `basePrefix` + `permissions` props;
-   * `isSuperAdmin` is the only extra bit needed for global-admin gating.
+   * Tenant brand rendered at the far left in navbar-only mode, where there
+   * is no sidebar header to carry it. Omit to render no brand.
    */
   brandTenant?: {
     name: string;
     slug: string;
     logoUrl?: string | null;
   } | null;
-  brandIsSuperAdmin?: boolean;
 };
 
 type BreadcrumbEntry = {
@@ -134,10 +135,9 @@ export function TopNavbar({
   supportedLangs,
   currentLanguage,
   settingsChildren = [],
-  permissions = [],
+  navGroups,
   hideSidebarTrigger = false,
   brandTenant,
-  brandIsSuperAdmin = false,
 }: TopNavbarProps) {
   const breadcrumbs = useBreadcrumbs();
   const navigate = useNavigate();
@@ -197,7 +197,7 @@ export function TopNavbar({
     <>
       <header className="bg-primary text-primary-foreground flex h-12 shrink-0 items-center gap-2 border-b">
         <div
-          className={`flex flex-1 items-center gap-2 self-stretch pr-4 ${
+          className={`flex min-w-0 flex-1 items-center gap-2 self-stretch pr-4 ${
             hideSidebarTrigger ? "" : "pl-4"
           }`}
         >
@@ -212,20 +212,38 @@ export function TopNavbar({
           )}
           {brandTenant && (
             <>
-              <TenantSwitcher
-                variant="navbar"
-                tenant={brandTenant}
-                basePrefix={basePrefix}
-                isSuperAdmin={brandIsSuperAdmin}
-                permissions={permissions}
-              />
+              <TenantBrand variant="navbar" tenant={brandTenant} basePrefix={basePrefix} />
               <Separator
                 orientation="vertical"
                 className="bg-primary-foreground/30 mr-2 data-[orientation=vertical]:h-4"
               />
             </>
           )}
-          <Breadcrumb className="hidden md:flex">
+          {navGroups && (
+            <nav className="flex min-w-0 items-center gap-1 overflow-x-auto">
+              {navGroups
+                .flatMap((group) => group.items)
+                .map((item) => (
+                  <NavLink
+                    key={item.url}
+                    to={item.url}
+                    end={item.url === basePrefix}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
+                        isActive
+                          ? "bg-primary-foreground/15 text-primary-foreground"
+                          : "text-primary-foreground/75 hover:bg-primary-foreground/10 hover:text-primary-foreground",
+                      )
+                    }
+                  >
+                    <item.icon className="size-4" />
+                    {item.tKey ? tNav(item.tKey) : item.title}
+                  </NavLink>
+                ))}
+            </nav>
+          )}
+          <Breadcrumb className={navGroups ? "hidden" : "hidden md:flex"}>
             <BreadcrumbList className="text-primary-foreground/70">
               {breadcrumbs.map((crumb, index) => {
                 const isLast = index === breadcrumbs.length - 1;
