@@ -39,6 +39,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     entityId: hasId ? id : undefined,
     payload,
   });
+  if (outcome.conflict) {
+    return data(submission.reply({ formErrors: [outcome.conflict.message] }), { status: 409 });
+  }
 
   const base = `/${params.tenant}/directory/people`;
   if (outcome.mode === "SELF_APPROVED" && outcome.change.entityId) {

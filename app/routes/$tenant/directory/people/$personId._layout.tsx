@@ -1,15 +1,16 @@
-import { ArrowLeft, Briefcase, Mail, Pencil, Phone, Trash2, UserPlus } from "lucide-react";
+import { ArrowLeft, Briefcase, Mail, Phone, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, data } from "react-router";
 import { AssignmentTimeline } from "~/components/directory/assignment-timeline";
 import { PendingBadge } from "~/components/directory/pending-badge";
+import { RecordActions, RecordLockedNotice } from "~/components/directory/record-actions";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
+import { findPendingChange } from "~/services/directory-changes.server";
 import { getPerson } from "~/services/people.server";
 import { hasPermission } from "~/utils/auth/require-auth.server";
-import { prisma } from "~/utils/db/db.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$personId._layout";
@@ -26,15 +27,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const [person, pendingChange] = await Promise.all([
     getPerson(params.personId, tenantId),
-    prisma.changeRequest.findFirst({
-      where: {
-        tenantId,
-        status: "PENDING",
-        entityType: "PERSON",
-        entityId: params.personId,
-      },
-      select: { id: true, submittedById: true },
-    }),
+    findPendingChange(tenantId, "PERSON", params.personId),
   ]);
 
   return data({
@@ -58,6 +51,7 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
 
   const canEdit = canWrite || canSubmit;
   const canDel = canDelete || canSubmit;
+  const locked = pendingChange !== null;
   const fullName =
     `${person.honorific ? `${person.honorific} ` : ""}${person.firstName} ${person.lastName}`.trim();
   const currentAssignments = person.assignments.filter((a) => a.isCurrent);
@@ -81,24 +75,14 @@ export default function PersonDetailLayout({ loaderData, params }: Route.Compone
               </Link>
             </Button>
           ) : null}
-          {canEdit ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to={`${base}/${person.id}/edit`}>
-                <Pencil className="mr-1 size-4" />
-                {t("actions.edit")}
-              </Link>
-            </Button>
-          ) : null}
-          {canDel ? (
-            <Button asChild size="sm" variant="destructive">
-              <Link to={`${base}/${person.id}/delete`}>
-                <Trash2 className="mr-1 size-4" />
-                {t("actions.delete")}
-              </Link>
-            </Button>
-          ) : null}
+          <RecordActions
+            editHref={canEdit ? `${base}/${person.id}/edit` : undefined}
+            deleteHref={canDel ? `${base}/${person.id}/delete` : undefined}
+            locked={locked}
+          />
         </div>
       </div>
+      {locked && (canEdit || canDel) ? <RecordLockedNotice /> : null}
 
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
