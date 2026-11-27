@@ -1,11 +1,9 @@
 import { parseWithZod } from "@conform-to/zod/v4";
-import { Building2, Mail, MapPin, Palette } from "lucide-react";
+import { Building2, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { data, Form, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
-import { BrandingColorSection } from "~/components/branding-color-picker";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
-import { LogoUpload } from "~/components/logo-upload";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
@@ -58,11 +56,6 @@ export default function OrganizationSettingsPage({ loaderData, actionData }: Rou
       name: tenant.name,
       email: tenant.email,
       phone: tenant.phone,
-      address: tenant.address ?? "",
-      city: tenant.city ?? "",
-      state: tenant.state ?? "",
-      logoUrl: tenant.logoUrl ?? "",
-      brandTheme: tenant.brandTheme ?? "",
     },
   });
 
@@ -76,7 +69,7 @@ export default function OrganizationSettingsPage({ loaderData, actionData }: Rou
           <h2 className="text-foreground text-2xl font-bold">Organization</h2>
           <div className="mt-0.5 flex items-center gap-2">
             <p className="text-muted-foreground text-sm">
-              Manage your organization&apos;s profile and branding.
+              Manage your organization&apos;s profile.
             </p>
             <Badge variant="outline" className="text-[10px]">
               {tenant.slug}
@@ -121,49 +114,6 @@ export default function OrganizationSettingsPage({ loaderData, actionData }: Rou
                 {fields.phone.errors && <FieldError>{fields.phone.errors}</FieldError>}
               </Field>
             </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <MapPin className="text-muted-foreground size-4" />
-            <h3 className="text-sm font-semibold">Address</h3>
-          </div>
-
-          <div className="space-y-4 rounded-lg border p-4">
-            <Field>
-              <FieldLabel htmlFor={fields.address.id}>Street Address</FieldLabel>
-              <Input
-                {...getInputProps(fields.address, { type: "text" })}
-                key={fields.address.key}
-              />
-              {fields.address.errors && <FieldError>{fields.address.errors}</FieldError>}
-            </Field>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={fields.city.id}>City</FieldLabel>
-                <Input {...getInputProps(fields.city, { type: "text" })} key={fields.city.key} />
-                {fields.city.errors && <FieldError>{fields.city.errors}</FieldError>}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={fields.state.id}>State</FieldLabel>
-                <Input {...getInputProps(fields.state, { type: "text" })} key={fields.state.key} />
-                {fields.state.errors && <FieldError>{fields.state.errors}</FieldError>}
-              </Field>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Palette className="text-muted-foreground size-4" />
-            <h3 className="text-sm font-semibold">Branding</h3>
-          </div>
-
-          <div className="space-y-4 rounded-lg border p-4">
-            <LogoUpload initialLogoUrl={tenant.logoUrl} />
-            <BrandingColorSection initialBrandTheme={tenant.brandTheme ?? ""} />
           </div>
         </section>
 

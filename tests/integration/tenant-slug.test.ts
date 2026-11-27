@@ -87,6 +87,15 @@ describe("creating a tenant", () => {
     expect(await prisma.tenant.count({ where: { slug: "medical" } })).toBe(1);
   });
 
+  it("gives every new tenant the AUC look, whatever the form posts", async () => {
+    const { session } = await arrange();
+
+    await createTenant(session, { slug: "medical", brandTheme: "nature" });
+
+    const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: "medical" } });
+    expect(tenant.brandTheme).toBe("auc");
+  });
+
   it.each(["healthz", "up", "sso", "api", "login"])(
     "shows a slug error for the reserved slug %s",
     async (slug) => {

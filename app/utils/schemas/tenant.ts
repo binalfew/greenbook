@@ -23,11 +23,6 @@ const tenantFieldsSchema = z.object({
   slug: slugField,
   email: z.email("Valid email is required"),
   phone: z.string({ error: "Phone is required" }).min(1, "Phone is required"),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  logoUrl: z.string().optional(),
-  brandTheme: z.string().optional(),
   // Optional: an existing user who belongs to no tenant, moved into the new
   // tenant as its first focal person or manager. An empty string from the
   // form means "no initial user".

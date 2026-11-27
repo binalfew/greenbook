@@ -1,9 +1,7 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
-import { BrandingColorSection } from "~/components/branding-color-picker";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
-import { LogoUpload } from "~/components/logo-upload";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
@@ -67,11 +65,6 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
       slug: tenant.slug,
       email: tenant.email,
       phone: tenant.phone,
-      address: tenant.address ?? "",
-      city: tenant.city ?? "",
-      state: tenant.state ?? "",
-      logoUrl: tenant.logoUrl ?? "",
-      brandTheme: tenant.brandTheme ?? "",
     },
   });
 
@@ -79,9 +72,7 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
     <div className="space-y-6">
       <div>
         <h2 className="text-foreground text-2xl font-bold">Edit tenant</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Update {tenant.name}&apos;s profile and branding.
-        </p>
+        <p className="text-muted-foreground mt-1 text-sm">Update {tenant.name}&apos;s profile.</p>
       </div>
 
       <Form method="post" {...getFormProps(form)} className="space-y-6">
@@ -127,45 +118,6 @@ export default function EditTenantPage({ loaderData, actionData }: Route.Compone
                 {fields.phone.errors && <FieldError>{fields.phone.errors}</FieldError>}
               </Field>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Address</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field>
-              <FieldLabel htmlFor={fields.address.id}>Street address</FieldLabel>
-              <Input
-                {...getInputProps(fields.address, { type: "text" })}
-                key={fields.address.key}
-              />
-              {fields.address.errors && <FieldError>{fields.address.errors}</FieldError>}
-            </Field>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={fields.city.id}>City</FieldLabel>
-                <Input {...getInputProps(fields.city, { type: "text" })} key={fields.city.key} />
-                {fields.city.errors && <FieldError>{fields.city.errors}</FieldError>}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={fields.state.id}>State</FieldLabel>
-                <Input {...getInputProps(fields.state, { type: "text" })} key={fields.state.key} />
-                {fields.state.errors && <FieldError>{fields.state.errors}</FieldError>}
-              </Field>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <LogoUpload initialLogoUrl={tenant.logoUrl} />
-            <BrandingColorSection initialBrandTheme={tenant.brandTheme ?? ""} />
           </CardContent>
         </Card>
 

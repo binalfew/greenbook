@@ -3,9 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
-import { BrandingColorSection } from "~/components/branding-color-picker";
 import { SelectField, getFormProps, getInputProps, useForm } from "~/components/form";
-import { LogoUpload } from "~/components/logo-upload";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
@@ -56,9 +54,6 @@ export async function action({ request, params }: Route.ActionArgs) {
     await createTenant(
       {
         ...tenantFields,
-        address: tenantFields.address ?? "",
-        city: tenantFields.city ?? "",
-        state: tenantFields.state ?? "",
         initialUser:
           initialUserId && initialUserRole
             ? { userId: initialUserId, role: initialUserRole }
@@ -215,36 +210,6 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
 
         <Card>
           <CardHeader>
-            <CardTitle>Address</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field>
-              <FieldLabel htmlFor={fields.address.id}>Street address</FieldLabel>
-              <Input
-                {...getInputProps(fields.address, { type: "text" })}
-                key={fields.address.key}
-                placeholder="123 Main St"
-              />
-              {fields.address.errors && <FieldError>{fields.address.errors}</FieldError>}
-            </Field>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={fields.city.id}>City</FieldLabel>
-                <Input {...getInputProps(fields.city, { type: "text" })} key={fields.city.key} />
-                {fields.city.errors && <FieldError>{fields.city.errors}</FieldError>}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={fields.state.id}>State</FieldLabel>
-                <Input {...getInputProps(fields.state, { type: "text" })} key={fields.state.key} />
-                {fields.state.errors && <FieldError>{fields.state.errors}</FieldError>}
-              </Field>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle>{t("tenantInitialUserTitle")}</CardTitle>
             <p className="text-muted-foreground text-sm">{t("tenantInitialUserHelp")}</p>
           </CardHeader>
@@ -289,16 +254,6 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
                 <FieldError>{fields.initialUserRole.errors}</FieldError>
               )}
             </Field>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <LogoUpload />
-            <BrandingColorSection />
           </CardContent>
         </Card>
 

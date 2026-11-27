@@ -17,16 +17,17 @@ import type {
   TenantServiceContext,
 } from "~/utils/types.server";
 
+/**
+ * The one look every tenant has: the `[data-brand="auc"]` block in
+ * `app/app.css`. It is set here, not chosen in a form.
+ */
+export const TENANT_BRAND_THEME = "auc";
+
 export type CreateTenantInput = {
   name: string;
   slug?: string;
   email: string;
   phone: string;
-  city: string;
-  state: string;
-  address: string;
-  logoUrl?: string | null;
-  brandTheme?: string;
   /**
    * Existing tenantless user to move into the new tenant as its first focal
    * person or manager. When omitted the tenant starts with no members and the
@@ -204,11 +205,12 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
         slug,
         email: input.email,
         phone: input.phone,
-        city: input.city,
-        state: input.state,
-        address: input.address,
-        logoUrl: input.logoUrl ?? null,
-        brandTheme: input.brandTheme ?? "",
+        brandTheme: TENANT_BRAND_THEME,
+        // No form collects an address any more; the columns are required,
+        // so they are written empty.
+        city: "",
+        state: "",
+        address: "",
       },
     });
     await addTenantToNewTenantFlags(tx, created.id);
@@ -263,11 +265,6 @@ export async function updateTenant(
       ...(input.slug !== undefined && { slug: input.slug }),
       ...(input.email !== undefined && { email: input.email }),
       ...(input.phone !== undefined && { phone: input.phone }),
-      ...(input.city !== undefined && { city: input.city }),
-      ...(input.state !== undefined && { state: input.state }),
-      ...(input.address !== undefined && { address: input.address }),
-      ...(input.logoUrl !== undefined && { logoUrl: input.logoUrl }),
-      ...(input.brandTheme !== undefined && { brandTheme: input.brandTheme }),
     },
   });
 
