@@ -11,7 +11,6 @@ import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/su
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
 import { action as reopenAction } from "~/routes/$tenant/_directory/submissions/$changeId.reopen";
 import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
-import { loader as historyLoader } from "~/routes/$tenant/_directory/approvals/history";
 import { loader as approvalQueueLoader } from "~/routes/$tenant/_directory/approvals/index";
 import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
@@ -389,12 +388,10 @@ describe("reopening a rejected request", () => {
     const orgs = await prisma.organization.findMany({ where: { tenantId: a.tenantId } });
     expect(orgs.map((o) => [o.name, o.acronym])).toEqual([["Bureau of Statistics", "BOS"]]);
 
-    const history = await historyLoader({
-      request: get(a, a.manager.cookie, "approvals/history"),
-      params: { tenant: a.slug },
-      context: {},
-    } as never);
-    const rows = payloadOf<{ changes: { id: string; status: string }[] }>(history).changes;
+    const rows = await prisma.changeRequest.findMany({
+      where: { tenantId: a.tenantId },
+      select: { id: true, status: true },
+    });
     expect(rows.map((r) => `${r.id}:${r.status}`).sort()).toEqual(
       [`${rejectedId}:REJECTED`, `${draft.id}:APPROVED`].sort(),
     );

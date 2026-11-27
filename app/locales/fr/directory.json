@@ -197,8 +197,6 @@
     "subtitle": "Examinez et publiez les modifications soumises par les points focaux.",
     "mineTitle": "Soumissions",
     "mineSubtitle": "Vos brouillons et vos demandes en attente, approuvées, rejetées et retirées. Sélectionnez des brouillons pour les soumettre ensemble.",
-    "historyTitle": "Historique",
-    "historySubtitle": "Toutes les demandes approuvées, rejetées ou retirées dans ce tenant.",
     "searchPlaceholder": "Rechercher un soumissionnaire, relecteur ou identifiant…",
     "emptyPending": "Aucune demande en attente.",
     "emptyPendingDescription": "Les soumissions des points focaux apparaîtront ici pour revue.",
@@ -206,8 +204,6 @@
     "emptyMineFiltered": "Aucun résultat pour ce filtre.",
     "emptyMineFilteredDescription": "Effacez le filtre pour voir tous vos brouillons et soumissions.",
     "emptyMineDescription": "Lorsque vous modifiez un enregistrement, votre brouillon apparaîtra ici, prêt à être soumis.",
-    "emptyHistory": "Aucun historique.",
-    "emptyHistoryDescription": "Les soumissions approuvées, rejetées et retirées apparaîtront ici.",
     "detailTitle": "Demande de modification",
     "detailSubtitle": "Examinez la modification proposée avant d'approuver ou de rejeter.",
     "beforeAfter": {

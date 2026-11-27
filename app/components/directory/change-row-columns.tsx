@@ -8,8 +8,8 @@ import { formatDate } from "~/utils/format-date";
 
 export type ChangeRow = ChangeListRow;
 
-// Build column config for the three change-list views. Each caller picks
-// which columns to include via the `columns` argument — pending/mine/history
+// Build column config for the change-list views. Each caller picks
+// which columns to include via the `columns` argument — pending and mine
 // share the core columns but want different surface treatments.
 
 export type ColumnKey =

@@ -2,8 +2,8 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "~/components/ui/badge";
 import type { ChangeStatus } from "~/generated/prisma/client.js";
 
-// Status pill for ChangeRequest rows across the Approvals queue, My
-// Submissions, and History views. Pending uses the amber "attention"
+// Status pill for ChangeRequest rows across the Approvals queue and the
+// Submissions list. Pending uses the amber "attention"
 // treatment that matches the entity-level pending badge.
 
 const STATUS_CLASS: Record<ChangeStatus, string> = {

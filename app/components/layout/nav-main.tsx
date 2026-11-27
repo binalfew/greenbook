@@ -26,8 +26,8 @@ function isSegmentPrefix(pathname: string, url: string): boolean {
 }
 
 // A top-level item is active on its own URL and anything below it, unless a
-// sibling with a longer URL claims the path: on `/approvals/history` only
-// History lights up, not Approvals as well.
+// sibling with a longer URL claims the path: on `/settings/security`
+// only Security lights up, not Settings as well.
 function isPathActive(
   pathname: string,
   item: { url: string; end?: boolean },

@@ -197,8 +197,6 @@
     "subtitle": "Review and publish directory changes submitted by focal persons.",
     "mineTitle": "Submissions",
     "mineSubtitle": "Your drafts and your pending, approved, rejected, and withdrawn change requests. Select drafts to submit them together.",
-    "historyTitle": "History",
-    "historySubtitle": "Every approved, rejected, and withdrawn change request in this tenant.",
     "searchPlaceholder": "Search submitter, reviewer, or record ID…",
     "emptyPending": "No pending change requests.",
     "emptyPendingDescription": "Focal persons' submissions will appear here for review.",
@@ -206,8 +204,6 @@
     "emptyMineFiltered": "Nothing matches this filter.",
     "emptyMineFilteredDescription": "Clear the filter to see all your drafts and submissions.",
     "emptyMineDescription": "When you edit a record, your draft will appear here, ready to submit.",
-    "emptyHistory": "No change history yet.",
-    "emptyHistoryDescription": "Approved, rejected, and withdrawn submissions will appear here.",
     "detailTitle": "Change request",
     "detailSubtitle": "Review the proposed change before approving or rejecting.",
     "beforeAfter": {

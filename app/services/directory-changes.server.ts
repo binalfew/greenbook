@@ -112,7 +112,7 @@ const changeListInclude = {
   },
 } as const;
 
-// Row shape returned by listPendingChanges / listMyChanges / listChangeHistory.
+// Row shape returned by listPendingChanges / listMyChanges.
 // Exported so UI layers pick up new fields automatically if changeListInclude
 // grows.
 export type ChangeListRow = ChangeRequest & {
@@ -1205,31 +1205,6 @@ export async function listMyChanges(
     prisma.changeRequest.findMany({
       where: filter,
       orderBy: orderBy ?? [{ submittedAt: "desc" }],
-      skip,
-      take: pageSize,
-      include: changeListInclude,
-    }),
-    prisma.changeRequest.count({ where: filter }),
-  ]);
-  return { data, total };
-}
-
-export async function listChangeHistory(tenantId: string, options: PaginatedQueryOptions) {
-  const { page, pageSize, where = {}, orderBy } = options;
-  const skip = (page - 1) * pageSize;
-
-  const filter: Prisma.ChangeRequestWhereInput = {
-    tenantId,
-    status: { in: ["APPROVED", "REJECTED", "WITHDRAWN"] },
-    ...(where.entityType ? { entityType: where.entityType as DirectoryEntityKey } : {}),
-    ...(where.entityId ? { entityId: where.entityId as string } : {}),
-    ...buildChangeSearchFilter(where.search),
-  };
-
-  const [data, total] = await Promise.all([
-    prisma.changeRequest.findMany({
-      where: filter,
-      orderBy: orderBy ?? [{ reviewedAt: "desc" }],
       skip,
       take: pageSize,
       include: changeListInclude,

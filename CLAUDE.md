@@ -255,7 +255,6 @@ positions/
 approvals/
   _layout.tsx (permission gate)
   index.tsx (pending queue; selectable + batch dialog for reject notes)
-  history.tsx (reviewed requests)
   $changeId._layout.tsx (one change, as a reviewer sees it; sends its author to `submissions/$changeId`)
   $changeId.approve.tsx, .reject.tsx (dialogs)
   batch-approve.tsx, batch-reject.tsx (resource routes)

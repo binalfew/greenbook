@@ -1,10 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Bell,
   BriefcaseBusiness,
   Building2,
   ClipboardList,
-  History,
   Inbox,
   LayoutDashboard,
   ListChecks,
@@ -143,15 +141,6 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           permission: "directory-change:submit",
         },
         {
-          title: "History",
-          tKey: "history",
-          description: "Changes that were approved, rejected or withdrawn.",
-          url: `${basePrefix}/approvals/history`,
-          icon: History,
-          featureFlag: "FF_DIRECTORY",
-          permission: "directory-change:read-all",
-        },
-        {
           title: "Logs",
           tKey: "logs",
           description: "Full audit trail of every change in this tenant.",
@@ -161,14 +150,6 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           // also requires the perm at the loader; this keeps the link from
           // rendering for users who would 403 on click.
           permission: "audit-log:read",
-        },
-        {
-          title: "Notifications",
-          tKey: "notifications",
-          description: "Inbox for in-app alerts and mentions.",
-          url: `${basePrefix}/notifications`,
-          icon: Bell,
-          featureFlag: "FF_NOTIFICATIONS",
         },
       ],
     },
