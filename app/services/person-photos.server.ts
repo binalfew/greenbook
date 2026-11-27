@@ -8,8 +8,9 @@ import { photoStorage, type StoredPhoto } from "~/utils/photo-storage.server";
 // photo, and deleting photos nothing refers to any more.
 //
 // A photo is referenced by id from `Person.photoId` (published) or from the
-// `photoId` of a person change request's payload (proposed). The bytes are
-// only ever touched through `photoStorage`.
+// `photoId` of a person change request's payload (proposed, or rejected and
+// still open to being reopened). The bytes are only ever touched through
+// `photoStorage`.
 
 export class PhotoUploadError extends Error {
   code: "TOO_LARGE" | "UNSUPPORTED_TYPE";
@@ -96,30 +97,94 @@ export async function photosTouchedBy(change: {
   return [...ids];
 }
 
-async function isReferenced(photoId: string): Promise<boolean> {
-  const [people, openChanges] = await Promise.all([
+/**
+ * The photos proposed by rejected requests that approving `change` puts out
+ * of reach: the requests it was reopened from, and any other rejected request
+ * against the same person (built on a version of the record that is now gone).
+ */
+export async function photosOfRejectionsClosedBy(change: {
+  tenantId: string;
+  entityType: string;
+  entityId?: string | null;
+  clonedFromId?: string | null;
+}): Promise<string[]> {
+  if (change.entityType !== "PERSON") return [];
+  const payloads: unknown[] = [];
+
+  let parentId = change.clonedFromId ?? null;
+  for (let depth = 0; parentId && depth < 50; depth++) {
+    const parent: { payload: unknown; clonedFromId: string | null } | null =
+      await prisma.changeRequest.findFirst({
+        where: { id: parentId, tenantId: change.tenantId },
+        select: { payload: true, clonedFromId: true },
+      });
+    if (!parent) break;
+    payloads.push(parent.payload);
+    parentId = parent.clonedFromId;
+  }
+
+  if (change.entityId) {
+    const rejected = await prisma.changeRequest.findMany({
+      where: {
+        tenantId: change.tenantId,
+        entityType: "PERSON",
+        entityId: change.entityId,
+        status: "REJECTED",
+      },
+      select: { payload: true },
+    });
+    payloads.push(...rejected.map((r) => r.payload));
+  }
+
+  return [...new Set(payloads.map(payloadPhotoId).filter((id) => id !== null))];
+}
+
+/**
+ * A copy of a person payload for a reopened draft. A photo that no longer
+ * exists is left out, which a draft reads as "leave the photo alone".
+ */
+export async function withoutMissingPhoto<T>(payload: T): Promise<T> {
+  const photoId = payloadPhotoId(payload);
+  if (!photoId || (await photoStorage.stat(photoId))) return payload;
+  const { photoId: _gone, ...rest } = payload as T & { photoId?: unknown };
+  return rest as T;
+}
+
+// A rejected request can be reopened as a draft carrying the same photo, so
+// it holds on to that photo like a draft or a pending request does.
+const HOLDING = ["DRAFT", "PENDING", "REJECTED"] as const;
+const HOLDING_OPEN = ["DRAFT", "PENDING"] as const;
+
+async function isReferenced(photoId: string, rejectedHolds: boolean): Promise<boolean> {
+  const [people, changes] = await Promise.all([
     prisma.person.count({ where: { photoId, deletedAt: null } }),
     prisma.changeRequest.count({
       where: {
         entityType: "PERSON",
-        status: { in: ["DRAFT", "PENDING"] },
+        status: { in: [...(rejectedHolds ? HOLDING : HOLDING_OPEN)] },
         payload: { path: ["photoId"], equals: photoId },
       },
     }),
   ]);
-  return people + openChanges > 0;
+  return people + changes > 0;
 }
 
 /**
  * Delete each of the given photos that is neither a person's published photo
- * nor proposed by a draft or pending request. Safe to call with any ids at
+ * nor proposed by a draft, pending or rejected request. Pass
+ * `rejectedHolds: false` when the operation ends the chance of reopening
+ * (the reopened draft was discarded, or the record was changed): rejected
+ * requests then no longer keep a photo alive. Safe to call with any ids at
  * any time. Never throws: cleanup must not undo the operation that led to it.
  */
-export async function releaseUnreferencedPhotos(photoIds: string[]): Promise<void> {
+export async function releaseUnreferencedPhotos(
+  photoIds: string[],
+  { rejectedHolds = true }: { rejectedHolds?: boolean } = {},
+): Promise<void> {
   try {
     const orphaned: string[] = [];
     for (const id of new Set(photoIds)) {
-      if (!(await isReferenced(id))) orphaned.push(id);
+      if (!(await isReferenced(id, rejectedHolds))) orphaned.push(id);
     }
     await photoStorage.delete(orphaned);
   } catch (err) {

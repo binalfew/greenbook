@@ -8,7 +8,12 @@ import {
   notifyManagersOfSubmissions,
   notifySubmitterOfDecision,
 } from "~/services/directory-notifications.server";
-import { photosTouchedBy, releaseUnreferencedPhotos } from "~/services/person-photos.server";
+import {
+  photosOfRejectionsClosedBy,
+  photosTouchedBy,
+  releaseUnreferencedPhotos,
+  withoutMissingPhoto,
+} from "~/services/person-photos.server";
 import {
   payloadSchemaFor,
   type ChangeOperationKey,
@@ -469,7 +474,9 @@ export async function discardDraft(id: string, ctx: TenantServiceContext) {
     where: { id, tenantId: ctx.tenantId, submittedById: ctx.userId, status: "DRAFT" },
   });
   if (deleted.count === 0) throw new ChangeRequestError("Draft not found", 404, "NOT_FOUND");
-  await releaseUnreferencedPhotos(photos);
+  // Discarding a reopened draft gives up its photo for good, even though the
+  // rejected request it came from still names it.
+  await releaseUnreferencedPhotos(photos, { rejectedHolds: false });
 }
 
 // ─── Reopen a rejected request ──────────────────────────────────────────
@@ -515,6 +522,8 @@ export async function reopenRejectedChange(id: string, ctx: TenantServiceContext
   }
   const entityType = rejected.entityType as DirectoryEntityKey;
   const entityId = rejected.entityId;
+  const payload =
+    entityType === "PERSON" ? await withoutMissingPhoto(rejected.payload) : rejected.payload;
 
   return prisma.$transaction(async (tx) => {
     // Serialize a double click on Reopen and, for an existing record, the
@@ -579,7 +588,7 @@ export async function reopenRejectedChange(id: string, ctx: TenantServiceContext
         entityType,
         entityId,
         operation: rejected.operation,
-        payload: rejected.payload as Prisma.InputJsonValue,
+        payload: payload as Prisma.InputJsonValue,
         submittedById: ctx.userId,
         status: "DRAFT",
         approvalMode: "REVIEWED",
@@ -825,7 +834,10 @@ export async function approveChange(
     "approving change request",
   );
 
-  const photos = await photosTouchedBy(change);
+  const photos = [
+    ...(await photosTouchedBy(change)),
+    ...(await photosOfRejectionsClosedBy(change)),
+  ];
   const result = await prisma.$transaction(async (tx) => {
     // Claim the row FIRST with a conditional, status-guarded update. The
     // pre-check above is outside the transaction and offers no protection
@@ -871,7 +883,7 @@ export async function approveChange(
     });
     return { change: updated, entity };
   });
-  await releaseUnreferencedPhotos(photos);
+  await releaseUnreferencedPhotos(photos, { rejectedHolds: false });
 
   emitDomainEvent(ctx.tenantId, "change.approved", {
     id: result.change.id,
@@ -959,7 +971,7 @@ export async function rejectChange(
       "NOT_PENDING",
     );
   }
-  await releaseUnreferencedPhotos(await photosTouchedBy(change));
+  // The proposed photo stays: the submitter may reopen this request.
   const updated = await prisma.changeRequest.findFirstOrThrow({
     where: { id },
     include: changeListInclude,
@@ -1059,12 +1071,11 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
     "submit+apply change request (self-approved)",
   );
 
-  const photos = await photosTouchedBy({
-    tenantId: ctx.tenantId,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    payload: validated,
-  });
+  const target = { tenantId: ctx.tenantId, entityType: input.entityType, entityId: input.entityId };
+  const photos = [
+    ...(await photosTouchedBy({ ...target, payload: validated })),
+    ...(await photosOfRejectionsClosedBy(target)),
+  ];
   const result = await prisma.$transaction(async (tx) => {
     // Same lock as submitChange — a manager's direct edit must not race with a
     // focal submission (or another manager) for the same entity.
@@ -1107,7 +1118,7 @@ export async function submitAndApply(input: SubmitInput, ctx: TenantServiceConte
     });
     return { change, entity };
   });
-  await releaseUnreferencedPhotos(photos);
+  await releaseUnreferencedPhotos(photos, { rejectedHolds: false });
 
   emitDomainEvent(ctx.tenantId, domainEventFor(input.entityType, input.operation, validated), {
     id: result.change.entityId,
