@@ -72,7 +72,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   // Always update the basic profile fields. The tenant assignment goes
   // through its own helper so role wiring + tenant bootstrapping happen too.
   await updateUser(params.userId, rest, ctx);
-  if (isGlobalAdmin) {
+  // A form without the tenant field is not a request to clear the tenant;
+  // only an explicit value ("" included) from the picker reassigns.
+  if (isGlobalAdmin && formData.has("tenantId")) {
     await setUserTenantAssignment(params.userId, targetTenantId, ctx);
   }
 
