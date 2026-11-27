@@ -92,7 +92,7 @@ export const personPayloadSchema = z.object({
   officeEmail: nullableString(255),
   officePhone: nullableString(50),
   bio: nullableString(10_000),
-  photoUrl: nullableString(500),
+  photoId: nullableCuid(),
   memberStateId: nullableCuid(),
   languages: z.array(z.string().length(2).max(10)).default([]),
   showEmail: z.coerce.boolean().default(false),
@@ -231,7 +231,12 @@ export const personFormSchema = z.object({
   officeEmail: formText(255),
   officePhone: formText(50),
   bio: formText(10_000),
-  photoUrl: formText(500),
+  // `photo` is a newly chosen file, `photoId` the photo the form already
+  // showed, `removePhoto` the request to drop it. The action folds the three
+  // into the payload's `photoId`.
+  photo: z.instanceof(File).optional(),
+  photoId: z.string().optional(),
+  removePhoto: z.string().optional(),
   memberStateId: z.string().optional(),
   languages: z.array(z.string().length(2).max(10)).default([]),
   showEmail: z.coerce.boolean().default(false),

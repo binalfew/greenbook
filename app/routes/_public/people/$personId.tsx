@@ -78,9 +78,9 @@ export default function PublicPersonDetail({ loaderData }: Route.ComponentProps)
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
             <div className="bg-card border-background -mt-12 grid size-24 shrink-0 place-items-center overflow-hidden rounded-full border-4 shadow-sm">
               <div className="bg-primary/10 text-primary grid size-full place-items-center">
-                {person.photoUrl ? (
+                {person.photoId ? (
                   <img
-                    src={person.photoUrl}
+                    src={`/people/${person.id}/photo?v=${person.photoId}`}
                     alt={fullName}
                     className="size-full object-cover"
                     loading="eager"

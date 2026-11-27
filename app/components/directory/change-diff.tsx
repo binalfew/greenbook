@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useParams } from "react-router";
 import type { FieldDiff } from "~/services/directory-changes.server";
+import { personPhotoPath } from "~/utils/directory-routes";
 
 // Renders a ChangeRequest's field-level diff as a vertical list: each row
 // shows the field name + the before-value (struck through) + the after-value.
@@ -25,6 +28,33 @@ function renderValue(v: unknown): React.ReactNode {
   return String(v);
 }
 
+// A person's `photoId` is shown as the picture itself. The old photo is
+// deleted once a replacement is approved, hence the fallback.
+function PhotoValue({ id }: { id: unknown }) {
+  const { t } = useTranslation("directory");
+  const { tenant = "" } = useParams();
+  const [failed, setFailed] = useState(false);
+
+  if (typeof id !== "string" || id === "") return renderValue(null);
+  if (failed) {
+    return <span className="text-muted-foreground italic">{t("people.photo.unavailable")}</span>;
+  }
+  return (
+    <img
+      src={personPhotoPath(tenant, id)}
+      alt={t("people.fields.photo")}
+      width={96}
+      height={96}
+      className="size-24 rounded-md border object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function DiffValue({ field, value }: { field: string; value: unknown }) {
+  return field === "photoId" ? <PhotoValue id={value} /> : renderValue(value);
+}
+
 export function ChangeDiff({ diffs }: { diffs: FieldDiff[] }) {
   const { t } = useTranslation("directory");
 
@@ -43,9 +73,11 @@ export function ChangeDiff({ diffs }: { diffs: FieldDiff[] }) {
             {d.field}
           </dt>
           <dd className="text-muted-foreground line-through decoration-rose-500">
-            {renderValue(d.before)}
+            <DiffValue field={d.field} value={d.before} />
           </dd>
-          <dd className="font-medium">{renderValue(d.after)}</dd>
+          <dd className="font-medium">
+            <DiffValue field={d.field} value={d.after} />
+          </dd>
         </div>
       ))}
     </dl>
