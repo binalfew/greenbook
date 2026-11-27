@@ -134,9 +134,9 @@ async function assertReferencedOrganization(organizationId: string, tenantId: st
   }
 }
 
-async function assertReferencedType(typeId: string, tenantId: string, db: Db) {
+async function assertReferencedType(typeId: string, db: Db) {
   const row = await db.positionType.findFirst({
-    where: { id: typeId, tenantId, deletedAt: null },
+    where: { id: typeId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {
@@ -192,7 +192,7 @@ export async function _applyCreatePosition(
 ) {
   const db: Db = tx ?? prisma;
   await assertReferencedOrganization(payload.organizationId, tenantId, db);
-  await assertReferencedType(payload.typeId, tenantId, db);
+  await assertReferencedType(payload.typeId, db);
   if (payload.reportsToId) await assertReferencedReportsTo(payload.reportsToId, tenantId, db);
 
   logger.info(
@@ -221,7 +221,7 @@ export async function _applyUpdatePosition(
   if (!existing) throw new PositionError("Position not found", 404, "NOT_FOUND");
 
   await assertReferencedOrganization(payload.organizationId, tenantId, db);
-  await assertReferencedType(payload.typeId, tenantId, db);
+  await assertReferencedType(payload.typeId, db);
   if (payload.reportsToId) await assertReferencedReportsTo(payload.reportsToId, tenantId, db, id);
 
   logger.info({ tenantId, userId: ctx.userId, positionId: id }, "applying UPDATE position");

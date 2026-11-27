@@ -45,7 +45,7 @@ describe("running the seed", () => {
     }
     const orgs = await prisma.organization.findMany({ where: { tenantId: system.id } });
     expect(orgs.map((o) => o.acronym).sort()).toEqual(["AU", "AUC", "ETTIM", "ODC", "OOC", "PAPS"]);
-    expect(await prisma.memberState.count({ where: { tenantId: system.id } })).toBe(55);
+    expect(await prisma.memberState.count()).toBe(55);
     expect(await prisma.person.count({ where: { tenantId: system.id } })).toBeGreaterThan(0);
     expect(
       await prisma.positionAssignment.count({ where: { tenantId: system.id, isCurrent: true } }),
@@ -96,11 +96,11 @@ describe("running the seed", () => {
       },
     });
     await prisma.organizationType.updateMany({
-      where: { tenantId: system.id, code: "UNIT" },
+      where: { code: "UNIT" },
       data: { name: "Renamed by hand" },
     });
     const etiopia = await prisma.memberState.findFirstOrThrow({
-      where: { tenantId: system.id, abbreviation: "ETH" },
+      where: { abbreviation: "ETH" },
     });
     await prisma.memberStateRegion.deleteMany({ where: { memberStateId: etiopia.id } });
 

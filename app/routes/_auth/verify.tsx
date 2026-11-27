@@ -42,7 +42,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export const meta: MetaFunction = () => {
-  return [{ title: "Setup Accreditation Account" }];
+  return [{ title: "Verify your email · Greenbook" }];
 };
 
 export default function VerifyRoute({ actionData }: Route.ComponentProps) {
@@ -62,14 +62,6 @@ export default function VerifyRoute({ actionData }: Route.ComponentProps) {
   const headings: Record<VerificationTypes, React.ReactNode> = {
     "reset-password": checkEmail,
     "change-email": checkEmail,
-    "2fa": (
-      <>
-        <h1 className="text-lg">Two-Factor Authentication</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Please enter your 2FA code to verify your identity.
-        </p>
-      </>
-    ),
   };
 
   const { form, fields } = useForm(VerifySchema, {
