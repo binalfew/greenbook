@@ -9,7 +9,7 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { RoleScope } from "~/generated/prisma/client";
-import { createUser, setUserTenantAssignment } from "~/services/users.server";
+import { createUser, EmailTakenError, setUserTenantAssignment } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
@@ -115,6 +115,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
     return redirect(`/${params.tenant}/settings/security/users/${created.id}`);
   } catch (error) {
+    if (error instanceof EmailTakenError) {
+      return data(submission.reply({ fieldErrors: { email: [error.message] } }), { status: 400 });
+    }
     return data(
       submission.reply({
         formErrors: [error instanceof Error ? error.message : "Failed to create user"],

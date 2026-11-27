@@ -86,6 +86,8 @@ const UNIQUE_PERMISSIONS = [
 async function main() {
   console.log("🌱 Starting seeding...");
 
+  await releaseDeletedUserEmails();
+
   // Create default user statuses
   console.log("Creating default user statuses...");
   const activeStatus = await prisma.userStatus.upsert({
@@ -1261,6 +1263,18 @@ async function upsertOrg(
       sortOrder: data.sortOrder,
     },
   });
+}
+
+// Data move (#14): users deleted before deletion started releasing the email
+// still hold their address. Give them the same placeholder `softDeleteUser`
+// writes (`releasedEmail` in app/services/users.server.ts). Idempotent.
+async function releaseDeletedUserEmails() {
+  const released = await prisma.$executeRaw`
+    UPDATE "User"
+    SET "email" = 'deleted-' || "id" || '@deleted.invalid'
+    WHERE "deletedAt" IS NOT NULL
+      AND "email" <> 'deleted-' || "id" || '@deleted.invalid'`;
+  if (released > 0) console.log(`Released the email of ${released} deleted user(s).`);
 }
 
 export { seedDirectory };

@@ -1,6 +1,5 @@
 import { hash } from "bcryptjs";
-import type { Prisma } from "~/generated/prisma/client";
-import { RoleScope } from "~/generated/prisma/client";
+import { Prisma, RoleScope } from "~/generated/prisma/client";
 import type { PaginatedQueryOptions, TenantServiceContext } from "~/utils/types.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { prisma } from "~/utils/db/db.server";
@@ -99,6 +98,47 @@ export async function getUserDetail(userId: string) {
   });
 }
 
+/** Refused because another live user already holds the email. */
+export class EmailTakenError extends Error {
+  constructor() {
+    super("A user with this email already exists");
+  }
+}
+
+// `User.email` is unique across the whole system, not per tenant. Checking
+// first turns a clash into an error the form can show on the field.
+async function assertEmailAvailable(email: string, exceptUserId?: string) {
+  const holder = await prisma.user.findFirst({
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      ...(exceptUserId && { id: { not: exceptUserId } }),
+    },
+    select: { id: true },
+  });
+  if (holder) throw new EmailTakenError();
+}
+
+// The check above can lose a race with a concurrent save; the unique index
+// then refuses the write. Report that the same way.
+function rethrowEmailClash(error: unknown): never {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002" &&
+    JSON.stringify(error.meta ?? {}).includes("email")
+  ) {
+    throw new EmailTakenError();
+  }
+  throw error;
+}
+
+/**
+ * Placeholder written over a deleted user's email so the real address can be
+ * registered again. The original stays in the audit log's DELETE entry.
+ */
+export function releasedEmail(userId: string) {
+  return `deleted-${userId}@deleted.invalid`;
+}
+
 export type CreateUserInput = {
   email: string;
   firstName: string;
@@ -124,46 +164,35 @@ export type CreateUserInput = {
 export async function createUser(input: CreateUserInput, ctx: TenantServiceContext) {
   const targetTenantId = input.tenantId === undefined ? ctx.tenantId : input.tenantId;
 
-  // Duplicate-email check is scoped to the target tenant. For tenantless
-  // creation (targetTenantId = null) we check against tenantless users only —
-  // the same address may legitimately exist as a tenant member elsewhere.
-  const existing = await prisma.user.findFirst({
-    where: { email: input.email, tenantId: targetTenantId, deletedAt: null },
-    select: { id: true },
-  });
-  if (existing) {
-    throw new Error(
-      targetTenantId
-        ? "A user with this email already exists in this tenant"
-        : "A regular (tenantless) user with this email already exists",
-    );
-  }
+  await assertEmailAvailable(input.email);
 
-  const created = await prisma.$transaction(async (tx) => {
-    const u = await tx.user.create({
-      data: {
-        email: input.email,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        tenantId: targetTenantId,
-        userStatusId: input.userStatusId ?? null,
-      },
-    });
-
-    if (input.password) {
-      await tx.password.create({
-        data: { userId: u.id, hash: await hash(input.password, 10) },
+  const created = await prisma
+    .$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          email: input.email,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          tenantId: targetTenantId,
+          userStatusId: input.userStatusId ?? null,
+        },
       });
-    }
 
-    if (input.roleIds && input.roleIds.length > 0) {
-      await tx.userRole.createMany({
-        data: input.roleIds.map((roleId) => ({ userId: u.id, roleId })),
-      });
-    }
+      if (input.password) {
+        await tx.password.create({
+          data: { userId: u.id, hash: await hash(input.password, 10) },
+        });
+      }
 
-    return u;
-  });
+      if (input.roleIds && input.roleIds.length > 0) {
+        await tx.userRole.createMany({
+          data: input.roleIds.map((roleId) => ({ userId: u.id, roleId })),
+        });
+      }
+
+      return u;
+    })
+    .catch(rethrowEmailClash);
 
   await writeAudit({
     tenantId: ctx.tenantId,
@@ -189,15 +218,19 @@ export async function updateUser(
   input: UpdateUserInput,
   ctx: TenantServiceContext,
 ) {
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      ...(input.firstName !== undefined && { firstName: input.firstName }),
-      ...(input.lastName !== undefined && { lastName: input.lastName }),
-      ...(input.email !== undefined && { email: input.email }),
-      ...(input.userStatusId !== undefined && { userStatusId: input.userStatusId }),
-    },
-  });
+  if (input.email !== undefined) await assertEmailAvailable(input.email, userId);
+
+  const updated = await prisma.user
+    .update({
+      where: { id: userId },
+      data: {
+        ...(input.firstName !== undefined && { firstName: input.firstName }),
+        ...(input.lastName !== undefined && { lastName: input.lastName }),
+        ...(input.email !== undefined && { email: input.email }),
+        ...(input.userStatusId !== undefined && { userStatusId: input.userStatusId }),
+      },
+    })
+    .catch(rethrowEmailClash);
 
   await writeAudit({
     tenantId: ctx.tenantId,
@@ -290,9 +323,13 @@ export async function softDeleteUser(userId: string, ctx: TenantServiceContext) 
     select: { email: true },
   });
   await assertNotLastGlobalAdmin(userId);
-  // Deleting the sessions signs the user out everywhere at once.
+  // Deleting the sessions signs the user out everywhere at once. Swapping the
+  // email for a placeholder lets the address be registered again.
   await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { deletedAt: new Date() } }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date(), email: releasedEmail(userId) },
+    }),
     prisma.session.deleteMany({ where: { userId } }),
   ]);
   await writeAudit({
