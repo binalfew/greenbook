@@ -57,7 +57,6 @@ model User {
   userRoles        UserRole[]
   sessions         Session[]
   password         Password?
-  recoveryCodes    RecoveryCode[]
   passwordHistory  PasswordHistory[]
   invitationsSent  Invitation[]
   notifications    Notification[]
@@ -283,18 +282,6 @@ model AuditLog {
   @@index([createdAt])
   @@index([tenantId, action, createdAt])
   @@index([entityType, entityId])
-}
-
-model RecoveryCode {
-  id        String    @id @default(cuid())
-  userId    String
-  codeHash  String    @db.VarChar(255)
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
 
 model PasswordHistory {

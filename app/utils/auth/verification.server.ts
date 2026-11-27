@@ -1,26 +1,18 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import { generateTOTP, verifyTOTP } from "@epic-web/totp";
 import { createCookieSessionStorage, data, redirect } from "react-router";
-import { safeRedirect } from "remix-utils/safe-redirect";
 import { z } from "zod";
 import {
   codeQueryParam,
   newEmailAddressSessionKey,
   redirectToQueryParam,
-  rememberMeSessionKey,
   resetPasswordEmailSessionKey,
-  sessionKey,
   targetQueryParam,
-  twoFAVerificationType,
-  twoFAVerifyVerificationType,
   typeQueryParam,
-  unverifiedSessionIdKey,
-  verifiedTimeKey,
 } from "./constants";
 import { prisma } from "../db/db.server";
 import { sendEmail } from "../email/email.server";
 import { invariant } from "../invariant";
-import { authSessionStorage } from "./session.server";
 import { redirectWithToast } from "../toast.server";
 import { VerifySchema, type VerificationTypes, type VerifyFunctionArgs } from "../types";
 import { getDomainUrl } from "../misc";
@@ -63,7 +55,7 @@ export async function isCodeValid({
   target,
 }: {
   code: string;
-  type: VerificationTypes | typeof twoFAVerifyVerificationType;
+  type: VerificationTypes;
   target: string;
 }) {
   const verification = await prisma.verification.findUnique({
@@ -136,9 +128,6 @@ export async function validateRequest(request: Request, body: URLSearchParams | 
     case "change-email": {
       await deleteVerification();
       return handleChangeEmailVerification({ request, body, submission });
-    }
-    case "2fa": {
-      return handleTwoFAVerification({ request, body, submission });
     }
     default:
       throw new Response("Invalid verification type", { status: 500 });
@@ -220,83 +209,6 @@ export async function handleChangeEmailVerification({ request, submission }: Ver
     title: "Email Changed",
     description: `Your email has been changed to ${user.email}.`,
   });
-}
-
-export async function handleTwoFAVerification({ request, submission }: VerifyFunctionArgs) {
-  invariant(submission.payload, "submission.value should be defined by now");
-  const cookieSession = await authSessionStorage.getSession(request.headers.get("cookie"));
-
-  const verifySession = await verifySessionStorage.getSession(request.headers.get("cookie"));
-
-  const rememberMe = verifySession.get(rememberMeSessionKey);
-  const redirectTo = submission.payload.redirectTo as string;
-
-  const headers = new Headers();
-  cookieSession.set(verifiedTimeKey, Date.now());
-
-  const unverifiedSessionId = verifySession.get(unverifiedSessionIdKey);
-  if (unverifiedSessionId) {
-    const session = await prisma.session.findUnique({
-      select: { expiresAt: true },
-      where: { id: unverifiedSessionId },
-    });
-
-    if (!session) {
-      throw await redirectWithToast("/login", {
-        type: "error",
-        title: "Invalid Session",
-        description: "Could not find session to verify. Please try again.",
-      });
-    }
-
-    cookieSession.set(sessionKey, unverifiedSessionId);
-
-    headers.append(
-      "set-cookie",
-      await authSessionStorage.commitSession(cookieSession, {
-        expires: rememberMe ? session.expiresAt : undefined,
-      }),
-    );
-  } else {
-    headers.append("set-cookie", await authSessionStorage.commitSession(cookieSession));
-  }
-
-  headers.append("set-cookie", await verifySessionStorage.destroySession(verifySession));
-
-  return redirect(safeRedirect(redirectTo), { headers });
-}
-
-export async function shouldRequestTwoFA({
-  request,
-  userId,
-}: {
-  request: Request;
-  userId: string;
-}) {
-  const verifySession = await verifySessionStorage.getSession(request.headers.get("cookie"));
-  const unverifiedSessionId = verifySession.get(unverifiedSessionIdKey);
-  if (unverifiedSessionId) return true;
-
-  const verification = await prisma.verification.findUnique({
-    select: { id: true },
-    where: {
-      target_type: {
-        target: userId,
-        type: twoFAVerificationType,
-      },
-    },
-  });
-
-  const userHasTwoFAEnabled = Boolean(verification);
-  if (!userHasTwoFAEnabled) return false;
-
-  const cookieSession = await authSessionStorage.getSession(request.headers.get("cookie"));
-  const verifiedTime = new Date(cookieSession.get(verifiedTimeKey) ?? 0);
-  if (!verifiedTime) return true;
-
-  const twoHoursAgo = 2 * 60 * 60 * 1000;
-
-  return Date.now() - verifiedTime.getTime() > twoHoursAgo;
 }
 
 export async function prepareVerification({

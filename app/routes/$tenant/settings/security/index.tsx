@@ -1,9 +1,8 @@
-import { ChevronRight, KeyRound, Link2, Shield, Smartphone, Users } from "lucide-react";
+import { ChevronRight, KeyRound, Link2, Shield, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, data } from "react-router";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
 import { requirePermission } from "~/utils/auth/require-auth.server";
-import { twoFAVerificationType } from "~/utils/auth/constants";
 import { prisma } from "~/utils/db/db.server";
 import type { Route } from "./+types/index";
 
@@ -29,28 +28,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     prisma.sSOConfiguration.count(),
   ]);
 
-  // 2FA-enabled user count: Verification rows with type "2fa" whose `target`
-  // matches a user in this tenant. Two-step so we don't leak cross-tenant
-  // verifications into the count.
-  const tenantUserIds = tenantId
-    ? await prisma.user
-        .findMany({ where: { tenantId, deletedAt: null }, select: { id: true } })
-        .then((rows) => rows.map((r) => r.id))
-    : [];
-  const twoFactorCount =
-    tenantUserIds.length > 0
-      ? await prisma.verification.count({
-          where: { type: twoFAVerificationType, target: { in: tenantUserIds } },
-        })
-      : 0;
-
   return data({
     counts: {
       users: userCount,
       roles: roleCount,
       permissions: permissionCount,
       sso: ssoCount,
-      twofactor: twoFactorCount,
     },
   });
 }
@@ -142,14 +125,6 @@ export default function SecurityHubPage({ loaderData }: Route.ComponentProps) {
             description="Connect OIDC, SAML, Azure AD, or Google for single sign-on."
             to={`${basePath}/sso`}
             accent="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-          />
-          <SurfaceCard
-            icon={Smartphone}
-            title="Two-factor auth"
-            value={counts.twofactor}
-            description="TOTP-based second factor. Enroll users and enforce policy."
-            to={`${basePath}/twofactor`}
-            accent="bg-rose-500/10 text-rose-600 dark:text-rose-400"
           />
         </div>
       </div>
