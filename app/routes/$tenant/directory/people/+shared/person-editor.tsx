@@ -20,9 +20,8 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { personPhotoPath } from "~/utils/directory-routes";
-import type { PossibleDuplicate } from "~/services/person-duplicates.server";
 import { personFormSchema } from "~/utils/schemas/directory";
-import type { Route } from "../$personId_/+types/edit";
+import type { PersonEditorResult } from "./person-editor.server";
 
 type PersonLike = {
   id: string;
@@ -60,7 +59,7 @@ export interface PersonEditorProps {
   }>;
   canDirectApply: boolean;
   basePrefix: string;
-  actionData?: Route.ComponentProps["actionData"];
+  actionData?: PersonEditorResult;
 }
 
 function FieldRow({
@@ -137,8 +136,7 @@ export function PersonEditor({
   const photoId = draftPhotoId || person?.photoId || null;
 
   // Present only when the action held the save back with a duplicate warning.
-  const duplicates =
-    (actionData as { duplicates?: PossibleDuplicate[] } | undefined)?.duplicates ?? [];
+  const duplicates = actionData?.duplicates ?? [];
 
   const cancelHref = person ? `${basePrefix}/${person.id}` : basePrefix;
   const submitLabel = canDirectApply

@@ -24,15 +24,16 @@ export class PhotoUploadError extends Error {
 const ACCEPTED_FORMATS = new Set(["jpeg", "png", "webp"]);
 const STORED_CONTENT_TYPE = "image/webp";
 
+/** An upload that passed validation, resized and re-encoded, not yet stored. */
+export type PreparedPhoto = { bytes: Buffer; width: number; height: number };
+
 /**
- * Validate an uploaded file and store it as a photo of at most 400×400.
- * The format is read from the file's content; its name and declared type are
- * ignored. The image is re-encoded, which drops all metadata of the original.
+ * Validate an uploaded file and turn it into a photo of at most 400×400, or
+ * throw `PhotoUploadError`. The format is read from the file's content; its
+ * name and declared type are ignored. The image is re-encoded, which drops
+ * all metadata of the original.
  */
-export async function storePersonPhoto(
-  file: File,
-  owner: { tenantId: string; userId: string },
-): Promise<string> {
+export async function preparePersonPhoto(file: File): Promise<PreparedPhoto> {
   if (file.size > PERSON_PHOTO_MAX_BYTES) throw new PhotoUploadError("TOO_LARGE");
 
   let resized: { data: Buffer; info: { width: number; height: number } };
@@ -54,13 +55,19 @@ export async function storePersonPhoto(
     throw new PhotoUploadError("UNSUPPORTED_TYPE");
   }
 
+  return { bytes: resized.data, width: resized.info.width, height: resized.info.height };
+}
+
+/** Store a prepared photo and return its id. */
+export async function storePersonPhoto(
+  photo: PreparedPhoto,
+  owner: { tenantId: string; userId: string },
+): Promise<string> {
   return photoStorage.put({
     tenantId: owner.tenantId,
     uploadedById: owner.userId,
     contentType: STORED_CONTENT_TYPE,
-    width: resized.info.width,
-    height: resized.info.height,
-    bytes: resized.data,
+    ...photo,
   });
 }
 

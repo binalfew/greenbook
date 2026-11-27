@@ -321,6 +321,34 @@ describe("person photo: upload", () => {
   });
 });
 
+describe("person photo: upload with a possible duplicate", () => {
+  it("reports a bad photo on the first save, before the duplicate warning", async () => {
+    const a = await arrange();
+    await savePerson(a, a.manager.cookie, personForm("Dayo"));
+    const text = new File(["just some text"], "photo.jpg", { type: "image/jpeg" });
+
+    const result = await savePerson(a, a.manager.cookie, personForm("Dayo", { photo: text }));
+
+    expect(statusOf(result)).toBe(400);
+    const reply = payloadOf<{ error?: Record<string, string[] | null> }>(result);
+    expect(reply.error?.photo?.[0]).toBeTruthy();
+  });
+
+  it("stores nothing while the duplicate warning is showing", async () => {
+    const a = await arrange();
+    await savePerson(a, a.manager.cookie, personForm("Efua"));
+
+    const result = await savePerson(
+      a,
+      a.manager.cookie,
+      personForm("Efua", { photo: await cameraJpeg() }),
+    );
+
+    expect(payloadOf<{ duplicates?: unknown[] }>(result).duplicates).toHaveLength(1);
+    expect(await prisma.personPhoto.count()).toBe(0);
+  });
+});
+
 describe("person photo: who can see it", () => {
   it("refuses an unauthenticated request on both routes", async () => {
     const a = await arrange();
