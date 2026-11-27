@@ -678,6 +678,16 @@ async function submitDraft(id: string, ctx: TenantServiceContext): Promise<Chang
     submittedById: change.submittedById,
   });
 
+  await writeAudit({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    action: "SUBMIT_CHANGE",
+    entityType: "ChangeRequest",
+    entityId: change.id,
+    description: `Submitted ${change.operation} ${change.entityType} for review`,
+    metadata: { targetEntityId: change.entityId },
+  });
+
   return change;
 }
 
@@ -1043,6 +1053,16 @@ export async function withdrawChange(id: string, ctx: TenantServiceContext) {
     id: updated.id,
     entityType: updated.entityType,
     entityId: updated.entityId,
+  });
+
+  await writeAudit({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    action: "WITHDRAW_CHANGE",
+    entityType: "ChangeRequest",
+    entityId: updated.id,
+    description: `Withdrew ${updated.operation} ${updated.entityType}`,
+    metadata: { targetEntityId: updated.entityId },
   });
 
   return updated;
