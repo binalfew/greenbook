@@ -51,5 +51,17 @@
   "end": "Fin",
   "editSettingTitle": "Modifier {{label}}",
   "currentValueLabel": "Valeur actuelle",
-  "defaultValueLabel": "Par défaut"
+  "defaultValueLabel": "Par défaut",
+  "tenantInitialUserTitle": "Utilisateur initial",
+  "tenantInitialUserHelp": "Vous pouvez placer dans ce locataire un utilisateur qui n'appartient à aucun locataire, comme premier point focal ou gestionnaire. Laissez vide pour créer le locataire sans membres ; vous pourrez affecter des utilisateurs plus tard depuis le formulaire de modification d'un utilisateur.",
+  "tenantInitialUserLabel": "Utilisateur",
+  "tenantInitialUserNone": "— Aucun (affecter plus tard) —",
+  "tenantInitialUserPlaceholder": "Sélectionner un utilisateur",
+  "tenantInitialUserEmpty": "Aucun utilisateur sans locataire n'est disponible. Créez d'abord un utilisateur, ou laissez vide et affectez quelqu'un plus tard.",
+  "tenantInitialUserRoleLabel": "Rôle",
+  "tenantInitialUserRolePlaceholder": "Sélectionner un rôle",
+  "tenantInitialUserRole_focal": "Point focal",
+  "tenantInitialUserRoleHelp_focal": "Enregistre des fiches et les soumet pour validation",
+  "tenantInitialUserRole_manager": "Gestionnaire",
+  "tenantInitialUserRoleHelp_manager": "Approuve les soumissions et modifie les fiches directement"
 }

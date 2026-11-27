@@ -6,19 +6,14 @@ import {
   updateMemberState,
   ReferenceDataError,
 } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
-import { buildServiceContext } from "~/utils/request-context.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import { memberStateFormSchema } from "./member-state-schema";
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const hasId = typeof formData.get("id") === "string" && (formData.get("id") as string).length > 0;
 
-  const user = await requirePermission(request, "reference-data", "write");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requireReferenceDataAdmin(request);
 
   // Checkbox group: getAll to capture every selected region before Conform parse.
   const regionIds = formData.getAll("regionIds").filter((v): v is string => typeof v === "string");
@@ -28,7 +23,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return data(submission.reply(), { status: 400 });
   }
 
-  const ctx = buildServiceContext(request, user, tenantId);
   const input = {
     fullName: submission.value.fullName,
     abbreviation: submission.value.abbreviation,
@@ -41,9 +35,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   try {
     if (hasId && submission.value.id) {
-      await updateMemberState(submission.value.id, input, ctx);
+      await updateMemberState(submission.value.id, input);
     } else {
-      await createMemberState(input, ctx);
+      await createMemberState(input);
     }
   } catch (err) {
     if (err instanceof ReferenceDataError) {

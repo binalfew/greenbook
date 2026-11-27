@@ -8,20 +8,15 @@ import {
   getPositionType,
   ReferenceDataError,
 } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
-import { buildServiceContext } from "~/utils/request-context.server";
+import { requireReferenceDataAdmin } from "~/utils/reference-data-access.server";
 import type { Route } from "./+types/$posTypeId.delete";
 
 export const handle = { breadcrumb: "Delete" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
+  await requireReferenceDataAdmin(request);
   try {
-    const positionType = await getPositionType(params.posTypeId, tenantId);
+    const positionType = await getPositionType(params.posTypeId);
     return data({ positionType });
   } catch (err) {
     if (err instanceof ReferenceDataError) {
@@ -32,13 +27,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const user = await requirePermission(request, "reference-data", "delete");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
-  const ctx = buildServiceContext(request, user, tenantId);
-  await deletePositionType(params.posTypeId, ctx);
+  await requireReferenceDataAdmin(request);
+  await deletePositionType(params.posTypeId);
   return redirect(`/${params.tenant}/settings/references/position-types`);
 }
 

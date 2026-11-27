@@ -3,18 +3,14 @@ import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, data } from "react-router";
 import { getReferenceDataCounts } from "~/services/reference-data.server";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireReferenceDataRead } from "~/utils/reference-data-access.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "References" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "reference-data", "read");
-  const tenantId = user.tenantId;
-  if (!tenantId) {
-    throw data({ error: "Missing tenant context" }, { status: 403 });
-  }
-  const counts = await getReferenceDataCounts(tenantId);
+  await requireReferenceDataRead(request);
+  const counts = await getReferenceDataCounts();
   return data({ counts });
 }
 

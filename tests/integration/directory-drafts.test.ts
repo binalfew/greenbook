@@ -87,7 +87,7 @@ async function arrange(): Promise<Seeded> {
   }
 
   const orgType = await prisma.organizationType.create({
-    data: { tenantId: tenant.id, code: "ROOT", name: "Root", level: 0 },
+    data: { code: "ROOT", name: "Root", level: 0 },
   });
 
   await prisma.featureFlag.upsert({

@@ -7,7 +7,6 @@
  * module into the client bundle.
  */
 export const FEATURE_FLAG_KEYS = {
-  TWO_FACTOR: "FF_TWO_FACTOR",
   IMPERSONATION: "FF_IMPERSONATION",
   NOTIFICATIONS: "FF_NOTIFICATIONS",
   PWA: "FF_PWA",

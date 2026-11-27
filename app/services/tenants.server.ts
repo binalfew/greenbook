@@ -1,6 +1,6 @@
 import type { Prisma, Tenant } from "~/generated/prisma/client";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
-import { bootstrapNewTenant } from "~/services/tenant-setup.server";
+import { placeInitialUser, type InitialUser } from "~/services/tenant-setup.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { addTenantToNewTenantFlags } from "~/utils/config/tenant-flag-membership.server";
@@ -28,14 +28,14 @@ export type CreateTenantInput = {
   logoUrl?: string | null;
   brandTheme?: string;
   /**
-   * Existing user to attach as the new tenant's first admin. When omitted,
-   * the tenant is created with its standard roles but no admin assigned —
-   * the global admin can promote users via the user-edit form.
+   * Existing tenantless user to move into the new tenant as its first focal
+   * person or manager. When omitted the tenant starts with no members and the
+   * global admin assigns users via the user-edit form.
    */
-  initialAdminUserId?: string | null;
+  initialUser?: InitialUser | null;
 };
 
-export type UpdateTenantInput = Partial<Omit<CreateTenantInput, "slug">> & {
+export type UpdateTenantInput = Partial<Omit<CreateTenantInput, "slug" | "initialUser">> & {
   slug?: string;
 };
 
@@ -193,9 +193,10 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
   const slug = input.slug ?? (await generateUniqueSlug(input.name));
   if (input.slug) await assertSlugAvailable(input.slug);
 
-  // The tenant and its place on the directory flags' enabled lists are written
-  // together, so a tenant that exists is one whose managers and focal persons
-  // can open the directory and whose approved people are searchable.
+  // The tenant, its place on the directory flags' enabled lists and its
+  // initial user are written together, so a tenant that exists is one whose
+  // managers and focal persons can open the directory and whose approved
+  // people are searchable.
   const tenant = await prisma.$transaction(async (tx) => {
     const created = await tx.tenant.create({
       data: {
@@ -211,19 +212,11 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
       },
     });
     await addTenantToNewTenantFlags(tx, created.id);
+    if (input.initialUser) await placeInitialUser(tx, created.id, input.initialUser);
     return created;
   });
   clearFlagCache();
   clearPublicTenantIdsCache();
-
-  // Every new tenant gets its standard `admin` and `user` roles wired up the
-  // moment it's created. The optional initialAdminUserId, when provided,
-  // attaches that user as the tenant's first admin so they can sign in and
-  // manage it immediately.
-  await bootstrapNewTenant({
-    tenantId: tenant.id,
-    initialAdminUserId: input.initialAdminUserId ?? undefined,
-  });
 
   await writeAudit({
     tenantId: tenant.id,
@@ -234,7 +227,8 @@ export async function createTenant(input: CreateTenantInput, ctx: ServiceContext
     description: `Created tenant "${tenant.name}"`,
     metadata: {
       slug: tenant.slug,
-      initialAdminUserId: input.initialAdminUserId ?? null,
+      initialUserId: input.initialUser?.userId ?? null,
+      initialUserRole: input.initialUser?.role ?? null,
     },
   });
 
