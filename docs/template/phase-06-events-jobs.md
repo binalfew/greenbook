@@ -1,67 +1,47 @@
-# Events & Jobs (Phase 6)
+# Domain events & notifications (Phase 6)
 
-The template ships a background-jobs, SSE, and notification stack. Entry points:
+What is in the code today: a domain-event emitter that writes to the structured log, and in-app notifications stored per user.
 
-## Job queue
-
-**In-process, single-instance, Postgres-backed.** `app/utils/events/job-queue.server.ts` exports `enqueueJob(type, payload, opts?)`, `registerJobHandler(type, handler)`, `startJobProcessor()`, and `stopJobProcessor()`. The processor is started on boot from `server/app.ts` on a 5-second interval and claims jobs atomically via `FOR UPDATE SKIP LOCKED`. Failed jobs retry with exponential backoff (2^attempts × 30s + jitter, cap 1h).
-
-**Horizontal scaling is not supported in Phase 6** — running multiple Node processes will still only have one processor per process, but they all hit the same DB and claim jobs competitively, which works. SSE, however, is in-memory per-instance; a pub/sub bus is needed for multi-instance SSE fan-out (deferred to a later phase).
-
-To add a new job type:
-
-```ts
-// app/utils/events/job-handlers.server.ts
-registerJobHandler("my-job", async (payload) => {
-  const { id } = payload as { id: string };
-  // …do work
-});
-```
-
-Enqueue from a service or route:
-
-```ts
-await enqueueJob("my-job", { id: "abc" }, { maxAttempts: 5, delay: 60_000 });
-```
+> **Not shipped.** The original phase also planned a Postgres-backed job queue, outbound webhooks, idempotency keys, and real-time updates over server-sent events (an SSE endpoint, a `use-sse` hook, a notification listener, the `FF_SSE` flag). None of that is in the code. Nothing runs in the background and nothing is pushed to the browser. The file keeps its old name so existing links still resolve.
 
 ## Domain events
 
-Services emit domain events through `emitDomainEvent(tenantId, eventType, data)` from `app/utils/events/emit-domain-event.server.ts`. This is **fire-and-forget** — it records the event in the structured log (debug level) and never throws, so the caller's write path is never blocked. There is no outbound delivery: the in-process consumers (notifications, audit trail) are called by the emitting service next to the `emitDomainEvent` call. Event names live in `app/utils/events/domain-events.ts`.
+`~/utils/events/emit-domain-event.server.ts` — `emitDomainEvent(tenantId, eventType, data)` records the event with `logger.debug` and returns. It is synchronous, never throws, and never blocks the caller's write. There is no subscriber registry and no delivery: a service that wants something to happen when an event occurs (send a notification, write an audit row) calls that code itself, next to the emit.
 
-**Rule: services emit, routes never emit directly.** Keep the routes thin.
+`~/utils/events/domain-events.ts` — `DOMAIN_EVENTS`, the catalog of event type names with a one-line description each, and the `DomainEventType` union. The catalog is a list of names, not a guarantee: some types in it (`user.updated`, `user.deleted`, `role.*`) have no emitter yet.
 
-```ts
-// In a service after a successful write:
-await prisma.user.create({ data: { ... } });
-emitDomainEvent(tenantId, "user.created", { id: user.id, email: user.email });
-```
+Events emitted today:
 
-## SSE
+- `tenant.created` / `tenant.updated` / `tenant.deleted` — `~/services/tenants.server.ts`
+- `invitation.created` / `invitation.accepted` / `invitation.revoked` — `~/services/invitations.server.ts`
+- `user.created` — through `emitUserCreated(user, tenantId, extra?)` in `~/utils/events/emit-user-created.server.ts`, which fixes the payload shape
+- `settings.changed` — `~/utils/config/settings.server.ts`
+- `change.submitted` / `change.approved` / `change.rejected` / `change.withdrawn`, and the entity events (`organization.created`, `person.updated`, `position.assigned`, …) that fire when a change is approved — `~/services/directory-changes.server.ts`
 
-`server/sse.ts` exposes `emitSSE({ type, tenantId, userId?, data })`; `app/routes/$tenant/api/events.tsx` is the stream endpoint; `app/hooks/use-sse.ts` is the consumer hook. Events are scoped per-tenant, optionally per-user; cross-tenant leakage is blocked. 30-second heartbeats prevent proxy idle timeouts.
-
-Feature flag: `FF_SSE` (default **on**).
+To add an event: add its name to `DOMAIN_EVENTS`, then call `emitDomainEvent` after the write has committed.
 
 ## Notifications
 
-`app/services/notifications.server.ts` — `createNotification`, `getUnreadCount`, `listNotifications`, `markAsRead`, `markAllAsRead`, `deleteNotification`. Creating a notification emits an SSE `notification` event so the UI updates in real-time.
+`~/services/notifications.server.ts`:
 
-Feature flag: `FF_NOTIFICATIONS` (default **on**).
+- `createNotification(input)` — stores one `Notification` row for one user.
+- `getUnreadCount(userId)`, `listNotifications(userId, { page?, perPage?, type?, ... })`
+- `markAsRead(id, userId)`, `markAllAsRead(userId)`, `deleteNotification(id, userId)`
+- `openNotification(id, userId)` — marks the notification read and returns it, so the caller can redirect to what it points at.
 
-## Idempotency
+Every function is scoped by `userId`; a user only ever reads or changes their own notifications.
 
-Write API endpoints that accept `Idempotency-Key` headers wrap their handler in `withIdempotency(request, tenantId, handler)` from `app/utils/events/idempotency.server.ts`. 24-hour TTL, `(key, tenantId)` unique. A cache sweeper job is deferred to a later phase.
+UI:
 
-## Phase 6b additions
+- `~/components/notification-bell.tsx` — the bell in the tenant layout, with the unread count and the five most recent notifications. `app/routes/$tenant/_layout.tsx` loads that data when `FF_NOTIFICATIONS` is on for the tenant, so the bell is current as of the last page load or revalidation.
+- `$tenant/notifications/index.tsx` — the full list.
+- `$tenant/notifications/mark-all-read.tsx`, `$notificationId.read.tsx`, `$notificationId.open.tsx`, `$notificationId.delete.tsx` — actions.
 
-Phase 6b activated the Phase 6a infrastructure:
+The routes call `requireFeature(request, "FF_NOTIFICATIONS")`. There are no notification permissions: access follows ownership.
 
-- **Emission wiring.** `emitDomainEvent` now fires from `tenants.server.ts` (tenant.created / updated / deleted), `api-keys.server.ts` (api_key.created / revoked / rotated), `invitations.server.ts` (invitation.created / accepted / revoked), and `settings.server.ts` (settings.changed, tenant-scope only). A shared `emit-user-created.server.ts` helper fires `user.created` from `signup()` and the invitation-accept route.
-- **Notification bell + listener** mounted in the tenant top-nav (`~/components/notification-bell`, `~/components/notification-listener`). Bell reads `unreadCount` + 5 recent notifications from the layout loader; listener wraps `useSSE` and surfaces notifications as `toast.info`. Both gated: bell on `FF_NOTIFICATIONS`, listener on `FF_SSE`.
-- **Notifications routes** at `$tenant/notifications/` — DataTable list with status filter, row actions for mark-as-read + delete, toolbar action for mark-all-read. All gated on `FF_NOTIFICATIONS` via `requireFeature`.
-- **i18n:** `notifications.json` fleshed out (20 keys).
-- **Permissions:** `notification:{read,write,delete}` added to the seed UNIQUE_PERMISSIONS list (admin role gets them automatically via the seed's "all permissions" assignment).
+The directory workflow is the one producer: `~/services/directory-notifications.server.ts` notifies approvers when drafts are submitted and the submitter when a change is approved or rejected. Failures there are logged and never undo the change.
 
 ## Deviations
 
-- No `logger.server.ts` existed when Phase 6 landed — ports used `console.*` (info/warn/error). Phase 13 (server hardening) landed a real pino logger and swept those call sites.
+- **No background work.** Email is sent inline from the request that triggers it (`~/utils/email/email.server.ts`).
+- **No bell on the directory search pages.** `/` and `/people/*` use the public layout, which has no notification UI.

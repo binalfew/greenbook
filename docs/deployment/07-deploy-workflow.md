@@ -86,7 +86,7 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 | `DATABASE_URL`    | `app/utils/db/db.server.ts` (via `@prisma/adapter-pg`); `prisma.config.ts`                                                                                                                                       | Standard postgres:// URL. URL-encode special chars in password.                                                                                                                            |
 | `SESSION_SECRET`  | `app/utils/auth/session.server.ts`, `app/utils/auth/csrf.server.ts`, `app/utils/auth/verification.server.ts`, `app/utils/auth/sso-state.server.ts`, `app/utils/toast.server.ts`, `app/utils/auth/auth.server.ts` | **Comma-separated list** (`new,old`) — greenbook signs with the first secret and verifies against all of them, so you can rotate without invalidating live sessions. See "Rotation" below. |
 | `HONEYPOT_SECRET` | `app/utils/auth/honeypot.server.ts`                                                                                                                                                                              | Used as the encryption seed for the honeypot anti-bot form field. Independent from SESSION_SECRET by design.                                                                               |
-| `RESEND_API_KEY`  | `app/utils/email/email.server.ts`                                                                                                                                                                                | Auth token for the Resend transactional email API. Verification emails, password resets, DSAR exports, tenant invites all flow through this.                                               |
+| `RESEND_API_KEY`  | `app/utils/email/email.server.ts`                                                                                                                                                                                | Auth token for the Resend transactional email API. Verification emails and password resets flow through this.                                                                              |
 | `EMAIL_FROM`      | `app/utils/email/email.server.ts`                                                                                                                                                                                | Sender of every outgoing email, e.g. `Greenbook <address>`. The address must be on a domain verified in Resend.                                                                            |
 
 ##### Not applicable: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
@@ -314,11 +314,9 @@ services:
     # and makes the behaviour visible to anyone skim-reading the compose file.
 
     stop_grace_period: 30s
-    # Docker's default is 10s, which can be tight: on SIGTERM greenbook
-    # drains the in-process job queue (app/utils/events/job-queue.server.ts),
-    # flushes the rate-limit audit buffer, and (if SENTRY_DSN is set) flushes
-    # pending Sentry events. Under heavy load those can exceed 10s. 30s gives
-    # the shutdown hooks room without surprising operators.
+    # Docker's default is 10s. On SIGTERM greenbook runs its shutdown hooks
+    # (today: flushing the rate-limit audit buffer) and then exits. 30s gives
+    # the hooks room under load without surprising operators.
 
     env_file:
       - /etc/greenbook.env
@@ -385,9 +383,9 @@ services:
           cpus: "1.0"
     # Hard limits. If the container exceeds memory: 1g, it's killed (OOM).
     # 1.0 CPUs means it can use one full core at 100%.
-    # The in-process job queue runs in the same Node event loop as request
-    # handling — if you add heavy job handlers (PDF generation, image
-    # processing), bump memory to 2g and consider dedicating a core.
+    # Everything runs in the one Node event loop that handles requests — if
+    # you add heavy work (PDF generation, image processing), bump memory to
+    # 2g and consider dedicating a core.
 
     read_only: true
     # Root filesystem is read-only. Any write attempt returns EACCES.
@@ -1030,7 +1028,7 @@ $ docker compose -f /opt/greenbook/docker-compose.yml up -d
 #   -d          detached.
 # Compose stops the old container, starts the new one, waits for the
 # healthcheck to pass. Downtime is typically 2-5 seconds — the recreation
-# gap. The job queue drains during stop_grace_period (30 s ceiling).
+# gap. Shutdown hooks run during stop_grace_period (30 s ceiling).
 
 $ docker compose -f /opt/greenbook/docker-compose.yml ps
 # Check that STATE=running and HEALTH=healthy.

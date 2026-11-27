@@ -1,5 +1,7 @@
 # Docs polish (Phase 15)
 
+> **Historical record.** This file describes what Phase 15 changed at the time. `README.md` and `CLAUDE.md` have since been rewritten to match the code (several subsystems the Phase 15 README listed, privacy among them, are not shipped), so read those files for the current state.
+
 Phase 15 is the final phase — it's docs-only, closes out the extraction plan, and brings the template's front-door documentation in line with everything that landed across phases 0–14.
 
 ## Changes

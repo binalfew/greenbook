@@ -1,32 +1,34 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with this template.
+This file provides guidance to Claude Code (claude.ai/code) when working in this repository.
 
-## Template Scope
+## Scope
 
-This is a **living template** for building multi-tenant SaaS apps on React Router 7. It ships the domain-agnostic plumbing (auth, RBAC, multi-tenancy, settings, feature flags, i18n, events/jobs, SSO, privacy, PWA, observability, testing harness). Business domains go in forks.
+Greenbook is the African Union Commission's staff directory, built on a multi-tenant React Router 7 template. The template supplies the plumbing (auth, RBAC, multi-tenancy, settings, feature flags, i18n, domain events, notifications, SSO, PWA, observability, testing harness); the directory and its editorial workflow are the product.
 
-The extraction plan that produced this template (`docs/superpowers/specs/2026-04-20-template-extraction-design.md`) landed in 15 phases, all merged. Per-subsystem deep dives live under `docs/template/phase-XX-*.md`. The "Patterns by phase" table below links to them — skim the "Deviations" block at the bottom of each phase file before starting new work.
+The template arrived in numbered phases (`docs/superpowers/specs/2026-04-20-template-extraction-design.md` is the original plan, kept as history). Several subsystems that plan describes were later removed because nothing used them. **These do not exist in the code — do not build on them or document them as present:** a job queue, webhooks, real-time updates over SSE, saved views, custom fields, view filters, a global search service, data export, privacy (DSAR + consent), API keys, two-factor authentication, business hours, `Country` / `Currency` / `Language` reference data, and the Notes demo module.
+
+Per-subsystem notes live under `docs/template/phase-XX-*.md`; the table below links to them.
 
 ## Patterns by phase
 
-| Phase | Subsystem                                                     | Look here                                                                                                                                                                                                                                                   | Deep dive                                                                                |
-| ----- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 1     | Auth + RBAC + audit log                                       | `app/utils/auth/`, `app/services/{users,roles,permissions}.server.ts`                                                                                                                                                                                       | —                                                                                        |
-| 2     | Multi-tenancy + invitations                                   | `app/routes/$tenant/_layout.tsx`, `app/services/{tenants,invitations,tenant-setup}.server.ts`, `app/utils/request-context.server.ts`                                                                                                                        | —                                                                                        |
-| 3     | Settings + feature flags + business hours                     | `app/services/{settings,business-hours}.server.ts`, `app/utils/config/{settings,feature-flags}.server.ts`                                                                                                                                                   | —                                                                                        |
-| 4     | i18n                                                          | `app/utils/i18n.ts`, `app/locales/`, `app/utils/i18n-cookie.server.ts`                                                                                                                                                                                      | See "i18n" below                                                                         |
-| 5     | Components library                                            | `app/components/form.tsx`, `app/components/data-table/`, `app/hooks/use-cascade.ts`                                                                                                                                                                         | [docs/template/phase-05-components.md](docs/template/phase-05-components.md)             |
-| 6     | Events + jobs + SSE + notifications                           | `app/utils/events/`, `app/services/notifications.server.ts`, `server/sse.ts`                                                                                                                                                                                | [docs/template/phase-06-events-jobs.md](docs/template/phase-06-events-jobs.md)           |
-| 7     | Saved views + custom fields + search + export                 | `app/services/{saved-views,custom-fields,search,data-export,view-filters}.server.ts`                                                                                                                                                                        | [docs/template/phase-07-data-patterns.md](docs/template/phase-07-data-patterns.md)       |
-| 8     | Reference data (Country/Title/Language/Currency)              | `app/services/reference-data.server.ts`, `app/routes/$tenant/settings/references/`                                                                                                                                                                          | [docs/template/phase-08-reference-data.md](docs/template/phase-08-reference-data.md)     |
-| 9     | Privacy (DSAR + consent) + audit-log UI                       | `app/services/privacy.server.ts`, `app/routes/$tenant/settings/privacy/`, `app/routes/$tenant/logs/`                                                                                                                                                        | [docs/template/phase-09-privacy-audit.md](docs/template/phase-09-privacy-audit.md)       |
-| 10    | SSO (OIDC + SAML)                                             | `app/services/sso.server.ts`, `app/utils/auth/{oidc,saml,sso-state}.server.ts`, `app/routes/_auth/sso/`, `app/routes/$tenant/settings/sso/`                                                                                                                 | [docs/template/phase-10-sso.md](docs/template/phase-10-sso.md)                           |
-| 11    | PWA + offline                                                 | `public/sw.js`, `public/manifest.json`, `app/utils/offline/`, `app/components/{offline-banner,pwa/*}.tsx`                                                                                                                                                   | [docs/template/phase-11-pwa.md](docs/template/phase-11-pwa.md)                           |
-| 12    | Testing harness                                               | `vitest.config.ts`, `vitest.integration.config.ts`, `playwright.config.ts`, `tests/`                                                                                                                                                                        | [docs/template/phase-12-testing.md](docs/template/phase-12-testing.md)                   |
-| 13    | Observability (logger/correlation/rate limit/Sentry/shutdown) | `app/utils/monitoring/`, `app/middleware/correlation.server.ts`, `server/{logger,correlation,request-logger,security,rate-limit-audit,sentry,shutdown}.{js,ts}`                                                                                             | [docs/template/phase-13-server-hardening.md](docs/template/phase-13-server-hardening.md) |
-| 15    | Docs polish                                                   | `README.md`, `.env.example`                                                                                                                                                                                                                                 | [docs/template/phase-15-docs-polish.md](docs/template/phase-15-docs-polish.md)           |
-| app   | Directory (Greenbook domain — AU Blue Book)                   | `app/services/{organizations,people,positions,position-assignments,directory-changes,public-directory}.server.ts`, `app/routes/$tenant/directory/`, `app/utils/{directory-access,directory-submit,directory-routes}.server.ts`, `app/components/directory/` | See "Directory + editorial workflow" below                                               |
+| Phase | Subsystem                                                                          | Look here                                                                                                                                                                                                                                                                                                                           | Deep dive                                                                                |
+| ----- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1     | Auth + RBAC + audit log                                                            | `app/utils/auth/`, `app/services/{users,roles,permissions}.server.ts`, `app/utils/acting-tenant.server.ts`                                                                                                                                                                                                                          | —                                                                                        |
+| 2     | Multi-tenancy + invitations                                                        | `app/routes/$tenant/_layout.tsx`, `app/services/{tenants,invitations,tenant-setup,tenant-features}.server.ts`, `app/utils/request-context.server.ts`                                                                                                                                                                                | —                                                                                        |
+| 3     | Settings + feature flags                                                           | `app/utils/config/{settings,feature-flags,tenant-flag-membership}.server.ts`, `app/utils/config/{settings-registry,feature-flag-keys}.ts`, `app/services/tenant-features.server.ts`                                                                                                                                                 | —                                                                                        |
+| 4     | i18n                                                                               | `app/utils/i18n.ts`, `app/locales/`, `app/utils/i18n-cookie.server.ts`                                                                                                                                                                                                                                                              | See "i18n" below                                                                         |
+| 5     | Components library                                                                 | `app/components/form.tsx`, `app/components/data-table/`, `app/hooks/use-cascade.ts`                                                                                                                                                                                                                                                 | [docs/template/phase-05-components.md](docs/template/phase-05-components.md)             |
+| 6     | Domain events + notifications                                                      | `app/utils/events/`, `app/services/notifications.server.ts`, `app/routes/$tenant/notifications/`                                                                                                                                                                                                                                    | [docs/template/phase-06-events-jobs.md](docs/template/phase-06-events-jobs.md)           |
+| 7     | Saved views, custom fields, search, export — **not shipped**                       | —                                                                                                                                                                                                                                                                                                                                   | [docs/template/phase-07-data-patterns.md](docs/template/phase-07-data-patterns.md)       |
+| 8     | Reference data (Title, RegionalGroup, MemberState, OrganizationType, PositionType) | `app/services/reference-data.server.ts`, `app/utils/reference-data-access.server.ts`, `app/routes/$tenant/settings/references/`                                                                                                                                                                                                     | [docs/template/phase-08-reference-data.md](docs/template/phase-08-reference-data.md)     |
+| 9     | Audit-log UI (privacy — DSAR + consent — **not shipped**)                          | `app/routes/$tenant/logs/`                                                                                                                                                                                                                                                                                                          | [docs/template/phase-09-privacy-audit.md](docs/template/phase-09-privacy-audit.md)       |
+| 10    | SSO (OIDC + SAML)                                                                  | `app/services/sso.server.ts`, `app/utils/auth/{oidc,saml,sso-state}.server.ts`, `app/routes/_auth/sso/`, `app/routes/$tenant/settings/security/sso/`                                                                                                                                                                                | [docs/template/phase-10-sso.md](docs/template/phase-10-sso.md)                           |
+| 11    | PWA + offline                                                                      | `public/sw.js`, `public/manifest.json`, `app/utils/offline/`, `app/components/{offline-banner,pwa/*}.tsx`                                                                                                                                                                                                                           | [docs/template/phase-11-pwa.md](docs/template/phase-11-pwa.md)                           |
+| 12    | Testing harness                                                                    | `vitest.config.ts`, `vitest.integration.config.ts`, `playwright.config.ts`, `tests/`                                                                                                                                                                                                                                                | [docs/template/phase-12-testing.md](docs/template/phase-12-testing.md)                   |
+| 13    | Observability (logger/correlation/rate limit/Sentry/shutdown)                      | `app/utils/monitoring/`, `app/middleware/correlation.server.ts`, `server/{logger,correlation,request-logger,sentry,shutdown}.js`, `server/{app,security,rate-limit-audit}.ts`                                                                                                                                                       | [docs/template/phase-13-server-hardening.md](docs/template/phase-13-server-hardening.md) |
+| 15    | Docs polish                                                                        | `README.md`, `.env.example`                                                                                                                                                                                                                                                                                                         | [docs/template/phase-15-docs-polish.md](docs/template/phase-15-docs-polish.md)           |
+| app   | Directory (Greenbook domain — AU Blue Book)                                        | `app/services/{organizations,people,positions,position-assignments,directory-changes,directory-notifications,person-photos,person-duplicates,public-directory}.server.ts`, `app/routes/$tenant/directory/`, `app/utils/{directory-access,directory-submit}.server.ts`, `app/utils/directory-routes.ts`, `app/components/directory/` | See "Directory + editorial workflow" below                                               |
 
 ## Build & Development Commands
 
@@ -42,14 +44,16 @@ npm run format           # Prettier format all files
 ### Database
 
 ```bash
-npm run docker:up        # Start PostgreSQL (dev on :5432, test on :5433)
+npm run docker:up        # Start PostgreSQL (dev + test containers; host ports from DB_PORT / DB_TEST_PORT)
 npm run docker:down      # Stop containers
 npm run db:push          # Sync Prisma schema to DB (template workflow — no migration files)
 npm run db:seed          # Seed roles, permissions, feature flags, reference data, demo users
 npm run db:studio        # Prisma Studio GUI
 ```
 
-> The template uses `prisma db push` rather than `prisma migrate`. No migration files are versioned. Apps adopting the template should generate their own migration baseline (`npx prisma migrate dev --create-only --name init`) when they're ready to lock down schema changes.
+> The host ports default to 5432 (development) and 5433 (tests). They are set by `DB_PORT` and `DB_TEST_PORT` in `.env`, which `docker-compose.yml`, `vitest.integration.config.ts`, `playwright.config.ts` and `tests/e2e/global-setup.ts` all read; `DATABASE_TEST_URL`, when set, wins over `DB_TEST_PORT`. Do not assume 5432/5433 — check `.env`.
+
+> The project uses `prisma db push` rather than `prisma migrate`. No migration files are versioned. Generate a migration baseline (`npx prisma migrate dev --create-only --name init`) when schema changes need to be locked down.
 
 ### Testing
 
@@ -57,7 +61,7 @@ npm run db:studio        # Prisma Studio GUI
 npm run test             # Unit tests (vitest)
 npm run test:watch       # Unit tests in watch mode
 npm run test:coverage    # Unit tests with coverage
-npm run test:integration # Integration tests against test DB (port 5433)
+npm run test:integration # Integration tests against the test DB (DATABASE_TEST_URL, else DB_TEST_PORT)
 npm run test:e2e         # Playwright E2E
 npm run test:e2e:ui      # Playwright with UI
 ```
@@ -72,12 +76,12 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
 - **Database:** PostgreSQL via Prisma 7 with `@prisma/adapter-pg` driver adapter
 - **UI:** shadcn/ui + Radix primitives + Tailwind CSS 4 + lucide-react
 - **Forms:** Conform (`@conform-to/react` + `@conform-to/zod/v4`) with Zod v4
-- **Auth:** Cookie-based sessions with DB backing, API keys with rate-limit tiers, SSO (OIDC + SAML)
-- **Events:** domain events, SSE for real-time UI
+- **Auth:** Cookie-based sessions with DB backing, emailed verification codes, password history, impersonation, SSO (OIDC + SAML)
+- **Events:** domain events recorded in the structured log (`emitDomainEvent`); no queue, no outbound delivery, nothing pushed to the browser
 - **Observability:** pino logger, AsyncLocalStorage correlation IDs, Sentry (client + server), rate-limit audit trail
 - **i18n:** i18next with en + fr, cookie-persisted, 13 namespaces
 - **PWA:** service worker (cache-first static / network-first API / offline fallback), install + update prompts, IndexedDB sync queue
-- **Testing:** vitest (unit + integration against a dedicated `db-test` Postgres on :5433) + Playwright (E2E + smoke project) + MSW mocks
+- **Testing:** vitest (unit + integration against a dedicated `db-test` Postgres) + Playwright (E2E + smoke project) + MSW mocks
 
 ### Project Layout
 
@@ -85,21 +89,21 @@ See `docs/template/phase-12-testing.md` for setup file layout, runner tiers, MSW
 - `app/components/ui/` — shadcn/ui components (do not edit; use `npx shadcn add`).
 - `app/components/` — Custom components.
 - `app/utils/` — Core utilities, organized into subdirectories. Files ending in `.server.ts` are server-only.
-  - `app/utils/auth/` — session, verification, CSRF, honeypot, user helpers, permissions, API keys, OIDC/SAML, audit
+  - `app/utils/auth/` — session, verification, CSRF, honeypot, user helpers, permissions, OIDC/SAML, audit
   - `app/utils/db/` — Prisma client with Postgres adapter wiring
   - `app/utils/email/` — email sending via Resend
   - `app/utils/config/` — environment variable parsing, settings SDK, feature-flag SDK + client-safe keys
-  - `app/utils/events/` — domain events
+  - `app/utils/events/` — domain event catalog + emitter
   - `app/utils/monitoring/` — pino logger + Sentry (client + server)
   - `app/utils/offline/` — service-worker registration + IndexedDB sync queue
-  - `app/utils/schemas/` — cross-cutting Zod schemas (privacy, sso, directory, tenant)
-  - `app/utils/constants/` — enum key lists + color maps for status badges
+  - `app/utils/schemas/` — Zod schemas (directory, organization, profile, security, sso, tenant)
+  - `app/utils/constants/` — shared constants (person photo limits, SSO provider lists)
 - `app/middleware/` — request-scoped helpers (correlation ID + AsyncLocalStorage)
 - `app/services/` — business logic (one file per domain, `.server.ts`)
 - `app/locales/` — i18n JSON (en/ + fr/), one file per namespace, registered in `utils/i18n.ts`
-- `app/hooks/` — client hooks (`use-base-prefix`, `use-cascade`, `use-sse`, `use-online-status`)
+- `app/hooks/` — client hooks (`use-base-prefix`, `use-cascade`, `use-mobile`, `use-online-status`)
 - `server/` — Express app boot + middleware (logger, correlation, rate limit, Sentry, shutdown).
-- `public/` — static assets (`sw.js`, `manifest.json`, icons).
+- `public/` — static assets (`sw.js`, `manifest.json`, `robots.txt`; no icon files are shipped).
 - `prisma/schema.prisma` — Database schema.
 - `prisma.config.ts` — Prisma 7 configuration file (datasource URL lives here, not in schema).
 - `tests/` — `unit/`, `integration/`, `e2e/`, and `setup/`.
@@ -111,7 +115,7 @@ Path alias: `~/*` maps to `./app/*`.
 
 - **Formatting:** Prettier — double quotes, semicolons, trailing commas, 100-char width, 2-space indent.
 - **Commits:** Conventional Commits enforced by commitlint. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. Max subject 100 chars.
-- **Pre-commit:** Husky + lint-staged runs Prettier on staged files. Git `core.hooksPath` points to `react-router/.husky`.
+- **Pre-commit:** Husky + lint-staged runs Prettier on staged files. Git `core.hooksPath` is `.husky/_`.
 - **Server-only code:** `.server.ts` suffix — excluded from client bundles by React Router.
 - **Node version:** 22 (leverages native TypeScript support via type stripping).
 
@@ -119,20 +123,20 @@ Path alias: `~/*` maps to `./app/*`.
 
 Task-based quick index for common work:
 
-| Task                                | Canonical example                                                            | Docs                                         |
-| ----------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| Wire a form                         | `app/routes/$tenant/directory/organizations/+shared/organization-editor.tsx` | `docs/template/phase-05-components.md`       |
-| Dialog overlay on a detail page     | `app/routes/$tenant/directory/organizations/$orgId.delete.tsx`               | "Directory" section below                    |
-| Trailing-underscore escape          | `app/routes/$tenant/directory/organizations/$orgId_/edit.tsx`                | "Directory" section below                    |
-| Cascading selects                   | `app/hooks/use-cascade.ts` + existing consumers                              | `docs/template/phase-05-components.md`       |
-| Tenant-scoped list with filters     | `app/routes/$tenant/directory/organizations/index.tsx`                       | `docs/template/phase-07-data-patterns.md`    |
-| Gate by feature flag                | `requireFeature(request, "FF_NAME")`                                         | Phase 3 services in table above              |
-| RBAC check                          | `requirePermission(request, "resource", "action")`                           | Phase 1 services in table above              |
-| Structured logging with correlation | `getRequestLogger()` from `~/middleware/correlation.server`                  | `docs/template/phase-13-server-hardening.md` |
+| Task                                | Canonical example                                                                                                               | Docs                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Wire a form                         | `app/routes/$tenant/directory/organizations/+shared/organization-editor.tsx`                                                    | `docs/template/phase-05-components.md`                                       |
+| Dialog overlay on a detail page     | `app/routes/$tenant/directory/organizations/$orgId.delete.tsx`                                                                  | "Directory" section below                                                    |
+| Trailing-underscore escape          | `app/routes/$tenant/directory/organizations/$orgId_/edit.tsx`                                                                   | "Directory" section below                                                    |
+| Cascading selects                   | `app/hooks/use-cascade.ts` (no route uses it yet)                                                                               | `docs/template/phase-05-components.md`                                       |
+| Tenant-scoped list with filters     | `app/routes/$tenant/directory/organizations/index.tsx`                                                                          | `docs/template/phase-05-components.md`                                       |
+| Gate by feature flag                | `requireFeature(request, "FF_NAME")`                                                                                            | `app/utils/auth/require-auth.server.ts`                                      |
+| RBAC check                          | `requirePermission(request, "resource", "action")`; `requireTenantPermission(...)` when the route acts on the tenant in the URL | `app/utils/auth/require-auth.server.ts`, `app/utils/acting-tenant.server.ts` |
+| Structured logging with correlation | `getRequestLogger()` from `~/middleware/correlation.server`                                                                     | `docs/template/phase-13-server-hardening.md`                                 |
 
 The per-phase docs under `docs/template/` each end with a "Deviations" block — skim these before starting new work, they flag the places where the template deliberately stopped short.
 
-## When Helping Users Build Apps From This Template
+## When working in this codebase
 
 - **Follow existing patterns** — the per-phase docs in `docs/template/` are the canonical shape of each subsystem.
 - **Keep the `.server.ts` boundary clean** — never import `.server.ts` code from client-only modules.
@@ -141,7 +145,7 @@ The per-phase docs under `docs/template/` each end with a "Deviations" block —
 
 ## i18n
 
-The template ships `en` and `fr` locales across seven namespaces: `common`, `auth`, `validation`, `nav`, `settings`, `users`, `notifications`. Language state is persisted in the `i18n_lang` cookie (1-year TTL). The `<LanguageSwitcher>` in the tenant top-nav is gated on the `FF_I18N` feature flag and the per-tenant `i18n.supported_languages` setting.
+The app ships `en` and `fr` locales across 13 namespaces: `common`, `auth`, `validation`, `nav`, `settings`, `users`, `notifications`, `references`, `logs`, `sso`, `pwa`, `directory`, `directory-public`. Language state is persisted in the `i18n_lang` cookie (1-year TTL). The `<LanguageSwitcher>` in the tenant top-nav is gated on the `FF_I18N` feature flag and the per-tenant `i18n.supported_languages` setting.
 
 ### Adding a new locale namespace
 
@@ -173,7 +177,7 @@ Greenbook's domain module — the AU Commission Blue Book. Unlike every other se
 Four tenant-scoped entities with no cross-tenant references:
 
 - **`Organization`** — hierarchical, self-referencing `parentId`, typed via `OrganizationType` (ROOT / MAIN_ORGAN / DEPARTMENT / OFFICE / UNIT).
-- **`Person`** — individual record with `honorific`, contact fields, `memberStateId` (nationality), + `showEmail` / `showPhone` public-visibility toggles.
+- **`Person`** — individual record with `honorific`, contact fields, `memberStateId` (nationality), `showEmail` / `showPhone` public-visibility toggles, and an optional photo (`photoId` → `PersonPhoto`, which holds the image bytes; `app/services/person-photos.server.ts`).
 - **`Position`** — formal post inside an org, with a `reportsToId` self-reference for internal reporting chains.
 - **`PositionAssignment`** — temporal link between a Person and a Position (`startDate`, `endDate`, `isCurrent`). Auto-closes the prior current assignment when a new one starts on the same position.
 
@@ -186,6 +190,9 @@ Every mutation flows through `app/services/directory-changes.server.ts`. The rea
 - **Focal persons** (role `focal`) hold `directory-change:submit`. Their edits `saveDraft()` — a `DRAFT` is private to its author and never reaches the approval queue. `submitDrafts(ids, ctx)` moves the author's drafts to `PENDING` (same batch cap and skipped/failed reporting as batch approve; stale-edit and one-open-change checks run here) and notifies approvers once per call. The record doesn't change until a manager approves.
 - **Managers** (role `manager`) hold `{organization,person,position,position-assignment}:write`. Their direct edits `submitAndApply()` — creates a self-approved ChangeRequest + applies in one transaction.
 - **One PENDING per `(entityType, entityId)`** enforced in service (future partial unique DB index).
+- **Reopening a rejection** — `reopenRejectedChange(id, ctx)` turns the author's own `REJECTED` request into a new `DRAFT` carrying the rejected payload and a `clonedFromId` link back. The rejected request stays in history untouched; `canReopenChange` decides whether the button shows.
+- **Discarding a draft** — `discardDraft(id, ctx)`, author only. Drafts never appear in the approval queue or to other users.
+- **Possible duplicates** — `findPossibleDuplicatePeople` (`app/services/person-duplicates.server.ts`) flags people in the same tenant who look like the one being created or edited; the person editor and the change-detail page show the warning. It is a warning, not an error: the editor holds the first save back and lets the author confirm and save anyway.
 - **Approval runs in a single `$transaction`** — `_applyCreate/Update/Move/SoftDelete` writers each accept an optional `tx: Prisma.TransactionClient` so guards, writes, and the ChangeRequest update commit atomically.
 - **Batch approve/reject** via `approveChanges(ids, ...)` / `rejectChanges(ids, ...)` — per-id atomic loop, capped at `MAX_BATCH_SIZE = 100`. NOT_FOUND / NOT_PENDING become `skipped` in the `BatchResult` rather than `failed`.
 - **Domain events** — entity-level events (`organization.created`, etc.) fire **only on approval**; a parallel event stream (`change.submitted`, `change.approved`, `change.rejected`, `change.withdrawn`) drives workflow consumers. Catalog in `app/utils/events/domain-events.ts`.
@@ -218,15 +225,20 @@ Post-MVP polish that landed alongside the cross-tenant directory tier:
 ### Routes (admin, `app/routes/$tenant/directory/`)
 
 ```
-_layout.tsx                                       — NavTabs (Overview / Orgs / People / Positions / Approvals | Mine)
+_layout.tsx                                       — NavTabs (Overview / Organizations / People / Positions, then
+                                                    Approvals + History for reviewers, Submissions for submitters)
 index.tsx                                         — KPI overview
+submissions.tsx                                   — the author's own change requests, every status;
+                                                    `?status=DRAFT` is the drafts list (select + submit for review)
+photos.$photoId.tsx                               — serves a person photo to a member of the tenant
 organizations/
-  index.tsx, new.tsx, $orgId._layout.tsx,
+  index.tsx, tree.tsx, new.tsx, $orgId._layout.tsx,
   $orgId_/edit.tsx, $orgId.delete.tsx,
   +shared/organization-editor.{tsx,server.tsx}
 people/
   index.tsx, new.tsx, $personId._layout.tsx,
   $personId_/edit.tsx, $personId.delete.tsx,
+  $personId.assign.tsx (dialog),
   +shared/person-editor.{tsx,server.tsx}
 positions/
   index.tsx, new.tsx, $positionId._layout.tsx,
@@ -235,30 +247,36 @@ positions/
   $positionId.assignments.$assignmentId.end.tsx (dialog),
   +shared/position-editor.{tsx,server.tsx}
 approvals/
-  _layout.tsx (permission gate — tabs now live on the parent directory layout)
+  _layout.tsx (permission gate — tabs live on the parent directory layout)
   index.tsx (pending queue; selectable + batch dialog for reject notes)
-  mine.tsx, history.tsx
+  history.tsx (reviewed requests)
   $changeId._layout.tsx (diff + metadata + action buttons)
-  $changeId.approve.tsx, .reject.tsx, .withdraw.tsx, .discard.tsx (dialogs)
+  $changeId.approve.tsx, .reject.tsx, .withdraw.tsx, .discard.tsx, .reopen.tsx (dialogs)
   batch-approve.tsx, batch-reject.tsx, submit-drafts.tsx (resource routes)
+api/
+  organizations.children.tsx, organizations.move.tsx (tree lazy-load + drag-and-drop move)
 ```
 
 ### Key helpers
 
-| Helper                                                                | File                                               | Purpose                                                                                                                                                  |
-| --------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requireDirectoryAccess(request, { write? })`                         | `app/utils/directory-access.server.ts`             | Resolves `{ user, tenantId, canDirect, canSubmit, canReview }` in one call                                                                               |
-| `requireDirectoryWriteAccess(request, resource)`                      | same                                               | Gates new/edit/delete loaders — fails 403 if neither direct-write nor submit                                                                             |
-| `requireReviewContext(request)` / `requireSubmitContext(request)`     | same                                               | Collapses `requireDirectoryAccess + buildServiceContext` for approval/submission routes                                                                  |
-| `dispatchDirectoryChange(request, resource, input)`                   | `app/utils/directory-submit.server.ts`             | Editor actions call this; routes through `submitAndApply` (manager) or `saveDraft` (focal person; `?draft=<id>` updates that draft) based on permissions |
-| `dispatchDirectoryDelete(request, resource, entityType, id, reason?)` | same                                               | Convenience wrapper for DELETE dialogs                                                                                                                   |
-| `directoryEntitySegment(entity)`                                      | `app/utils/directory-routes.ts`                    | Maps `DirectoryEntity` enum to admin URL segment (for deep-links from the change-detail page)                                                            |
-| `formatBatchSummary(result, verb)`                                    | `app/services/directory-changes.server.ts`         | Produces "5 approved · 1 skipped" strings for the fetcher responses                                                                                      |
-| `NavTabs`                                                             | `app/components/layout/nav-tabs.tsx`               | Shared horizontal tab strip, used by Directory `_layout.tsx` + Changes `_layout.tsx`                                                                     |
-| `PendingBadge`                                                        | `app/components/directory/pending-badge.tsx`       | Amber pill shown on entity detail pages when a pending change exists                                                                                     |
-| `ChangeStatusPill`                                                    | `app/components/directory/change-status-pill.tsx`  | Status badge across queue + detail                                                                                                                       |
-| `ChangeDiff`                                                          | `app/components/directory/change-diff.tsx`         | Renders `FieldDiff[]` from `computeDiff()` as field / before / after                                                                                     |
-| `AssignmentTimeline`                                                  | `app/components/directory/assignment-timeline.tsx` | Vertical timeline of assignments; used on Person + Position detail pages                                                                                 |
+| Helper                                                                                | File                                               | Purpose                                                                                                                                                  |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requireDirectoryAccess(request, { write? })`                                         | `app/utils/directory-access.server.ts`             | Resolves `{ user, tenantId, canDirect, canSubmit, canReview }` in one call                                                                               |
+| `requireDirectoryWriteAccess(request, resource)`                                      | same                                               | Gates new/edit/delete loaders — fails 403 if neither direct-write nor submit                                                                             |
+| `requireReviewContext(request)` / `requireSubmitContext(request)`                     | same                                               | Collapses `requireDirectoryAccess + buildServiceContext` for approval/submission routes                                                                  |
+| `dispatchDirectoryChange(request, resource, input)`                                   | `app/utils/directory-submit.server.ts`             | Editor actions call this; routes through `submitAndApply` (manager) or `saveDraft` (focal person; `?draft=<id>` updates that draft) based on permissions |
+| `dispatchDirectoryDelete(request, resource, entityType, id, reason?)`                 | same                                               | Convenience wrapper for DELETE dialogs                                                                                                                   |
+| `directoryEntitySegment(entity)`                                                      | `app/utils/directory-routes.ts`                    | Maps `DirectoryEntity` enum to admin URL segment (for deep-links from the change-detail page)                                                            |
+| `submissionsPath` / `draftsPath` / `draftEditPath` / `personPhotoPath`                | same                                               | URL builders for the author's submissions list, its drafts view, the editor that resumes a draft, and a tenant photo                                     |
+| `requireApproveContext(request)` / `requireRejectContext(request)`                    | `app/utils/directory-access.server.ts`             | Review context gated on the specific `directory-change:approve` / `:reject` permission                                                                   |
+| `loadEditorDraft(...)` / `directoryConflictFrom(request, err)`                        | `app/utils/directory-submit.server.ts`             | Editor loaders resume a draft from `?draft=<id>`; editor actions turn a stale-edit or open-change conflict into a form message                           |
+| `requireActingTenant(request)` / `requireTenantPermission(request, resource, action)` | `app/utils/acting-tenant.server.ts`                | Resolves the tenant in the URL and checks the user may act on it (own tenant, or global admin)                                                           |
+| `formatBatchSummary(result, verb)`                                                    | `app/services/directory-changes.server.ts`         | Produces "5 approved · 1 skipped" strings for the fetcher responses                                                                                      |
+| `NavTabs`                                                                             | `app/components/layout/nav-tabs.tsx`               | Shared horizontal tab strip, used by Directory `_layout.tsx` + Changes `_layout.tsx`                                                                     |
+| `PendingBadge`                                                                        | `app/components/directory/pending-badge.tsx`       | Amber pill shown on entity detail pages when a pending change exists                                                                                     |
+| `ChangeStatusPill`                                                                    | `app/components/directory/change-status-pill.tsx`  | Status badge across queue + detail                                                                                                                       |
+| `ChangeDiff`                                                                          | `app/components/directory/change-diff.tsx`         | Renders `FieldDiff[]` from `computeDiff()` as field / before / after                                                                                     |
+| `AssignmentTimeline`                                                                  | `app/components/directory/assignment-timeline.tsx` | Vertical timeline of assignments; used on Person + Position detail pages                                                                                 |
 
 ### Form schemas
 
@@ -274,11 +292,12 @@ Under module `directory`:
 - `organization:{read,write,delete}` / `person:*` / `position:*` / `position-assignment:*`
 - `directory-change:submit` / `:withdraw-own` / `:read-own` / `:read-all` / `:approve` / `:reject`
 
-Seeded roles per tenant (in `prisma/seed.ts`):
+There are four roles, and they are global: each is one row with `tenantId = null`, created by `upsertGlobalRole` in `prisma/seed.ts` and shared by every tenant. Roles are not seeded per tenant. `Role.scope` says where a role's permissions reach:
 
-- `focal` — reads + `directory-change:{submit, withdraw-own, read-own}`
-- `manager` — everything `focal` has + entity writes + `directory-change:{read-all, approve, reject}`
-- `admin` (existing) — picks up every permission via the seed's "all permissions" assignment
+- `admin` (scope `GLOBAL`) — every permission, in every tenant
+- `user` (scope `GLOBAL`) — reads and updates their own user record; a directory reader
+- `focal` (scope `TENANT`) — directory reads + `directory-change:{submit, withdraw-own, read-own}` in the user's home tenant
+- `manager` (scope `TENANT`) — everything `focal` has + entity writes and deletes + `directory-change:{read-all, approve, reject}` + `user:{read,create,update,delete}` and `role:read` in the user's home tenant
 
 Demo users: `admin@africanunion.org / admin123`, `manager@africanunion.org / manager123`, `focal@africanunion.org / focal123`, and `user@africanunion.org / user123` (plain directory reader — lands on `/`, not a tenant workspace). The admin's home is the `system` tenant. The focal, manager and reader accounts belong to the demo tenant, which also carries the starter organizations: `misd` when that tenant exists, otherwise a `demo` tenant the seed creates.
 
@@ -297,7 +316,7 @@ The `system` tenant is admin-only: it holds no directory records, is on neither 
 - **Assignment timeline pagination** — `publicGetPerson.history` capped at 50. A person with >50 recorded posts needs a dedicated timeline pagination route.
 - **Tree lazy-load bypasses HTTP cache** — each tree expand is a POST FormData, so `Cache-Control` headers don't apply. The in-component `loadedChildrenRef` prevents duplicate queries within one session; across visitors each expand hits the DB.
 - **Tree DnD rollback on backend failure** — optimistic cache update is not reverted when `/api/organizations/move` returns `{ ok: false }`. User sees an error toast and can re-drag.
-- **No sample people/positions in seed** — seed ships starter orgs + types + regions + member states only. Populate via the UI.
+- **Starter directory data is seeded once** — the seed gives the demo tenant starter organizations, positions, people and assignments only while it holds no directory records; it never overwrites or tops up existing ones.
 - **No notification chrome on the directory search surface** — notifications fire but the bell/inbox UI only lives on tenant layouts. Users on `/` and `/people/*` are now logged in but still see no bell; operators get it once they're in their tenant workspace, and plain `user`-role readers receive no workflow notifications anyway.
 
 ## Agent skills

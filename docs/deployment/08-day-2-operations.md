@@ -44,13 +44,13 @@ $ sudo tail -F /var/log/nginx/greenbook.error.log
 
 ### 8.2 Restarting services
 
-| Thing               | Command                                                         | Side effect                                           |
-| ------------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
-| App container       | docker compose -f /opt/greenbook/docker-compose.yml restart app | ~5s downtime; connections dropped; job queue re-ticks |
-| Nginx               | sudo systemctl reload nginx                                     | Zero downtime for config changes                      |
-| Nginx (full)        | sudo systemctl restart nginx                                    | <1s downtime; connections dropped                     |
-| Docker daemon       | sudo systemctl restart docker                                   | ALL containers restart; ~5-10s app downtime           |
-| Postgres (on DB VM) | sudo systemctl restart postgresql@16-main                       | ~2s downtime; Prisma pool reconnects                  |
+| Thing               | Command                                                         | Side effect                                 |
+| ------------------- | --------------------------------------------------------------- | ------------------------------------------- |
+| App container       | docker compose -f /opt/greenbook/docker-compose.yml restart app | ~5s downtime; connections dropped           |
+| Nginx               | sudo systemctl reload nginx                                     | Zero downtime for config changes            |
+| Nginx (full)        | sudo systemctl restart nginx                                    | <1s downtime; connections dropped           |
+| Docker daemon       | sudo systemctl restart docker                                   | ALL containers restart; ~5-10s app downtime |
+| Postgres (on DB VM) | sudo systemctl restart postgresql@16-main                       | ~2s downtime; Prisma pool reconnects        |
 
 ### 8.2.1 Reading pino JSON logs
 

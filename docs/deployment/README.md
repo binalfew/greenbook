@@ -33,7 +33,7 @@ Prepared for: **Binalfew** — Senior Solutions & System Architect, MISD / AUC
 | 03  | [Database VM backups](03-db-vm-backups.md)          | nightly pg_dump, pgBackRest physical+WAL, offsite replication                                                                                                                                           | DB VM                   |
 | 04  | [App VM Docker setup](04-app-vm-docker.md)          | Docker Engine + Compose v2 + buildx, `deployer` in docker group                                                                                                                                         | App VM                  |
 | 05  | [Application container](05-app-vm-container.md)     | **Source-tree artefacts**: hardened Dockerfile, `.dockerignore`, `/healthz` route, post-build checkpoint, common build-failures playbook                                                                | Repo (laptop)           |
-| 06  | [App VM nginx (inner tier)](06-app-vm-nginx-tls.md) | Multi-tenant inner-tier nginx (HTTP-only, source-pinned to DMZ), streaming SSR / SSE / PWA tuning, per-app onboarding, legacy single-tier migration                                                     | App VM                  |
+| 06  | [App VM nginx (inner tier)](06-app-vm-nginx-tls.md) | Multi-tenant inner-tier nginx (HTTP-only, source-pinned to DMZ), streaming SSR / PWA tuning, per-app onboarding, legacy single-tier migration                                                           | App VM                  |
 | 07  | [Deploy workflow](07-deploy-workflow.md)            | **App-VM-side**: initial setup (`/etc/greenbook.env`, `docker-compose.yml`), first-deploy walkthrough, build path A/B, schema (`db push` vs `migrate`), env-file lifecycle, `deploy.sh`, rollback, seed | App VM (+ build host)   |
 | 08  | [Day-2 operations](08-day-2-operations.md)          | Logs (pino + jq), restart playbook, monitoring script, image prune, OS / Docker / Postgres updates                                                                                                      | BOTH VMs                |
 | 09  | [Hardening checklist](09-hardening-checklist.md)    | Pre-go-live audit and quarterly review                                                                                                                                                                  | BOTH VMs                |
@@ -144,7 +144,7 @@ The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse
     │   │   · No TLS (terminated at the DMZ)                      │    │
     │   │   · `set_real_ip_from 172.16.177.50` for accurate logs  │    │
     │   │   · Long cache /assets/*, short on /sw.js               │    │
-    │   │   · proxy_buffering off → streams SSR + SSE             │    │
+    │   │   · proxy_buffering off → streams SSR                   │    │
     │   │   · X-Correlation-Id forwarding                         │    │
     │   │   · Reverse-proxies to 127.0.0.1:3000                   │    │
     │   └───────────────────────────┬─────────────────────────────┘    │
@@ -158,7 +158,6 @@ The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse
     │   │   · Pino JSON logs to stdout                            │    │
     │   │   · Correlation ID middleware (AsyncLocalStorage)       │    │
     │   │   · Rate limiter (general / mutation / auth tiers)      │    │
-    │   │   · In-process Postgres job queue (5 s tick)            │    │
     │   │   · Sentry (server SDK) — optional via SENTRY_DSN       │    │
     │   │   · Listens on 0.0.0.0:3000 inside the container;       │    │
     │   │     published as 127.0.0.1:3000 on the host             │    │
@@ -251,8 +250,8 @@ The greenbook AU production deployment is a **three-VM topology**: a DMZ reverse
 5. Docker's port mapping delivers the request from `127.0.0.1:3000` into the `greenbook` container's `0.0.0.0:3000`.
 6. **Express** (`server.js` + `server/app.ts`, with `app.set("trust proxy", 2)` so Express knows there are two trusted upstream proxies and `req.ip` resolves to the real client) runs middleware in order: correlation ID → request logger (pino JSON) → CORS → session extraction → rate limiter (general / mutation / auth tier by route) → React Router handler (`@react-router/express` + `createRequestHandler`).
 7. Route loaders/actions that need data call `prisma.*` through `@prisma/adapter-pg`, which opens a pooled TCP connection to `10.111.11.50:5432`. PostgreSQL authenticates the `appuser` role via SCRAM-SHA-256 and returns rows.
-8. Rendered HTML (for initial load) streams back through the same path — DMZ → App VM nginx → DMZ → client. React Router 7 is streaming-first, which is why `proxy_buffering off` is critical at _both_ nginx tiers. Subsequent navigations return serialised loader data; SSE routes (notifications, real-time updates) keep the connection open all the way through.
-9. Side effects — audit log rows, `send-email` jobs, domain events — are enqueued into the in-process job queue and picked up by the 5-second tick. On `SIGTERM` the job processor drains, the rate-limit audit buffer flushes, and Sentry flushes pending events.
+8. Rendered HTML (for initial load) streams back through the same path — DMZ → App VM nginx → DMZ → client. React Router 7 is streaming-first, which is why `proxy_buffering off` is critical at _both_ nginx tiers. Subsequent navigations return serialised loader data.
+9. Side effects — audit log rows, emails, notifications — are written inline by the request that causes them; there is no background job queue. On `SIGTERM` the rate-limit audit buffer is flushed before the process exits.
 
 ---
 

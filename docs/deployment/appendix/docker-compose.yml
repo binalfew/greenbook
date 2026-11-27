@@ -41,11 +41,9 @@ services:
     # the compose file.
 
     stop_grace_period: 30s
-    # Docker's default is 10s, which can be tight: on SIGTERM greenbook
-    # drains the in-process job queue (app/utils/events/job-queue.server.ts),
-    # flushes the rate-limit audit buffer, and (if SENTRY_DSN is set) flushes
-    # pending Sentry events. Under heavy load those can exceed 10s. 30s
-    # gives the shutdown hooks room without surprising operators.
+    # Docker's default is 10s. On SIGTERM greenbook runs its shutdown hooks
+    # (today: flushing the rate-limit audit buffer) and then exits. 30s gives
+    # the hooks room under load without surprising operators.
 
     env_file:
       - /etc/greenbook.env
@@ -113,9 +111,9 @@ services:
           cpus: "1.0"
     # Hard limits. If the container exceeds memory: 1g, it's killed (OOM).
     # 1.0 CPUs means it can use one full core at 100%.
-    # The in-process job queue runs in the same Node event loop as request
-    # handling — if you add heavy job handlers (PDF generation, image
-    # processing), bump memory to 2g and consider dedicating a core.
+    # Everything runs in the one Node event loop that handles requests — if
+    # you add heavy work (PDF generation, image processing), bump memory to
+    # 2g and consider dedicating a core.
 
     read_only: true
     # Root filesystem is read-only. Any write attempt returns EACCES.

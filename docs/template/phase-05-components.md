@@ -24,8 +24,8 @@ Use `useBasePrefix` from `~/hooks/use-base-prefix` inside components that need `
 
 Permission gating is opt-in: pass `canPerformAction={(permission) => …}` to filter actions. When omitted, every action declaring a `permission` is hidden (fail-closed default).
 
-Alternate view renderers (kanban, calendar, gallery) are not implemented in Phase 5; the `viewType` / `viewConfig` prop shape is preserved for forward-compat with a saved-views phase. Passing `viewType !== "TABLE"` falls through to the table renderer.
+The table is the only renderer. There are no alternate views (kanban, calendar, gallery) and no saved views.
 
 ## UI primitives
 
-Phase 5 added: `~/components/ui/switch`, `radio-group`, `calendar`, `empty-state`, `native-select`, `info-row`, `date-picker`, `date-time-picker`. The `date-picker` / `date-time-picker` are standalone widgets with a hidden `name` input that work in plain `<Form>` submissions — use `DatePickerField` from `~/components/form` when integrating with Conform.
+Phase 5 added: `~/components/ui/switch`, `radio-group`, `calendar`, `empty-state`, `native-select`, `info-row`, `date-picker`. The `date-picker` is a standalone widget with a hidden `name` input that works in plain `<Form>` submissions — use `DatePickerField` from `~/components/form` when integrating with Conform.

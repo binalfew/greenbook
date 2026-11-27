@@ -24,7 +24,7 @@ This file covers the **repo-side artefacts** that have to be in greenbook's sour
 
 Greenbook runs as a container built from a multi-stage Dockerfile. The build stage compiles the TypeScript and produces the React Router `build/` output; the runtime stage contains only Node, production dependencies, the build output, and the root-level `server.js` Express bootstrap — nothing else.
 
-**Important**: greenbook ships its own Express server (`server.js` → `server/app.ts`) that layers correlation IDs, pino logging, CORS, session extraction, three rate-limit tiers, the in-process job-queue tick, and Sentry init. It does **not** use `react-router-serve`. The Dockerfile `CMD` therefore invokes `npm run start`, which runs `node server.js`. Treat the `server/` directory and `server.js` as ship-critical — both must land in the runtime image.
+**Important**: greenbook ships its own Express server (`server.js` → `server/app.ts`) that layers correlation IDs, pino logging, CORS, session extraction, four rate limiters, and Sentry init. It does **not** use `react-router-serve`. The Dockerfile `CMD` therefore invokes `npm run start`, which runs `node server.js`. Treat the `server/` directory and `server.js` as ship-critical — both must land in the runtime image.
 
 ### 5.1 The Dockerfile
 
@@ -210,12 +210,10 @@ COPY --from=build --chown=node:node /app/prisma.config.ts  ./prisma.config.ts
 
 STOPSIGNAL SIGTERM
 # Signal Docker sends on `docker stop`. greenbook's server/app.ts installs
-# SIGTERM + SIGINT handlers that:
-#   1. flush the rate-limit audit buffer (server/rate-limit-audit.ts)
-#   2. stop the job processor (app/utils/events/job-queue.server.ts)
-#   3. flush pending Sentry events when SENTRY_DSN is set
-# The 10-second default Docker grace can be tight when the job queue has
-# long-running handlers; the compose file in 07 §7.2.3 extends it to 30s via stop_grace_period.
+# SIGTERM + SIGINT handlers that run the registered shutdown hooks — today
+# one, which flushes the rate-limit audit buffer (server/rate-limit-audit.ts) —
+# and then exit. The compose file in 07 §7.2.3 extends Docker's 10-second
+# default grace to 30s via stop_grace_period.
 
 EXPOSE 3000
 # Documentation — does NOT publish the port. See compose "ports:" in 07 §7.2.3.
