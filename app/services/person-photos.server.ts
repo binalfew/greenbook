@@ -1,8 +1,14 @@
 import sharp from "sharp";
+import { getRequestLogger } from "~/middleware/correlation.server";
 import { prisma } from "~/utils/db/db.server";
 import { PERSON_PHOTO_MAX_BYTES, PERSON_PHOTO_MAX_DIMENSION } from "~/utils/constants/person-photo";
-import { logger } from "~/utils/monitoring/logger.server";
-import { photoStorage, type StoredPhoto } from "~/utils/photo-storage.server";
+import {
+  deletePhotos,
+  getPhoto,
+  putPhoto,
+  statPhoto,
+  type StoredPhoto,
+} from "~/utils/photo-storage.server";
 
 // Person photos: validating and resizing an upload, deciding who may see a
 // photo, and deleting photos nothing refers to any more.
@@ -10,7 +16,7 @@ import { photoStorage, type StoredPhoto } from "~/utils/photo-storage.server";
 // A photo is referenced by id from `Person.photoId` (published) or from the
 // `photoId` of a person change request's payload (proposed, or rejected and
 // still open to being reopened). The bytes are only ever touched through
-// `photoStorage`.
+// `~/utils/photo-storage.server`.
 
 export class PhotoUploadError extends Error {
   code: "TOO_LARGE" | "UNSUPPORTED_TYPE";
@@ -63,7 +69,7 @@ export async function storePersonPhoto(
   photo: PreparedPhoto,
   owner: { tenantId: string; userId: string },
 ): Promise<string> {
-  return photoStorage.put({
+  return putPhoto({
     tenantId: owner.tenantId,
     uploadedById: owner.userId,
     contentType: STORED_CONTENT_TYPE,
@@ -152,7 +158,7 @@ export async function photosOfRejectionsClosedBy(change: {
  */
 export async function withoutMissingPhoto<T>(payload: T): Promise<T> {
   const photoId = payloadPhotoId(payload);
-  if (!photoId || (await photoStorage.stat(photoId))) return payload;
+  if (!photoId || (await statPhoto(photoId))) return payload;
   const { photoId: _gone, ...rest } = payload as T & { photoId?: unknown };
   return rest as T;
 }
@@ -193,9 +199,9 @@ export async function releaseUnreferencedPhotos(
     for (const id of new Set(photoIds)) {
       if (!(await isReferenced(id, rejectedHolds))) orphaned.push(id);
     }
-    await photoStorage.delete(orphaned);
+    await deletePhotos(orphaned);
   } catch (err) {
-    logger.error({ err, photoIds }, "failed to clean up person photos");
+    getRequestLogger().error({ err, photoIds }, "failed to clean up person photos");
   }
 }
 
@@ -217,7 +223,7 @@ export async function keepablePhotoId(
     : null;
   const published = person?.photoId ?? null;
   if (!requestedId || requestedId === published) return published;
-  const photo = await photoStorage.stat(requestedId);
+  const photo = await statPhoto(requestedId);
   const usable = photo?.tenantId === scope.tenantId && photo.uploadedById === scope.userId;
   return usable ? requestedId : published;
 }
@@ -234,7 +240,7 @@ export async function getTenantPhoto(
   photoId: string,
   viewer: { tenantId: string; userId: string; canReview: boolean },
 ): Promise<StoredPhoto | null> {
-  const photo = await photoStorage.stat(photoId);
+  const photo = await statPhoto(photoId);
   if (!photo || photo.tenantId !== viewer.tenantId) return null;
 
   let allowed = photo.uploadedById === viewer.userId;
@@ -255,7 +261,7 @@ export async function getTenantPhoto(
     });
     allowed = submitted > 0;
   }
-  return allowed ? photoStorage.get(photoId) : null;
+  return allowed ? getPhoto(photoId) : null;
 }
 
 /** The published photo of a person in the cross-tenant directory, or null. */
@@ -268,35 +274,5 @@ export async function getDirectoryPersonPhoto(
     where: { id: personId, tenantId: { in: publicTenantIds }, deletedAt: null },
     select: { photoId: true },
   });
-  return person?.photoId ? photoStorage.get(person.photoId) : null;
-}
-
-// Photos are only ever sent to a logged-in user, so the response is private.
-// `no-cache` makes the browser revalidate (and so re-check the session) every
-// time; a photo's content never changes, so its id doubles as the ETag.
-const PHOTO_CACHE_HEADER = "private, no-cache";
-
-export function photoResponse(request: Request, photo: StoredPhoto | null): Response {
-  if (!photo) {
-    return new Response("Not Found", {
-      status: 404,
-      headers: { "Cache-Control": "private, no-store" },
-    });
-  }
-  const etag = `"${photo.id}"`;
-  const headers = {
-    "Cache-Control": PHOTO_CACHE_HEADER,
-    ETag: etag,
-    "X-Content-Type-Options": "nosniff",
-  };
-  if (request.headers.get("If-None-Match") === etag) {
-    return new Response(null, { status: 304, headers });
-  }
-  return new Response(new Uint8Array(photo.bytes), {
-    headers: {
-      ...headers,
-      "Content-Type": photo.contentType,
-      "Content-Length": String(photo.bytes.byteLength),
-    },
-  });
+  return person?.photoId ? getPhoto(person.photoId) : null;
 }

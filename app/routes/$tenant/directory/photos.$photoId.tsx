@@ -1,5 +1,6 @@
-import { getTenantPhoto, photoResponse } from "~/services/person-photos.server";
+import { getTenantPhoto } from "~/services/person-photos.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
+import { photoResponse } from "~/utils/photo-response.server";
 import type { Route } from "./+types/photos.$photoId";
 
 // Resource route: a person photo for the tenant's admin pages (detail page,

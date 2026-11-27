@@ -1,5 +1,6 @@
-import { getDirectoryPersonPhoto, photoResponse } from "~/services/person-photos.server";
+import { getDirectoryPersonPhoto } from "~/services/person-photos.server";
 import { requireUserId } from "~/utils/auth/auth.server";
+import { photoResponse } from "~/utils/photo-response.server";
 import { getPublicContext } from "~/utils/public-directory.server";
 import type { Route } from "./+types/$personId_.photo";
 
