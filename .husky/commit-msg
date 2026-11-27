@@ -1,4 +1,8 @@
-# git invokes this hook with cwd = repo root; $1 is relative to that.
+# git invokes this hook with cwd = repo root; $1 is relative to that in the main
+# checkout and already absolute in a linked worktree.
 # Resolve $1 to an absolute path so both normal and merge commits validate.
-MSG_FILE="$PWD/$1"
+case "$1" in
+  /*) MSG_FILE="$1" ;;
+  *) MSG_FILE="$PWD/$1" ;;
+esac
 npx --no -- commitlint --edit "$MSG_FILE"
