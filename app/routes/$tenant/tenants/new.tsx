@@ -1,5 +1,6 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { BrandingColorSection } from "~/components/branding-color-picker";
@@ -10,12 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
+import { InitialUserError } from "~/services/tenant-setup.server";
 import { TenantSlugError, createTenant } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import { createTenantSchema } from "~/utils/schemas/tenant";
+import { INITIAL_USER_ROLES, createTenantSchema } from "~/utils/schemas/tenant";
 import type { Route } from "./+types/new";
 
 export const handle = { breadcrumb: "New Tenant" };
@@ -27,15 +29,14 @@ export function meta({}: Route.MetaArgs) {
 // Tenant management is global-admin-only (policy).
 export async function loader({ request }: Route.LoaderArgs) {
   await requireGlobalAdmin(request);
-  // Tenantless ("regular") users are eligible to be promoted as the new
-  // tenant's first admin. Filtering to tenantless avoids accidentally moving
-  // an existing tenant admin away from their current tenant via this form.
-  const eligibleAdmins = await prisma.user.findMany({
+  // Only users who belong to no tenant can be picked as the new tenant's
+  // initial user, so this form never takes someone out of their tenant.
+  const eligibleUsers = await prisma.user.findMany({
     where: { tenantId: null, deletedAt: null },
     select: { id: true, email: true, firstName: true, lastName: true },
     orderBy: [{ email: "asc" }],
   });
-  return data({ eligibleAdmins });
+  return data({ eligibleUsers });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -50,20 +51,29 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const ctx = buildServiceContext(request, user);
+  const { initialUserId, initialUserRole, ...tenantFields } = submission.value;
   try {
     await createTenant(
       {
-        ...submission.value,
-        address: submission.value.address ?? "",
-        city: submission.value.city ?? "",
-        state: submission.value.state ?? "",
-        initialAdminUserId: submission.value.initialAdminUserId,
+        ...tenantFields,
+        address: tenantFields.address ?? "",
+        city: tenantFields.city ?? "",
+        state: tenantFields.state ?? "",
+        initialUser:
+          initialUserId && initialUserRole
+            ? { userId: initialUserId, role: initialUserRole }
+            : null,
       },
       ctx,
     );
   } catch (error) {
     if (error instanceof TenantSlugError) {
       return data(submission.reply({ fieldErrors: { slug: [error.message] } }), { status: 400 });
+    }
+    if (error instanceof InitialUserError) {
+      return data(submission.reply({ fieldErrors: { initialUserId: [error.message] } }), {
+        status: 400,
+      });
     }
     throw error;
   }
@@ -80,7 +90,8 @@ function slugify(text: string): string {
 }
 
 export default function NewTenantPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { eligibleAdmins } = loaderData;
+  const { eligibleUsers } = loaderData;
+  const { t } = useTranslation("settings");
   const basePrefix = useBasePrefix();
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const slugInputRef = useRef<HTMLInputElement>(null);
@@ -221,35 +232,48 @@ export default function NewTenantPage({ loaderData, actionData }: Route.Componen
 
         <Card>
           <CardHeader>
-            <CardTitle>Initial manager</CardTitle>
-            <p className="text-muted-foreground text-sm">
-              Optionally attach a tenantless user as this tenant's first manager (approves directory
-              submissions and manages users within the tenant). Leave empty to create the tenant
-              unattached — you can grant the manager role later via the user-edit form.
-            </p>
+            <CardTitle>{t("tenantInitialUserTitle")}</CardTitle>
+            <p className="text-muted-foreground text-sm">{t("tenantInitialUserHelp")}</p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Field>
-              <FieldLabel htmlFor={fields.initialAdminUserId.id}>User</FieldLabel>
+              <FieldLabel htmlFor={fields.initialUserId.id}>
+                {t("tenantInitialUserLabel")}
+              </FieldLabel>
               <SelectField
-                meta={fields.initialAdminUserId}
+                meta={fields.initialUserId}
                 options={[
-                  { value: "", label: "— None (assign later) —" },
-                  ...eligibleAdmins.map((u) => ({
+                  { value: "", label: t("tenantInitialUserNone") },
+                  ...eligibleUsers.map((u) => ({
                     value: u.id,
                     label: `${u.firstName} ${u.lastName} (${u.email})`,
                   })),
                 ]}
-                placeholder="Select user"
+                placeholder={t("tenantInitialUserPlaceholder")}
               />
-              {fields.initialAdminUserId.errors && (
-                <FieldError>{fields.initialAdminUserId.errors}</FieldError>
+              {fields.initialUserId.errors && (
+                <FieldError>{fields.initialUserId.errors}</FieldError>
               )}
-              {eligibleAdmins.length === 0 && (
-                <p className="text-muted-foreground mt-1 text-xs">
-                  No tenantless users available. Create a regular user first, or leave this empty
-                  and promote someone later.
-                </p>
+              {eligibleUsers.length === 0 && (
+                <p className="text-muted-foreground mt-1 text-xs">{t("tenantInitialUserEmpty")}</p>
+              )}
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor={fields.initialUserRole.id}>
+                {t("tenantInitialUserRoleLabel")}
+              </FieldLabel>
+              <SelectField
+                meta={fields.initialUserRole}
+                options={INITIAL_USER_ROLES.map((role) => ({
+                  value: role,
+                  label: t(`tenantInitialUserRole_${role}`),
+                  description: t(`tenantInitialUserRoleHelp_${role}`),
+                }))}
+                placeholder={t("tenantInitialUserRolePlaceholder")}
+              />
+              {fields.initialUserRole.errors && (
+                <FieldError>{fields.initialUserRole.errors}</FieldError>
               )}
             </Field>
           </CardContent>
