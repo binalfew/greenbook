@@ -153,6 +153,14 @@ describe("public directory: opt-in gate", () => {
     expect(visible?.name).toBe("Visible Root");
   });
 
+  it("drops a deleted tenant even while it is still on the allow-list", async () => {
+    const a = await arrange();
+    await optInTenants([a.tenantA.id, a.tenantB.id]);
+    await prisma.tenant.update({ where: { id: a.tenantB.id }, data: { deletedAt: new Date() } });
+    clearPublicTenantIdsCache();
+    expect(await getPublicTenantIds()).toEqual([a.tenantA.id]);
+  });
+
   it("returns empty with no opt-in tenants", async () => {
     await arrange();
     clearPublicTenantIdsCache();

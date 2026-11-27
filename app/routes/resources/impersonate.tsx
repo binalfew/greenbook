@@ -1,4 +1,5 @@
 import { data, redirect } from "react-router";
+import { safeRedirect } from "remix-utils/safe-redirect";
 import { z } from "zod";
 import { prisma } from "~/utils/db/db.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
@@ -36,7 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
   const input = parsed.data;
 
   if (input.intent === "stop") {
-    return stopImpersonating(request, input.redirectTo ?? "/");
+    return stopImpersonating(request, safeRedirect(input.redirectTo, "/"));
   }
 
   // Only global admins may START impersonation. Stopping is always allowed so a
@@ -51,5 +52,5 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: "Target user not found" }, { status: 404 });
   }
 
-  return startImpersonating(request, input.targetUserId, input.redirectTo ?? "/");
+  return startImpersonating(request, input.targetUserId, safeRedirect(input.redirectTo, "/"));
 }

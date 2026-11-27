@@ -1,4 +1,5 @@
 import type { Prisma, Tenant } from "~/generated/prisma/client";
+import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { bootstrapNewTenant } from "~/services/tenant-setup.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { prisma } from "~/utils/db/db.server";
@@ -297,17 +298,38 @@ export async function updateTenant(
   return tenant;
 }
 
+/** A deletion refused for a reason the admin can act on. */
+export class TenantDeleteError extends Error {}
+
 export async function deleteTenant(id: string, ctx: TenantServiceContext): Promise<void> {
   const existing = await prisma.tenant.findFirst({
     where: { id, deletedAt: null },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      _count: { select: { users: { where: { deletedAt: null } } } },
+    },
   });
   if (!existing) throw new Error("Tenant not found");
+
+  if (existing.slug === "system") {
+    throw new TenantDeleteError("The system tenant cannot be deleted.");
+  }
+  // Also covers the acting admin's own home tenant, and means no account is
+  // left pointing at a workspace that no longer exists.
+  if (existing._count.users > 0) {
+    throw new TenantDeleteError(
+      `Cannot delete this tenant because it has ${existing._count.users} user(s). Remove all users first.`,
+    );
+  }
 
   await prisma.tenant.update({
     where: { id },
     data: { deletedAt: new Date() },
   });
+  // Take the tenant's people out of cross-tenant search now, not in 5 minutes.
+  clearPublicTenantIdsCache();
 
   await writeAudit({
     tenantId: id,

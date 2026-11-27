@@ -59,9 +59,10 @@ export async function requireUser(request: Request) {
     throw redirect(`/login?${searchParams}`);
   }
 
-  const session = await prisma.session.findUnique({
+  // A soft-deleted user's session resolves to nothing, wherever it came from.
+  const session = await prisma.session.findFirst({
     select: { userId: true },
-    where: { id: sessionId },
+    where: { id: sessionId, user: { deletedAt: null } },
   });
   if (!session) {
     const searchParams = new URLSearchParams([["redirectTo", new URL(request.url).pathname]]);
@@ -113,9 +114,9 @@ export async function requireAnonymous(request: Request): Promise<void> {
   const sessionId = cookieSession.get(sessionKey);
   if (!sessionId) return;
 
-  const session = await prisma.session.findUnique({
+  const session = await prisma.session.findFirst({
     select: { userId: true },
-    where: { id: sessionId },
+    where: { id: sessionId, user: { deletedAt: null } },
   });
   if (session?.userId) {
     throw redirect("/");

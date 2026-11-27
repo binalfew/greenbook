@@ -56,8 +56,13 @@ export async function getPublicTenantIds(): Promise<string[]> {
     return ids;
   }
 
-  // tenant scope
-  const ids = [...flag.enabledForTenants];
+  // Tenant scope. The allow-list keeps the ids of deleted tenants, so it is
+  // checked against live tenants rather than trusted as-is.
+  const tenants = await prisma.tenant.findMany({
+    where: { id: { in: flag.enabledForTenants }, deletedAt: null },
+    select: { id: true },
+  });
+  const ids = tenants.map((t) => t.id);
   cache.set(CACHE_KEY, ids);
   return ids;
 }

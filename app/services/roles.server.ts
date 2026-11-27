@@ -39,7 +39,11 @@ export async function listRolesPaginated(
   return { items, totalCount: total };
 }
 
-export async function getRoleDetail(roleId: string) {
+/**
+ * `membersInTenantId` limits the listed role holders to one tenant. Roles are
+ * platform-wide rows, so without it the holder list spans every tenant.
+ */
+export async function getRoleDetail(roleId: string, membersInTenantId?: string) {
   return prisma.role.findUnique({
     where: { id: roleId },
     select: {
@@ -67,6 +71,9 @@ export async function getRoleDetail(roleId: string) {
         },
       },
       userRoles: {
+        where: {
+          user: { deletedAt: null, ...(membersInTenantId && { tenantId: membersInTenantId }) },
+        },
         select: {
           id: true,
           user: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -82,7 +89,40 @@ export type RoleInput = {
   scope: "GLOBAL" | "TENANT" | "EVENT";
 };
 
+/** A role change refused for a reason the admin can act on. */
+export class RoleGuardError extends Error {}
+
+// Access checks look these roles up by name (`admin` at GLOBAL scope is the
+// platform admin), so their name and scope are part of the security model.
+export const BUILT_IN_ROLE_NAMES = ["admin", "manager", "focal", "user"];
+
+function isBuiltIn(role: { name: string; tenantId: string | null }): boolean {
+  return role.tenantId === null && BUILT_IN_ROLE_NAMES.includes(role.name);
+}
+
+// `@@unique([tenantId, name])` does not stop two tenant-less roles sharing a
+// name (Postgres treats NULLs as distinct), and a second "admin" there would
+// be a second platform-admin role. Built-in names are refused everywhere so a
+// look-alike can't be created inside a tenant either.
+async function assertRoleNameAvailable(name: string, tenantId: string | null, exceptId?: string) {
+  const wanted = name.trim().toLowerCase();
+  if (BUILT_IN_ROLE_NAMES.includes(wanted)) {
+    throw new RoleGuardError(`"${name}" is a built-in role name. Choose another name.`);
+  }
+  if (tenantId !== null) return;
+  const clash = await prisma.role.findFirst({
+    where: {
+      tenantId: null,
+      name: { equals: name.trim(), mode: "insensitive" },
+      ...(exceptId && { id: { not: exceptId } }),
+    },
+    select: { id: true },
+  });
+  if (clash) throw new RoleGuardError(`A role named "${name}" already exists.`);
+}
+
 export async function createRole(input: RoleInput, ctx: TenantServiceContext) {
+  await assertRoleNameAvailable(input.name, input.scope === "GLOBAL" ? null : ctx.tenantId);
   const role = await prisma.role.create({
     data: {
       name: input.name,
@@ -103,12 +143,31 @@ export async function createRole(input: RoleInput, ctx: TenantServiceContext) {
 }
 
 export async function updateRole(roleId: string, input: RoleInput, ctx: TenantServiceContext) {
+  const existing = await prisma.role.findUnique({
+    where: { id: roleId },
+    select: { name: true, scope: true, tenantId: true },
+  });
+  if (!existing) throw new RoleGuardError("Role not found.");
+
+  if (isBuiltIn(existing)) {
+    if (input.name !== existing.name || input.scope !== existing.scope) {
+      throw new RoleGuardError(
+        `"${existing.name}" is a built-in role. Its name and scope cannot be changed.`,
+      );
+    }
+  } else {
+    // A role made GLOBAL leaves its tenant, so its name must be free there.
+    const tenantId = input.scope === "GLOBAL" ? null : existing.tenantId;
+    await assertRoleNameAvailable(input.name, tenantId, roleId);
+  }
+
   const role = await prisma.role.update({
     where: { id: roleId },
     data: {
       name: input.name,
       description: input.description,
       scope: input.scope,
+      ...(input.scope === "GLOBAL" && { tenantId: null }),
     },
   });
   await writeAudit({
@@ -125,8 +184,11 @@ export async function updateRole(roleId: string, input: RoleInput, ctx: TenantSe
 export async function deleteRole(roleId: string, ctx: TenantServiceContext) {
   const role = await prisma.role.findUnique({
     where: { id: roleId },
-    select: { name: true },
+    select: { name: true, tenantId: true },
   });
+  if (role && isBuiltIn(role)) {
+    throw new RoleGuardError(`"${role.name}" is a built-in role and cannot be deleted.`);
+  }
   await prisma.role.delete({ where: { id: roleId } });
   await writeAudit({
     tenantId: ctx.tenantId,

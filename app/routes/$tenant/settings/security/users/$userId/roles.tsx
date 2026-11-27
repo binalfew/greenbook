@@ -5,8 +5,9 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { RoleScope } from "~/generated/prisma/client";
-import { getUserDetail, replaceUserRoles } from "~/services/users.server";
+import { LastAdminError, replaceUserRoles } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
+import { assertCanGrantRoles, requireUserInScope } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -32,14 +33,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const roleWhere = isGlobalAdmin ? {} : { scope: RoleScope.TENANT };
 
   const [user, allRoles] = await Promise.all([
-    getUserDetail(params.userId),
+    requireUserInScope(actor, params.userId, "write"),
     prisma.role.findMany({
       where: roleWhere,
       select: { id: true, name: true, scope: true, description: true },
       orderBy: [{ scope: "asc" }, { name: "asc" }],
     }),
   ]);
-  if (!user) throw data({ error: "User not found" }, { status: 404 });
 
   const assignedIds = new Set(user.userRoles.map((ur) => ur.role.id));
   return data({ user, allRoles, assignedIds: [...assignedIds] });
@@ -49,42 +49,28 @@ export async function action({ request, params }: Route.ActionArgs) {
   const actor = await requirePermission(request, "user", "update");
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
-  const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+
+  // Hand-crafted POSTs can target any user id and smuggle in any role id, so
+  // both are checked here even though the loader already hides them.
+  await requireUserInScope(actor, params.userId, "write");
 
   const formData = await request.formData();
+  const roleIds = formData.getAll("roleIds").filter((v): v is string => typeof v === "string");
+  await assertCanGrantRoles(actor, roleIds);
   await validateCSRF(formData, request.headers);
 
-  const roleIds = formData.getAll("roleIds").filter((v): v is string => typeof v === "string");
-
-  // Defense in depth: validate every submitted role id is one the actor is
-  // authorised to assign. Managers can only assign TENANT-scope roles
-  // (focal, manager). Granting GLOBAL roles (admin, user) is platform-admin-
-  // only — hand-crafted POSTs that smuggle in a GLOBAL role id are rejected
-  // here even though the loader hides them from the UI.
-  if (roleIds.length > 0 && !isGlobalAdmin) {
-    const submitted = await prisma.role.findMany({
-      where: { id: { in: roleIds } },
-      select: { id: true, scope: true },
-    });
-    const disallowed = submitted.filter((r) => r.scope !== RoleScope.TENANT);
-    if (disallowed.length > 0) {
-      throw data(
-        {
-          error: "Forbidden",
-          message: "Only platform admins can grant GLOBAL-scope roles.",
-        },
-        { status: 403 },
-      );
-    }
-  }
-
   const ctx = buildServiceContext(request, actor, tenantId);
-  await replaceUserRoles(params.userId, roleIds, ctx);
+  try {
+    await replaceUserRoles(params.userId, roleIds, ctx);
+  } catch (error) {
+    if (!(error instanceof LastAdminError)) throw error;
+    return data({ error: error.message }, { status: 400 });
+  }
 
   return redirect(`/${params.tenant}/settings/security/users/${params.userId}`);
 }
 
-export default function UserRolesPage({ loaderData, params }: Route.ComponentProps) {
+export default function UserRolesPage({ loaderData, actionData, params }: Route.ComponentProps) {
   const { user, allRoles, assignedIds } = loaderData;
   const assigned = new Set(assignedIds);
   const displayName = `${user.firstName} ${user.lastName}`.trim() || user.email;
@@ -111,6 +97,12 @@ export default function UserRolesPage({ loaderData, params }: Route.ComponentPro
 
       <Form method="post" className="space-y-6">
         <AuthenticityTokenInput />
+
+        {actionData?.error ? (
+          <p className="text-destructive text-sm" role="alert">
+            {actionData.error}
+          </p>
+        ) : null}
 
         <Card>
           <CardHeader>

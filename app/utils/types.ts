@@ -18,12 +18,7 @@ export const ToastSchema = z.object({
 export type Toast = z.infer<typeof ToastSchema>;
 export type ToastInput = z.input<typeof ToastSchema>;
 
-export const VerificationTypeSchema = z.enum([
-  "onboarding",
-  "reset-password",
-  "change-email",
-  "2fa",
-]);
+export const VerificationTypeSchema = z.enum(["reset-password", "change-email", "2fa"]);
 
 export type VerificationTypes = z.infer<typeof VerificationTypeSchema>;
 

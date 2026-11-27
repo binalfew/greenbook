@@ -2,7 +2,6 @@ import { Bell, Code, CreditCard, List, Lock, Settings, User } from "lucide-react
 import type { SettingsNavItem, VerificationTypes } from "../types";
 
 export const sessionKey = "sessionId";
-export const onboardingEmailSessionKey = "onboardingEmail";
 export const resetPasswordEmailSessionKey = "resetPasswordEmail";
 export const newEmailAddressSessionKey = "newEmailAddress";
 export const twoFAVerifyVerificationType = "2fa-verify";

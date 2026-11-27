@@ -8,8 +8,9 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { RoleScope } from "~/generated/prisma/client";
-import { getUserDetail, setUserTenantAssignment, updateUser } from "~/services/users.server";
+import { setUserTenantAssignment, updateUser } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireUserInScope } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -28,7 +29,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
 
   const [user, statuses, tenants] = await Promise.all([
-    getUserDetail(params.userId),
+    requireUserInScope(actor, params.userId, "write"),
     prisma.userStatus.findMany({
       where: { isActive: true },
       select: { id: true, code: true, name: true },
@@ -44,7 +45,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         })
       : Promise.resolve([]),
   ]);
-  if (!user) throw data({ error: "User not found" }, { status: 404 });
   return data({ user, statuses, tenants, isGlobalAdmin });
 }
 
@@ -53,6 +53,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
   const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
+  await requireUserInScope(actor, params.userId, "write");
 
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);

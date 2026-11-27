@@ -3,8 +3,9 @@ import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { getUserDetail, softDeleteUser } from "~/services/users.server";
+import { LastAdminError, softDeleteUser } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireUserInScope } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -17,9 +18,8 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "user", "delete");
-  const user = await getUserDetail(params.userId);
-  if (!user) throw data({ error: "User not found" }, { status: 404 });
+  const actor = await requirePermission(request, "user", "delete");
+  const user = await requireUserInScope(actor, params.userId, "write");
   return data({ user });
 }
 
@@ -27,6 +27,8 @@ export async function action({ request, params }: Route.ActionArgs) {
   const actor = await requirePermission(request, "user", "delete");
   const tenantId = actor.tenantId;
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
+
+  await requireUserInScope(actor, params.userId, "write");
 
   if (params.userId === actor.id) {
     return data({ error: "You cannot delete your own account" }, { status: 400 });
@@ -36,12 +38,17 @@ export async function action({ request, params }: Route.ActionArgs) {
   await validateCSRF(formData, request.headers);
 
   const ctx = buildServiceContext(request, actor, tenantId);
-  await softDeleteUser(params.userId, ctx);
+  try {
+    await softDeleteUser(params.userId, ctx);
+  } catch (error) {
+    if (!(error instanceof LastAdminError)) throw error;
+    return data({ error: error.message }, { status: 400 });
+  }
 
   return redirect(`/${params.tenant}/settings/security/users`);
 }
 
-export default function DeleteUserPage({ loaderData, params }: Route.ComponentProps) {
+export default function DeleteUserPage({ loaderData, actionData, params }: Route.ComponentProps) {
   const { user } = loaderData;
   const displayName = `${user.firstName} ${user.lastName}`.trim() || user.email;
   const backTo = `/${params.tenant}/settings/security/users/${user.id}`;
@@ -86,6 +93,12 @@ export default function DeleteUserPage({ loaderData, params }: Route.ComponentPr
           <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
             This user will no longer be able to sign in. Their data remains for audit purposes.
           </div>
+
+          {actionData?.error ? (
+            <p className="text-destructive text-sm" role="alert">
+              {actionData.error}
+            </p>
+          ) : null}
 
           <div className="flex gap-3 pt-2">
             <Form method="post">

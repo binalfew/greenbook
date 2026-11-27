@@ -11,7 +11,16 @@ import { startJobProcessor, stopJobProcessor } from "~/utils/events/job-queue.se
 import { correlationMiddleware } from "./correlation.js";
 import { logger } from "./logger.js";
 import { requestLogger } from "./request-logger.js";
-import { corsMiddleware, extractSessionUser, generalLimiter, searchLimiter } from "./security.js";
+import {
+  AUTH_LIMITED_PATHS,
+  authLimiter,
+  corsMiddleware,
+  extractSessionUser,
+  generalLimiter,
+  mutationLimiter,
+  requireSameOrigin,
+  searchLimiter,
+} from "./security.js";
 import { flushRateLimitBuffer } from "./rate-limit-audit.js";
 import { onShutdown, runShutdownHooks } from "./shutdown.js";
 
@@ -30,12 +39,14 @@ app.set("trust proxy", 1);
 // ─── Observability middleware (order matters) ───────────
 // 1. Correlation ID first so every downstream log/audit line can pivot on it.
 // 2. Request logger second so it captures the correlation ID.
-// 3. CORS before rate limiting so preflight OPTIONS isn't counted.
+// 3. CORS before rate limiting so preflight OPTIONS isn't counted, then the
+//    same-origin check so forged writes are refused before any work is done.
 // 4. Session extraction before rate limiting so keys are per-user when authed.
 // 5. General rate limiter last — covers every subsequent request.
 app.use(correlationMiddleware);
 app.use(requestLogger);
 app.use(corsMiddleware);
+app.use(requireSameOrigin);
 
 // Lazy-load the session helper so rate-limit extraction doesn't pull in
 // the entire app bundle before Vite is ready.
@@ -47,6 +58,12 @@ app.use(
 );
 
 app.use(generalLimiter);
+
+// Writes get a per-minute cap on top of the general budget, and credential
+// submissions a tighter one still, so passwords and reset codes can't be
+// guessed at the general rate.
+app.use(mutationLimiter);
+app.use(AUTH_LIMITED_PATHS, authLimiter);
 
 // Tighter cap on the directory search type-ahead — mounted before the
 // general handler so it only governs the search endpoint. Both spellings are

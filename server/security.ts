@@ -26,6 +26,55 @@ export const corsMiddleware = cors({
   ],
 });
 
+// ─── Cross-site request forgery ────────────────────────────
+// Most route actions never call `validateCSRF`, and the session cookie's
+// `sameSite: lax` is the only thing between them and a forged form post. This
+// closes the gap for every route at once: a state-changing request must come
+// from a page on this site. Browsers attach `Origin` to every cross-origin
+// write and scripts cannot forge it, so a mismatch is a forged request.
+// Requests with neither header come from non-browser clients, which carry no
+// ambient cookies to abuse.
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+// The SAML identity provider posts the assertion here from its own origin.
+const CROSS_ORIGIN_POST_PATHS = new Set(["/sso/callback"]);
+
+function trustedOrigins(): Set<string> {
+  const configured = [process.env.APP_URL, ...allowedOrigins].filter(Boolean) as string[];
+  const origins = new Set<string>();
+  for (const value of configured) {
+    try {
+      origins.add(new URL(value).origin);
+    } catch {
+      // Ignore a malformed entry rather than refuse every write.
+    }
+  }
+  return origins;
+}
+
+export function requireSameOrigin(req: Request, res: Response, next: NextFunction) {
+  if (SAFE_METHODS.has(req.method) || CROSS_ORIGIN_POST_PATHS.has(req.path)) return next();
+
+  const origin = req.get("origin");
+  let allowed: boolean;
+  if (origin) {
+    let originHost: string | null = null;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      // "null" (sandboxed iframe, data: URL) or garbage — never same-origin.
+    }
+    allowed =
+      (originHost !== null && originHost === req.get("host")) || trustedOrigins().has(origin);
+  } else {
+    const site = req.get("sec-fetch-site");
+    allowed = !site || site === "same-origin" || site === "none";
+  }
+
+  if (allowed) return next();
+  res.status(403).json({ error: "FORBIDDEN", message: "Cross-site request refused." });
+}
+
 // ─── Session extraction for rate-limit keying ──────────────
 // Looks up the cookie-stored session id and stores it in res.locals so
 // createKeyGenerator keys per-user when authenticated, falling back to IP.
@@ -125,15 +174,31 @@ export const searchLimiter = rateLimit({
   validate: { keyGeneratorIpFallback: false },
 });
 
-// Tight limiter for /login, /signup, /forgot-password, etc. Apps mount
-// this on their auth routes explicitly; it's not applied globally.
+// Tight limiter for credential and one-time-code submissions (login,
+// forgot-password, 2FA, ...). Mounted on `AUTH_LIMITED_PATHS` only, and counts
+// submissions only — rendering the form does not spend the budget.
 export const authLimiter = rateLimit({
   windowMs: 60_000,
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: createKeyGenerator(),
-  skip: skipHealthCheck,
+  skip: (req: Request) => req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS",
   handler: createRateLimitHandler("auth", 10),
   validate: { keyGeneratorIpFallback: false },
 });
+
+// Every route that accepts a password, reset request or one-time code. Each is
+// listed with its `.data` twin: Express matches mount paths on segment
+// boundaries, and `.data` is the URL React Router submits to.
+export const AUTH_LIMITED_PATHS = [
+  "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/verify",
+  "/2fa-verify",
+  "/2fa-recovery",
+  "/change-expired-password",
+  "/accept-invite",
+  "/sso/callback",
+].flatMap((path) => [path, `${path}.data`]);

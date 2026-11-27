@@ -3,7 +3,7 @@ import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useBasePrefix } from "~/hooks/use-base-prefix";
-import { deleteTenant, getTenantWithCounts } from "~/services/tenants.server";
+import { TenantDeleteError, deleteTenant, getTenantWithCounts } from "~/services/tenants.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { buildServiceContext } from "~/utils/request-context.server";
@@ -32,12 +32,19 @@ export async function action({ request, params }: Route.ActionArgs) {
   await validateCSRF(formData, request.headers);
 
   const ctx = buildServiceContext(request, user, params.tenantId);
-  await deleteTenant(params.tenantId, ctx);
+  try {
+    await deleteTenant(params.tenantId, ctx);
+  } catch (error) {
+    if (error instanceof TenantDeleteError) {
+      return data({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
 
   return redirect(`/${params.tenant}/tenants`);
 }
 
-export default function DeleteTenantPage({ loaderData }: Route.ComponentProps) {
+export default function DeleteTenantPage({ loaderData, actionData }: Route.ComponentProps) {
   const { tenant } = loaderData;
   const basePrefix = useBasePrefix();
   const canDelete = tenant._count.users === 0;
@@ -90,6 +97,12 @@ export default function DeleteTenantPage({ loaderData }: Route.ComponentProps) {
               removed.
             </div>
           )}
+
+          {actionData?.error ? (
+            <p className="text-destructive text-sm" role="alert">
+              {actionData.error}
+            </p>
+          ) : null}
 
           <div className="flex gap-3 pt-2">
             {canDelete ? (

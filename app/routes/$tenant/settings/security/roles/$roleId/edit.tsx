@@ -8,7 +8,7 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { getRoleDetail, updateRole } from "~/services/roles.server";
+import { getRoleDetail, RoleGuardError, updateRole } from "~/services/roles.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -45,7 +45,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const ctx = buildServiceContext(request, actor, tenantId);
-  await updateRole(params.roleId, submission.value, ctx);
+  try {
+    await updateRole(params.roleId, submission.value, ctx);
+  } catch (error) {
+    if (!(error instanceof RoleGuardError)) throw error;
+    return data(submission.reply({ formErrors: [error.message] }), { status: 400 });
+  }
 
   return redirect(`/${params.tenant}/settings/security/roles/${params.roleId}`);
 }
@@ -84,6 +89,14 @@ export default function EditRolePage({ loaderData, actionData, params }: Route.C
 
       <Form method="post" {...getFormProps(form)} className="space-y-6">
         <AuthenticityTokenInput />
+
+        {form.errors && form.errors.length > 0 && (
+          <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm" role="alert">
+            {form.errors.map((e, i) => (
+              <p key={i}>{e}</p>
+            ))}
+          </div>
+        )}
 
         <Card>
           <CardHeader>

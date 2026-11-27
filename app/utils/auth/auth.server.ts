@@ -20,7 +20,7 @@ export async function verifyUserPassword(
   request?: Request,
 ) {
   const userWithPassword = await prisma.user.findUnique({
-    where,
+    where: { ...where, deletedAt: null },
     select: {
       id: true,
       tenantId: true,
@@ -193,88 +193,6 @@ export function isPasswordExpired(lastChanged: Date, maxAgeDays = PASSWORD_EXPIR
   return Date.now() - lastChanged.getTime() > maxAgeMs;
 }
 
-export async function signup({
-  email,
-  password,
-  firstName,
-  lastName,
-  tenantName,
-  request,
-}: {
-  email: User["email"];
-  firstName: User["firstName"];
-  lastName: User["lastName"];
-  password: string;
-  tenantName: string;
-  request: Request;
-}) {
-  const { generateUniqueSlug } = await import("~/services/tenants.server");
-  const { bootstrapNewTenant } = await import("~/services/tenant-setup.server");
-
-  const slug = await generateUniqueSlug(tenantName);
-  const hashedPassword = await getPasswordHash(password);
-  const metadata = {
-    fingerprint: generateFingerprint(request),
-  };
-
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: tenantName,
-      slug,
-      email: email.toLowerCase(),
-      phone: "",
-      city: "",
-      state: "",
-      address: "",
-    },
-    select: { id: true, slug: true, name: true },
-  });
-
-  const session = await prisma.session.create({
-    select: { id: true, expiresAt: true, userId: true },
-    data: {
-      expiresAt: getSessionExpirationDate(),
-      metadata,
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          firstName,
-          lastName,
-          tenantId: tenant.id,
-          password: {
-            create: { hash: hashedPassword },
-          },
-        },
-      },
-    },
-  });
-
-  // Attach the signing-up user as the tenant admin with a tenant-scoped role
-  // set mirroring the seed baseline.
-  await bootstrapNewTenant({
-    tenantId: tenant.id,
-    initialAdminUserId: session.userId,
-  });
-
-  await writeAudit({
-    tenantId: tenant.id,
-    userId: session.userId,
-    action: "CREATE",
-    entityType: "user",
-    entityId: session.userId,
-    description: `User signed up and bootstrapped tenant "${tenant.name}"`,
-    request,
-  });
-
-  const { emitUserCreated } = await import("~/utils/events/emit-user-created.server");
-  emitUserCreated({ id: session.userId, email: email.toLowerCase() }, tenant.id, {
-    source: "signup",
-    tenantName: tenant.name,
-  });
-
-  return { session, tenant };
-}
-
 export async function login({
   email,
   password,
@@ -372,9 +290,9 @@ export async function getUserId(request: Request) {
   const sessionId = cookieSession.get(sessionKey);
   if (!sessionId) return null;
 
-  const session = await prisma.session.findUnique({
+  const session = await prisma.session.findFirst({
     select: { userId: true, metadata: true },
-    where: { id: sessionId },
+    where: { id: sessionId, user: { deletedAt: null } },
   });
 
   if (!session) {

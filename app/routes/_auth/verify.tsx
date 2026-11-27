@@ -60,7 +60,6 @@ export default function VerifyRoute({ actionData }: Route.ComponentProps) {
   );
 
   const headings: Record<VerificationTypes, React.ReactNode> = {
-    onboarding: checkEmail,
     "reset-password": checkEmail,
     "change-email": checkEmail,
     "2fa": (

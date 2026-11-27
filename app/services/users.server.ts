@@ -264,15 +264,37 @@ export async function setUserTenantAssignment(
   });
 }
 
+/** Refused because it would leave the platform with no admin. */
+export class LastAdminError extends Error {
+  constructor() {
+    super("This is the only platform admin. Make someone else an admin first.");
+  }
+}
+
+const GLOBAL_ADMIN_ROLE = { name: "admin", scope: RoleScope.GLOBAL };
+
+// Call before taking the platform-admin role (or the account) away from
+// `userId`. Without an admin nobody can manage tenants or roles again.
+async function assertNotLastGlobalAdmin(userId: string) {
+  const admins = await prisma.user.findMany({
+    where: { deletedAt: null, userRoles: { some: { role: GLOBAL_ADMIN_ROLE } } },
+    select: { id: true },
+    take: 2,
+  });
+  if (admins.length === 1 && admins[0].id === userId) throw new LastAdminError();
+}
+
 export async function softDeleteUser(userId: string, ctx: TenantServiceContext) {
   const existing = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });
-  await prisma.user.update({
-    where: { id: userId },
-    data: { deletedAt: new Date() },
-  });
+  await assertNotLastGlobalAdmin(userId);
+  // Deleting the sessions signs the user out everywhere at once.
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { deletedAt: new Date() } }),
+    prisma.session.deleteMany({ where: { userId } }),
+  ]);
   await writeAudit({
     tenantId: ctx.tenantId,
     userId: ctx.userId,
@@ -288,6 +310,11 @@ export async function replaceUserRoles(
   roleIds: string[],
   ctx: TenantServiceContext,
 ) {
+  const keepsAdmin =
+    roleIds.length > 0 &&
+    (await prisma.role.count({ where: { id: { in: roleIds }, ...GLOBAL_ADMIN_ROLE } })) > 0;
+  if (!keepsAdmin) await assertNotLastGlobalAdmin(userId);
+
   await prisma.$transaction(async (tx) => {
     await tx.userRole.deleteMany({ where: { userId } });
     if (roleIds.length > 0) {

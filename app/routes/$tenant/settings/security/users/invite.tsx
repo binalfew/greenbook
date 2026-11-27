@@ -10,6 +10,7 @@ import { getFormProps, getInputProps, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { createInvitation } from "~/services/invitations.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
+import { assertCanGrantRoles, isGlobalAdmin } from "~/utils/auth/user-access.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -29,7 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 
   const roles = await prisma.role.findMany({
-    where: { OR: [{ tenantId }, { scope: "GLOBAL" }] },
+    where: isGlobalAdmin(user) ? {} : { scope: "TENANT" },
     select: { id: true, name: true, scope: true },
     orderBy: { name: "asc" },
   });
@@ -43,14 +44,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   invariantResponse(tenantId, "Missing tenant context", { status: 403 });
 
   const formData = await request.formData();
+  const roleIds = formData.getAll("roleIds").filter((v): v is string => typeof v === "string");
+  await assertCanGrantRoles(user, roleIds);
   await validateCSRF(formData, request.headers);
 
   const submission = parseWithZod(formData, { schema: inviteUserSchema });
   if (submission.status !== "success") {
     return data(submission.reply(), { status: 400 });
   }
-
-  const roleIds = formData.getAll("roleIds").filter((v): v is string => typeof v === "string");
 
   const ctx = buildServiceContext(request, user, tenantId);
   await createInvitation({ email: submission.value.email, roleIds }, ctx);

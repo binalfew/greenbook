@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   codeQueryParam,
   newEmailAddressSessionKey,
-  onboardingEmailSessionKey,
   redirectToQueryParam,
   rememberMeSessionKey,
   resetPasswordEmailSessionKey,
@@ -130,10 +129,6 @@ export async function validateRequest(request: Request, body: URLSearchParams | 
   }
 
   switch (submissionValue[typeQueryParam]) {
-    case "onboarding": {
-      await deleteVerification();
-      return handleOnboardingVerification({ request, body, submission });
-    }
     case "reset-password": {
       await deleteVerification();
       return handlePasswordResetVerification({ request, body, submission });
@@ -148,17 +143,6 @@ export async function validateRequest(request: Request, body: URLSearchParams | 
     default:
       throw new Response("Invalid verification type", { status: 500 });
   }
-}
-
-export async function handleOnboardingVerification({ request, submission }: VerifyFunctionArgs) {
-  invariant(submission.payload, "submission.value should be defined by now");
-  const verifySession = await verifySessionStorage.getSession(request.headers.get("cookie"));
-  verifySession.set(onboardingEmailSessionKey, submission.payload.target);
-  return redirect("/onboarding", {
-    headers: {
-      "set-cookie": await verifySessionStorage.commitSession(verifySession),
-    },
-  });
 }
 
 export async function handlePasswordResetVerification({ request, submission }: VerifyFunctionArgs) {
@@ -356,18 +340,6 @@ export async function prepareVerification({
   verifyUrl.searchParams.set(codeQueryParam, otp);
 
   return { otp, redirectTo, verifyUrl };
-}
-
-export async function requireOnboardingEmail(request: Request) {
-  const verifySession = await verifySessionStorage.getSession(request.headers.get("cookie"));
-
-  const email = verifySession.get(onboardingEmailSessionKey);
-
-  if (typeof email !== "string" || !email) {
-    throw redirect("/signup");
-  }
-
-  return email;
 }
 
 export async function requireResetPasswordEmail(request: Request) {

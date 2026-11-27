@@ -392,25 +392,6 @@ export default function LoginRoute({ loaderData, actionData }: Route.ComponentPr
           </p>
         </div>
       </Form>
-
-      <div className="relative my-8">
-        <div className="absolute inset-0 flex items-center">
-          <div className="border-border w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-background text-muted-foreground px-3">or</span>
-        </div>
-      </div>
-
-      <p className="text-muted-foreground text-center text-sm">
-        {t("noAccount")}{" "}
-        <Link
-          to="/signup"
-          className="text-primary hover:text-primary/80 font-semibold transition-colors"
-        >
-          {t("signUp")}
-        </Link>
-      </p>
     </AuthContent>
   );
 }

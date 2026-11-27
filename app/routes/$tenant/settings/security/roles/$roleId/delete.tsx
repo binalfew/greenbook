@@ -3,7 +3,7 @@ import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { deleteRole, getRoleDetail } from "~/services/roles.server";
+import { deleteRole, getRoleDetail, RoleGuardError } from "~/services/roles.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -38,12 +38,17 @@ export async function action({ request, params }: Route.ActionArgs) {
   await validateCSRF(formData, request.headers);
 
   const ctx = buildServiceContext(request, actor, tenantId);
-  await deleteRole(params.roleId, ctx);
+  try {
+    await deleteRole(params.roleId, ctx);
+  } catch (error) {
+    if (!(error instanceof RoleGuardError)) throw error;
+    return data({ error: error.message }, { status: 400 });
+  }
 
   return redirect(`/${params.tenant}/settings/security/roles`);
 }
 
-export default function DeleteRolePage({ loaderData, params }: Route.ComponentProps) {
+export default function DeleteRolePage({ loaderData, actionData, params }: Route.ComponentProps) {
   const { role } = loaderData;
   const canDelete = role.userRoles.length === 0;
   const backTo = `/${params.tenant}/settings/security/roles/${role.id}`;
@@ -92,6 +97,12 @@ export default function DeleteRolePage({ loaderData, params }: Route.ComponentPr
               This role will be permanently deleted.
             </div>
           )}
+
+          {actionData?.error ? (
+            <p className="text-destructive text-sm" role="alert">
+              {actionData.error}
+            </p>
+          ) : null}
 
           <div className="flex gap-3 pt-2">
             {canDelete ? (

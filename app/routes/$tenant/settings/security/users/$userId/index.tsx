@@ -4,8 +4,8 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
-import { getUserDetail } from "~/services/users.server";
 import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireUserInScope } from "~/utils/auth/user-access.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Detail" };
@@ -19,11 +19,8 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requirePermission(request, "user", "read");
-  const user = await getUserDetail(params.userId);
-  if (!user) {
-    throw data({ error: "User not found" }, { status: 404 });
-  }
+  const actor = await requirePermission(request, "user", "read");
+  const user = await requireUserInScope(actor, params.userId, "read");
   return data({ user });
 }
 

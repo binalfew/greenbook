@@ -17,7 +17,10 @@ export function meta({ data }: Route.MetaArgs) {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const actor = await requirePermission(request, "role", "read");
   const isGlobalAdmin = actor.roles.some((r) => r.scope === RoleScope.GLOBAL && r.name === "admin");
-  const role = await getRoleDetail(params.roleId);
+  if (!isGlobalAdmin && !actor.tenantId) {
+    throw data({ error: "Missing tenant context" }, { status: 403 });
+  }
+  const role = await getRoleDetail(params.roleId, isGlobalAdmin ? undefined : actor.tenantId!);
   if (!role) throw data({ error: "Role not found" }, { status: 404 });
   return data({ role, isGlobalAdmin });
 }

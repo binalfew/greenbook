@@ -8,7 +8,7 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { getFormProps, getInputProps, SelectField, useForm } from "~/components/form";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { createRole } from "~/services/roles.server";
+import { createRole, RoleGuardError } from "~/services/roles.server";
 import { requireGlobalAdmin } from "~/utils/auth/require-auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { invariantResponse } from "~/utils/invariant";
@@ -43,7 +43,13 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const ctx = buildServiceContext(request, actor, tenantId);
-  const role = await createRole(submission.value, ctx);
+  let role;
+  try {
+    role = await createRole(submission.value, ctx);
+  } catch (error) {
+    if (!(error instanceof RoleGuardError)) throw error;
+    return data(submission.reply({ formErrors: [error.message] }), { status: 400 });
+  }
 
   return redirect(`/${params.tenant}/settings/security/roles/${role.id}`);
 }
