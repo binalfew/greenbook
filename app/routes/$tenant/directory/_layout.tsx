@@ -2,17 +2,14 @@ import { Building2, Gauge, Inbox, ListChecks, Network, ScrollText, Users } from 
 import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router";
 import { NavTabs, type NavTabItem } from "~/components/layout/nav-tabs";
-import { hasPermission, requireFeature } from "~/utils/auth/require-auth.server";
+import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import type { Route } from "./+types/_layout";
 
 export const handle = { breadcrumb: "Directory" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { user } = await requireFeature(request, "FF_DIRECTORY");
-  return {
-    canReview: hasPermission(user, "directory-change", "read-all"),
-    canSubmit: hasPermission(user, "directory-change", "submit"),
-  };
+  const { canReview, canSubmit } = await requireDirectoryAccess(request);
+  return { canReview, canSubmit };
 }
 
 export default function DirectoryLayout({ loaderData, params }: Route.ComponentProps) {

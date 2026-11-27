@@ -4,18 +4,17 @@ import { Link, data } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { requirePermission } from "~/utils/auth/require-auth.server";
+import { requireTenantPermission } from "~/utils/acting-tenant.server";
 import { prisma } from "~/utils/db/db.server";
 import type { Route } from "./+types/index";
 
 export const handle = { breadcrumb: "Log detail" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const user = await requirePermission(request, "audit-log", "read");
-  const tenantId = user.tenantId;
+  const { tenantId } = await requireTenantPermission(request, "audit-log", "read");
 
   const log = await prisma.auditLog.findFirst({
-    where: { id: params.logId, tenantId: tenantId ?? undefined },
+    where: { id: params.logId, tenantId },
   });
 
   if (!log) throw data({ error: "Log entry not found" }, { status: 404 });
