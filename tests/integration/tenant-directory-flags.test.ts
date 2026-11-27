@@ -45,7 +45,7 @@ async function arrange() {
   // The system tenant is already on both lists, as the seed leaves it.
   await seedNewTenantFlags(prisma, [system.id]);
   await prisma.featureFlag.create({
-    data: { key: "FF_IMPERSONATION", scope: "global", enabled: true },
+    data: { key: "FF_PWA", scope: "global", enabled: true },
   });
 
   const admin = await prisma.user.create({
@@ -198,7 +198,7 @@ describe("the global admin changes a tenant's features", () => {
     const fresh = await listedFlags(a.adminCookie, tenant.id);
     expect(fresh).toMatchObject({ FF_DIRECTORY: false, FF_PUBLIC_DIRECTORY: false });
     // A global flag has no per-tenant enabled list, so it is not offered.
-    expect(fresh).not.toHaveProperty("FF_IMPERSONATION");
+    expect(fresh).not.toHaveProperty("FF_PWA");
     expect(await listedFlags(a.adminCookie, a.system.id)).toMatchObject({
       FF_DIRECTORY: true,
       FF_PUBLIC_DIRECTORY: true,
@@ -260,7 +260,7 @@ describe("the global admin changes a tenant's features", () => {
     const a = await arrange();
     const tenant = await createTenantInUi(a.adminCookie, "medical");
 
-    expect(await setTenantFlag(a.adminCookie, tenant.id, "FF_IMPERSONATION", true)).toBe(400);
+    expect(await setTenantFlag(a.adminCookie, tenant.id, "FF_PWA", true)).toBe(400);
     expect(await setTenantFlag(a.adminCookie, tenant.id, "FF_NO_SUCH_FLAG", true)).toBe(400);
   });
 

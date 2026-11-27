@@ -1,12 +1,16 @@
 import { parseWithZod } from "@conform-to/zod/v4";
 import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
-import { draftsPath } from "~/utils/directory-routes";
+import { CONFIRM_DUPLICATES_FIELD } from "~/components/directory/possible-duplicates";
+import { findPossibleDuplicatePeople } from "~/services/person-duplicates.server";
+import { requireDirectoryWriteAccess } from "~/utils/directory-access.server";
+import { DRAFT_PARAM, draftsPath } from "~/utils/directory-routes";
 import { dispatchDirectoryChange } from "~/utils/directory-submit.server";
 import { personFormSchema } from "~/utils/schemas/directory";
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  const submission = parseWithZod(await request.formData(), {
+  const formData = await request.formData();
+  const submission = parseWithZod(formData, {
     schema: personFormSchema,
   });
   if (submission.status !== "success") {
@@ -33,6 +37,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : undefined;
 
   const payload = initialAssignment ? { ...rest, initialAssignment } : rest;
+
+  // Possible duplicates are a warning, not an error: the first save comes
+  // back with the matches, and the editor's "save anyway" button re-posts
+  // with the confirmation field to go through.
+  if (!formData.has(CONFIRM_DUPLICATES_FIELD)) {
+    const { tenantId } = await requireDirectoryWriteAccess(request, "person");
+    const duplicates = await findPossibleDuplicatePeople(tenantId, rest, {
+      personId: hasId ? id : undefined,
+      changeId: new URL(request.url).searchParams.get(DRAFT_PARAM),
+    });
+    if (duplicates.length > 0) return data({ ...submission.reply(), duplicates });
+  }
 
   const outcome = await dispatchDirectoryChange(request, "person", {
     entityType: "PERSON",

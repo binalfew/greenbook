@@ -9,11 +9,16 @@ import {
   useForm,
 } from "~/components/form";
 import { FormError } from "~/components/directory/form-error";
+import {
+  CONFIRM_DUPLICATES_FIELD,
+  PossibleDuplicates,
+} from "~/components/directory/possible-duplicates";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import type { PossibleDuplicate } from "~/services/person-duplicates.server";
 import { personFormSchema } from "~/utils/schemas/directory";
 import type { Route } from "../$personId_/+types/edit";
 
@@ -123,6 +128,9 @@ export function PersonEditor({
     },
   });
 
+  // Present only when the action held the save back with a duplicate warning.
+  const duplicates =
+    (actionData as { duplicates?: PossibleDuplicate[] } | undefined)?.duplicates ?? [];
   const cancelHref = person ? `${basePrefix}/${person.id}` : basePrefix;
   const submitLabel = canDirectApply
     ? t("actions.submitAndApprove")
@@ -332,10 +340,23 @@ export function PersonEditor({
         </Card>
       ) : null}
 
+      <PossibleDuplicates duplicates={duplicates} peopleHref={basePrefix} forSave />
+
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Button type="submit" className="w-full sm:w-auto">
-          {submitLabel}
-        </Button>
+        {duplicates.length > 0 ? (
+          <Button
+            type="submit"
+            name={CONFIRM_DUPLICATES_FIELD}
+            value="1"
+            className="w-full sm:w-auto"
+          >
+            {t("duplicates.saveAnyway")}
+          </Button>
+        ) : (
+          <Button type="submit" className="w-full sm:w-auto">
+            {submitLabel}
+          </Button>
+        )}
         <Button type="button" variant="outline" asChild className="w-full sm:w-auto">
           <Link to={cancelHref}>{tc("cancel")}</Link>
         </Button>

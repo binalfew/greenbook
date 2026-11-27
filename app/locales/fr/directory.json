@@ -251,13 +251,31 @@
       "editDraft": "Modifier le brouillon",
       "discard": "Supprimer le brouillon",
       "submitDraft": "Soumettre pour revue",
+      "reopen": "Rouvrir comme brouillon",
       "submitSelected_one": "Soumettre {{count}} brouillon",
       "submitSelected_other": "Soumettre {{count}} brouillons"
+    },
+    "submitted": {
+      "title_one": "Soumis pour revue",
+      "title_other": "{{count}} modifications soumises pour revue",
+      "description": "Rien n'est publié tant qu'un gestionnaire ne l'a pas approuvé.",
+      "link": "Voir mes soumissions"
     },
     "discardDialog": {
       "title": "Supprimer ce brouillon ?",
       "description": "Le brouillon sera définitivement supprimé. L'enregistrement publié n'est pas modifié.",
       "confirm": "Supprimer le brouillon"
+    },
+    "reopenDialog": {
+      "title": "Rouvrir cette demande ?",
+      "description": "Un nouveau brouillon est créé avec les valeurs que vous aviez soumises, afin que vous puissiez le corriger et le soumettre à nouveau. La demande rejetée reste dans votre historique.",
+      "confirm": "Rouvrir comme brouillon"
+    },
+    "reopened": {
+      "rejectedBy": "Rejetée par {{name}}",
+      "rejected": "Rejetée",
+      "viewRejected": "Voir la demande rejetée",
+      "followsRejection": "Fait suite à un rejet"
     },
     "approveDialog": {
       "title": "Approuver cette modification ?",
@@ -321,7 +339,25 @@
     "HAS_ACTIVE_ASSIGNMENTS": "Cette fiche a encore une affectation en cours. Mettez d'abord fin à l'affectation, puis supprimez.",
     "REFERENCED_RECORD_NOT_PUBLISHED": "Cette modification renvoie à une fiche qui a depuis été supprimée. Rejetez-la ou demandez une correction.",
     "NOT_PENDING": "Cette modification n'est plus en attente de revue. Rechargez la page pour voir son statut actuel.",
+    "RECORD_CHANGED": "Cette fiche a changé depuis la demande : celle-ci ne peut donc pas être rouverte. Ouvrez la fiche et refaites la modification.",
+    "ALREADY_REOPENED": "Cette demande a déjà été rouverte. Poursuivez avec le brouillon ou la soumission qui l'a suivie.",
+    "NOT_REJECTED": "Seule une demande rejetée peut être rouverte. Rechargez la page pour voir son statut actuel.",
     "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue."
+  },
+  "duplicates": {
+    "title": "Doublons possibles",
+    "saveHelp": "Rien n'a encore été enregistré. Vérifiez qu'il ne s'agit pas de l'une des personnes ci-dessous, puis enregistrez quand même ou annulez.",
+    "reviewHelp": "Cette personne figure peut-être déjà dans l'annuaire. Vérifiez les personnes ci-dessous avant d'approuver.",
+    "saveAnyway": "Enregistrer quand même",
+    "source": {
+      "PERSON": "publiée",
+      "DRAFT": "brouillon",
+      "PENDING": "en attente de revue"
+    },
+    "matchedOn": {
+      "name": "même nom",
+      "email": "même e-mail"
+    }
   },
   "status": {
     "published": "Publié",

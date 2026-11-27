@@ -6,6 +6,7 @@ import frDirectory from "~/locales/fr/directory.json";
 import {
   findOwnDraftForEntity,
   getOwnDraft,
+  getReopenedFrom,
   saveDraft,
   submitAndApply,
   type SubmitInput,
@@ -40,6 +41,9 @@ const CONFLICT_CODES = [
   "HAS_ACTIVE_ASSIGNMENTS",
   "REFERENCED_RECORD_NOT_PUBLISHED",
   "NOT_PENDING",
+  "RECORD_CHANGED",
+  "ALREADY_REOPENED",
+  "NOT_REJECTED",
 ] as const;
 
 export type DirectoryConflictCode = (typeof CONFLICT_CODES)[number];
@@ -121,7 +125,19 @@ export async function dispatchDirectoryDelete(
   });
 }
 
-export type EditorDraft = { id: string; values: Record<string, unknown> };
+/** Why the request a draft was reopened from was rejected. */
+export type DraftRejection = {
+  changeId: string;
+  notes: string | null;
+  reviewerName: string | null;
+};
+
+export type EditorDraft = {
+  id: string;
+  values: Record<string, unknown>;
+  /** Set when the draft reopens a rejected request; shown above the editor. */
+  rejection: DraftRejection | null;
+};
 
 /**
  * For the new / edit loaders: resolve the draft the editor should resume.
@@ -160,7 +176,18 @@ export async function loadEditorDraft(
   ) {
     throw new Response("Not Found", { status: 404 });
   }
-  return { id: draft.id, values: draftFormValues(draft.payload) };
+  const rejected = await getReopenedFrom(draft);
+  const rejection = rejected
+    ? {
+        changeId: rejected.id,
+        notes: rejected.reviewerNotes,
+        reviewerName: rejected.reviewedBy
+          ? `${rejected.reviewedBy.firstName} ${rejected.reviewedBy.lastName}`.trim() ||
+            rejected.reviewedBy.email
+          : null,
+      }
+    : null;
+  return { id: draft.id, values: draftFormValues(draft.payload), rejection };
 }
 
 // Stored payloads are post-transform (`""` → null, nested initialAssignment);

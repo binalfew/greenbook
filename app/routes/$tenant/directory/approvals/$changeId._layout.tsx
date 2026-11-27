@@ -1,20 +1,43 @@
-import { ArrowLeft, Check, ExternalLink, Pencil, Send, Trash2, Undo2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ExternalLink,
+  Pencil,
+  RotateCcw,
+  Send,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, data, useFetcher } from "react-router";
 import { ChangeDiff } from "~/components/directory/change-diff";
 import { ChangeStatusPill } from "~/components/directory/change-status-pill";
+import { PossibleDuplicates } from "~/components/directory/possible-duplicates";
+import { RejectionNotes } from "~/components/directory/rejection-notes";
+import { SubmittedNotice } from "~/components/directory/submitted-notice";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
 import {
   ChangeRequestError,
+  canReopenChange,
   computeDiff,
   getChange,
+  getReopenedFrom,
   type BatchResult,
 } from "~/services/directory-changes.server";
+import {
+  findPossibleDuplicatePeople,
+  type DuplicateCandidate,
+} from "~/services/person-duplicates.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
-import { directoryEntitySegment, draftEditPath } from "~/utils/directory-routes";
+import {
+  directoryEntitySegment,
+  draftEditPath,
+  type SubmittedConfirmation,
+} from "~/utils/directory-routes";
 import { formatDate } from "~/utils/format-date";
 import type { Route } from "./+types/$changeId._layout";
 
@@ -45,12 +68,58 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const backHref = canReview
     ? `/${params.tenant}/directory/approvals`
     : `/${params.tenant}/directory/submissions`;
-  return data({ change, diffs, currentUserId: user.id, canReview, backHref });
+  // The advisory check the person editor runs on save, repeated here so a
+  // reviewer sees it before approving. Only while the change is still open.
+  const isOpenPersonChange =
+    change.entityType === "PERSON" &&
+    (change.operation === "CREATE" || change.operation === "UPDATE") &&
+    (change.status === "DRAFT" || change.status === "PENDING");
+  const possibleDuplicates = isOpenPersonChange
+    ? await findPossibleDuplicatePeople(tenantId, change.payload as DuplicateCandidate, {
+        personId: change.entityId,
+        changeId: change.id,
+      })
+    : [];
+  // A reopened request shows the rejection it follows; the author of a
+  // rejected request may reopen it as a draft.
+  const [rejected, canReopen] = await Promise.all([
+    getReopenedFrom(change),
+    canSubmit ? canReopenChange(change, user.id) : false,
+  ]);
+  const reopenedFrom = rejected
+    ? {
+        changeId: rejected.id,
+        notes: rejected.reviewerNotes,
+        reviewerName: rejected.reviewedBy
+          ? `${rejected.reviewedBy.firstName} ${rejected.reviewedBy.lastName}`.trim() ||
+            rejected.reviewedBy.email
+          : null,
+      }
+    : null;
+  return data({
+    change,
+    diffs,
+    currentUserId: user.id,
+    canReview,
+    backHref,
+    possibleDuplicates,
+    canReopen,
+    reopenedFrom,
+  });
 }
 
 export default function ChangeDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
-  const { change, diffs, currentUserId, canReview, backHref } = loaderData;
+  const {
+    change,
+    diffs,
+    currentUserId,
+    canReview,
+    backHref,
+    possibleDuplicates,
+    canReopen,
+    reopenedFrom,
+  } = loaderData;
   const base = `/${params.tenant}/directory/approvals`;
   const entitySegment = directoryEntitySegment(change.entityType);
   const entityHref = change.entityId
@@ -62,7 +131,11 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
   // The loader only ever returns a draft to its author.
   const isDraft = change.status === "DRAFT";
   const draftEditHref = isDraft ? draftEditPath(params.tenant, change) : null;
-  const submitFetcher = useFetcher<{ result: BatchResult | null; summary: string }>();
+  const submitFetcher = useFetcher<{
+    result: BatchResult | null;
+    summary: string;
+    confirmation: SubmittedConfirmation | null;
+  }>();
   const submitFailure = submitFetcher.data
     ? (submitFetcher.data.result?.failed[0]?.message ??
       (submitFetcher.data.result ? null : submitFetcher.data.summary))
@@ -117,6 +190,14 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
               </Link>
             </Button>
           ) : null}
+          {canReopen ? (
+            <Button asChild size="sm">
+              <Link to={`${base}/${change.id}/reopen`}>
+                <RotateCcw className="mr-1 size-4" />
+                {t("changes.actions.reopen")}
+              </Link>
+            </Button>
+          ) : null}
           {isDraft ? (
             <>
               {draftEditHref ? (
@@ -145,6 +226,8 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
         </div>
       </div>
 
+      <SubmittedNotice confirmation={submitFetcher.data?.confirmation} />
+
       {submitFailure ? (
         <p role="alert" className="text-destructive text-sm">
           {submitFailure}
@@ -160,9 +243,18 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
           {change.approvalMode === "SELF_APPROVED" ? (
             <Badge variant="outline">{t("changes.selfApprovedTag")}</Badge>
           ) : null}
+          {reopenedFrom ? (
+            <Badge variant="outline">{t("changes.reopened.followsRejection")}</Badge>
+          ) : null}
         </div>
         <p className="text-muted-foreground text-sm">{t("changes.detailSubtitle")}</p>
       </header>
+
+      <RejectionNotes rejection={reopenedFrom} tenant={params.tenant} />
+      <PossibleDuplicates
+        duplicates={possibleDuplicates}
+        peopleHref={`/${params.tenant}/directory/people`}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">

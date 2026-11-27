@@ -1,0 +1,342 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { buildTenant, buildUser, seedActiveUserStatus, seedNewTenantFlags } from "../factories";
+import { prisma } from "../setup/integration-setup";
+
+import { loader as tenantLayoutLoader } from "~/routes/$tenant/_layout";
+import { loader as changeDetailLoader } from "~/routes/$tenant/directory/approvals/$changeId._layout";
+import { action as approveAction } from "~/routes/$tenant/directory/approvals/$changeId.approve";
+import { action as rejectAction } from "~/routes/$tenant/directory/approvals/$changeId.reject";
+import { action as submitDraftsAction } from "~/routes/$tenant/directory/approvals/submit-drafts";
+import { action as organizationEditorAction } from "~/routes/$tenant/directory/organizations/+shared/organization-editor.server";
+import { loader as openNotificationLoader } from "~/routes/$tenant/notifications/$notificationId.open";
+import { loader as inboxLoader } from "~/routes/$tenant/notifications/index";
+import { action as newTenantAction } from "~/routes/$tenant/tenants/new";
+import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
+import { csrf } from "~/utils/auth/csrf.server";
+import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { createSessionCookie } from "./helpers/session";
+
+// The workflow's notifications are addressed to managers and focal persons,
+// so those are the people who must see the bell and the inbox, in a tenant
+// created through the UI as much as in a seeded one, and be able to open
+// what a notification is about.
+
+const SLUG = "medical";
+
+beforeEach(() => {
+  clearFlagCache();
+  clearPublicTenantIdsCache();
+});
+
+async function grant(roleId: string, permissions: [string, string][]) {
+  for (const [resource, action] of permissions) {
+    const perm = await prisma.permission.upsert({
+      where: { resource_action: { resource, action } },
+      create: { resource, action, module: "directory" },
+      update: {},
+    });
+    await prisma.rolePermission.create({
+      data: { roleId, permissionId: perm.id, access: "any" },
+    });
+  }
+}
+
+function get(cookie: string, path: string): Request {
+  return new Request(`http://localhost${path}`, { headers: { cookie } });
+}
+
+async function post(path: string, cookie: string, body: Record<string, string>): Promise<Request> {
+  const [token, csrfCookie] = await csrf.commitToken();
+  return new Request(`http://localhost${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      cookie: `${cookie}; ${csrfCookie!.split(";")[0]}`,
+    },
+    body: new URLSearchParams({ ...body, csrf: token }).toString(),
+  });
+}
+
+/** Run a loader/action and return what it returned or threw. */
+async function run(fn: () => Promise<unknown>): Promise<unknown> {
+  return fn().catch((thrown) => thrown);
+}
+
+function statusOf(result: unknown): number {
+  if (result instanceof Response) return result.status;
+  const init = (result as { init?: { status?: number } | null }).init;
+  return init?.status ?? 200;
+}
+
+/**
+ * A tenant created through the form the global admin uses, with one manager
+ * and one focal person placed in it.
+ */
+async function arrange() {
+  const status = await seedActiveUserStatus(prisma);
+  const system = await prisma.tenant.create({ data: buildTenant({ slug: "system" }) });
+  const adminRole = await prisma.role.create({ data: { name: "admin", scope: "GLOBAL" } });
+  const managerRole = await prisma.role.create({ data: { name: "manager", scope: "TENANT" } });
+  const focalRole = await prisma.role.create({ data: { name: "focal", scope: "TENANT" } });
+  await prisma.role.create({ data: { name: "user", scope: "GLOBAL" } });
+  await grant(focalRole.id, [
+    ["organization", "read"],
+    ["directory-change", "submit"],
+    ["directory-change", "read-own"],
+  ]);
+  await grant(managerRole.id, [
+    ["organization", "read"],
+    ["organization", "write"],
+    ["directory-change", "read-all"],
+    ["directory-change", "approve"],
+    ["directory-change", "reject"],
+  ]);
+  await seedNewTenantFlags(prisma);
+
+  const admin = await prisma.user.create({
+    data: {
+      ...buildUser({ tenantId: system.id, userStatusId: status.id }),
+      userRoles: { create: { roleId: adminRole.id } },
+    },
+  });
+  const adminCookie = await createSessionCookie(prisma, admin.id);
+
+  const created = await run(async () =>
+    newTenantAction({
+      request: await post("/system/tenants/new", adminCookie, {
+        name: "Medical Services",
+        slug: SLUG,
+        email: "medical@example.org",
+        phone: "+251 11 000 0000",
+      }),
+      params: { tenant: "system" },
+      context: {},
+    } as never),
+  );
+  expect(statusOf(created)).toBe(302);
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: SLUG } });
+
+  const member = async (roleId: string, firstName: string, lastName: string) => {
+    const user = await prisma.user.create({
+      data: {
+        ...buildUser({ tenantId: tenant.id, userStatusId: status.id }),
+        firstName,
+        lastName,
+        userRoles: { create: { roleId } },
+      },
+    });
+    return { id: user.id, cookie: await createSessionCookie(prisma, user.id) };
+  };
+  const orgType = await prisma.organizationType.create({
+    data: { code: "ROOT", name: "Root", level: 0 },
+  });
+
+  return {
+    tenant,
+    orgTypeId: orgType.id,
+    manager: await member(managerRole.id, "Musa", "Manager"),
+    focal: await member(focalRole.id, "Fatou", "Focal"),
+  };
+}
+
+type Arranged = Awaited<ReturnType<typeof arrange>>;
+type Listed = { id: string; type: string; title: string; read: boolean };
+
+/** What the bell shows this user: whether it is there, the count, the latest. */
+async function bell(cookie: string) {
+  const result = (await tenantLayoutLoader({
+    request: get(cookie, `/${SLUG}`),
+    params: { tenant: SLUG },
+    context: {},
+  } as never)) as unknown as {
+    data: { notifications: { enabled: boolean; unreadCount: number; recent: Listed[] } };
+  };
+  return result.data.notifications;
+}
+
+/** The inbox page as this user gets it. */
+async function inbox(cookie: string) {
+  const result = await run(() =>
+    inboxLoader({
+      request: get(cookie, `/${SLUG}/notifications`),
+      params: { tenant: SLUG },
+      context: {},
+    } as never),
+  );
+  const notifications =
+    (result as { data?: { notifications: Listed[] } }).data?.notifications ?? [];
+  return { status: statusOf(result), notifications };
+}
+
+/** Follow a notification the way a click on it does; returns where it leads. */
+async function open(cookie: string, notificationId: string) {
+  const result = await run(() =>
+    openNotificationLoader({
+      request: get(cookie, `/${SLUG}/notifications/${notificationId}/open`),
+      params: { tenant: SLUG, notificationId },
+      context: {},
+    } as never),
+  );
+  expect(statusOf(result)).toBe(302);
+  return (result as Response).headers.get("Location")!;
+}
+
+/** Load the change detail page a notification led to. */
+async function changePage(cookie: string, path: string) {
+  const changeId = path.split("/").pop()!;
+  const result = await run(() =>
+    changeDetailLoader({
+      request: get(cookie, path),
+      params: { tenant: SLUG, changeId },
+      context: {},
+    } as never),
+  );
+  return {
+    status: statusOf(result),
+    change: (result as { data?: { change: { id: string; status: string } } }).data?.change,
+  };
+}
+
+/** The focal person saves one draft per name, then sends them all for review together. */
+async function submitAsFocal(a: Arranged, names = ["Proposed Org"]): Promise<string[]> {
+  for (const name of names) {
+    await run(async () =>
+      organizationEditorAction({
+        request: await post(`/${SLUG}/directory/organizations/new`, a.focal.cookie, {
+          name,
+          typeId: a.orgTypeId,
+          isActive: "true",
+          sortOrder: "0",
+        }),
+        params: { tenant: SLUG },
+        context: {},
+      } as never),
+    );
+  }
+  const drafts = await prisma.changeRequest.findMany({
+    where: { tenantId: a.tenant.id, status: "DRAFT" },
+  });
+  expect(drafts).toHaveLength(names.length);
+  const body = new URLSearchParams(drafts.map((d) => ["ids[]", d.id]));
+  await run(() =>
+    submitDraftsAction({
+      request: new Request(`http://localhost/${SLUG}/directory/approvals/submit-drafts`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: a.focal.cookie,
+        },
+        body: body.toString(),
+      }),
+      params: { tenant: SLUG },
+      context: {},
+    } as never),
+  );
+  return drafts.map((d) => d.id);
+}
+
+async function decide(a: Arranged, changeId: string, verb: "approve" | "reject") {
+  const action = verb === "approve" ? approveAction : rejectAction;
+  const body: Record<string, string> = verb === "reject" ? { notes: "Already registered" } : {};
+  const result = await run(async () =>
+    action({
+      request: await post(
+        `/${SLUG}/directory/approvals/${changeId}/${verb}`,
+        a.manager.cookie,
+        body,
+      ),
+      params: { tenant: SLUG, changeId },
+      context: {},
+    } as never),
+  );
+  expect(statusOf(result)).toBe(302);
+}
+
+describe("in a tenant created through the UI", () => {
+  it("shows the bell and the inbox to a manager and to a focal person", async () => {
+    const a = await arrange();
+
+    for (const user of [a.manager, a.focal]) {
+      expect((await bell(user.cookie)).enabled).toBe(true);
+      expect((await inbox(user.cookie)).status).toBe(200);
+    }
+  });
+
+  it("a submission reaches the manager, who can open the change from it", async () => {
+    const a = await arrange();
+    const [changeId] = await submitAsFocal(a);
+
+    const shown = await bell(a.manager.cookie);
+    expect(shown.unreadCount).toBe(1);
+    expect(shown.recent).toHaveLength(1);
+    expect(shown.recent[0]).toMatchObject({ type: "directory.change.submitted", read: false });
+
+    const destination = await open(a.manager.cookie, shown.recent[0].id);
+    expect(destination).toBe(`/${SLUG}/directory/approvals/${changeId}`);
+    expect(await changePage(a.manager.cookie, destination)).toMatchObject({
+      status: 200,
+      change: { id: changeId, status: "PENDING" },
+    });
+    expect((await bell(a.manager.cookie)).unreadCount).toBe(0);
+  });
+
+  it("a submission of several changes opens the manager's approval queue", async () => {
+    const a = await arrange();
+    await submitAsFocal(a, ["First Office", "Second Office"]);
+
+    const shown = await bell(a.manager.cookie);
+    expect(shown.unreadCount).toBe(1);
+
+    expect(await open(a.manager.cookie, shown.recent[0].id)).toBe(`/${SLUG}/directory/approvals`);
+  });
+
+  it("an approval reaches the focal person, who can open the change from it", async () => {
+    const a = await arrange();
+    const [changeId] = await submitAsFocal(a);
+    await decide(a, changeId, "approve");
+
+    const listed = (await inbox(a.focal.cookie)).notifications;
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ type: "directory.change.approved", read: false });
+
+    const destination = await open(a.focal.cookie, listed[0].id);
+    expect(await changePage(a.focal.cookie, destination)).toMatchObject({
+      status: 200,
+      change: { id: changeId, status: "APPROVED" },
+    });
+    expect((await inbox(a.focal.cookie)).notifications[0].read).toBe(true);
+  });
+
+  it("a rejection reaches the focal person, who can open the change from it", async () => {
+    const a = await arrange();
+    const [changeId] = await submitAsFocal(a);
+    await decide(a, changeId, "reject");
+
+    const shown = await bell(a.focal.cookie);
+    expect(shown.unreadCount).toBe(1);
+    expect(shown.recent[0]).toMatchObject({ type: "directory.change.rejected" });
+
+    const destination = await open(a.focal.cookie, shown.recent[0].id);
+    expect(await changePage(a.focal.cookie, destination)).toMatchObject({
+      status: 200,
+      change: { id: changeId, status: "REJECTED" },
+    });
+  });
+
+  it("does not let one user open another user's notification", async () => {
+    const a = await arrange();
+    await submitAsFocal(a);
+    const toManager = (await bell(a.manager.cookie)).recent[0];
+
+    const result = await run(() =>
+      openNotificationLoader({
+        request: get(a.focal.cookie, `/${SLUG}/notifications/${toManager.id}/open`),
+        params: { tenant: SLUG, notificationId: toManager.id },
+        context: {},
+      } as never),
+    );
+
+    expect(statusOf(result)).toBe(404);
+    expect((await bell(a.manager.cookie)).unreadCount).toBe(1);
+  });
+});
