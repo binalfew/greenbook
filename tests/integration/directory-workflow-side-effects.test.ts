@@ -25,10 +25,10 @@ async function arrange() {
   const passwordHash = await hash("test-password", 4);
 
   const focalRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "focal", scope: "TENANT" },
+    data: { name: "focal", scope: "TENANT" },
   });
   const managerRole = await prisma.role.create({
-    data: { tenantId: tenant.id, name: "manager", scope: "TENANT" },
+    data: { name: "manager", scope: "TENANT" },
   });
 
   async function grant(roleId: string, resource: string, action: string) {
@@ -91,6 +91,7 @@ async function arrange() {
 
   return {
     tenantId: tenant.id,
+    slug: tenant.slug,
     focalId: focal.id,
     managerId: manager.id,
     focalSession: await createSessionCookie(prisma, focal.id),
@@ -122,13 +123,13 @@ type Arranged = Awaited<ReturnType<typeof arrange>>;
 async function submitAsFocal(a: Arranged): Promise<string> {
   await run(() =>
     organizationEditorAction({
-      request: post("/system/directory/organizations/new", a.focalSession, {
+      request: post(`/${a.slug}/directory/organizations/new`, a.focalSession, {
         name: "Proposed Org",
         typeId: a.orgTypeId,
         isActive: "true",
         sortOrder: "0",
       }),
-      params: { tenant: "system" },
+      params: { tenant: a.slug },
       context: {},
     }),
   );
@@ -163,8 +164,8 @@ describe("directory workflow notifications and audit trail", () => {
 
     const response = await run(() =>
       approveAction({
-        request: post(`/system/directory/approvals/${changeId}/approve`, a.managerSession, {}),
-        params: { tenant: "system", changeId },
+        request: post(`/${a.slug}/directory/approvals/${changeId}/approve`, a.managerSession, {}),
+        params: { tenant: a.slug, changeId },
         context: {},
       } as Parameters<typeof approveAction>[0]),
     );
@@ -196,10 +197,10 @@ describe("directory workflow notifications and audit trail", () => {
 
     const response = await run(() =>
       rejectAction({
-        request: post(`/system/directory/approvals/${changeId}/reject`, a.managerSession, {
+        request: post(`/${a.slug}/directory/approvals/${changeId}/reject`, a.managerSession, {
           notes: "Duplicate of an existing office",
         }),
-        params: { tenant: "system", changeId },
+        params: { tenant: a.slug, changeId },
         context: {},
       } as Parameters<typeof rejectAction>[0]),
     );
