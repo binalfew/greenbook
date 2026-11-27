@@ -29,12 +29,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   const diffs = await computeDiff(change);
-  return data({ change, diffs, currentUserId: user.id, canReview });
+  // Reviewers go back to the approvals queue; a submitter without review
+  // access goes back to their own submissions list.
+  const backHref = canReview
+    ? `/${params.tenant}/directory/approvals`
+    : `/${params.tenant}/directory/submissions`;
+  return data({ change, diffs, currentUserId: user.id, canReview, backHref });
 }
 
 export default function ChangeDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
-  const { change, diffs, currentUserId, canReview } = loaderData;
+  const { change, diffs, currentUserId, canReview, backHref } = loaderData;
   const base = `/${params.tenant}/directory/approvals`;
   const entitySegment = directoryEntitySegment(change.entityType);
   const entityHref = change.entityId
@@ -55,7 +60,7 @@ export default function ChangeDetailLayout({ loaderData, params }: Route.Compone
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link to={isMine && !canReview ? `${base}/mine` : base}>
+          <Link to={backHref}>
             <ArrowLeft className="mr-1 size-4" />
             {t("actions.back")}
           </Link>
