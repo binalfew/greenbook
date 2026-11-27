@@ -2,7 +2,7 @@
 
 > **Phase**: bring-up · **Run on**: App VM (`auishqosrgbwbs01`) · **Time**: ~30 min
 >
-> Host-installed nginx as the App VM's inner-tier reverse proxy. Listens on plain HTTP from the DMZ VM only (172.16.177.50), routes by `Host:` header to the right docker container on `127.0.0.1`, applies inner-tier rate limits, and serves greenbook's PWA cache headers. Tuned for React Router 7's streaming SSR + SSE (`proxy_buffering off`, long `proxy_read_timeout`) and correlation-ID forwarding.
+> Host-installed nginx as the App VM's inner-tier reverse proxy. Listens on plain HTTP from the DMZ VM only (172.16.177.50), routes by `Host:` header to the right docker container on `127.0.0.1`, applies inner-tier rate limits, and serves greenbook's PWA cache headers. Tuned for React Router 7's streaming SSR (`proxy_buffering off`, long `proxy_read_timeout`) and correlation-ID forwarding.
 >
 > **TLS lives on the DMZ VM, not here** — the App VM never holds the wildcard cert and never accepts public traffic. See [12 — DMZ shared reverse proxy](12-dmz-reverse-proxy.md) for cert installation and the public-facing edge.
 >
@@ -207,7 +207,7 @@ server {
         proxy_request_buffering on;
     }
 
-    # Catch-all → docker container (SSR + SSE + API). Streaming-aware
+    # Catch-all → docker container (SSR + API). Streaming-aware
     # buffering (off) per-location, NOT in the shared snippet — see the
     # NOTE in app-vm-proxy-headers.conf for why.
     location / {

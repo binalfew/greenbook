@@ -30,23 +30,26 @@ log.info({ action: "create" }, "creating record"); // automatically tagged with 
 
 ## Request logger
 
-`server/request-logger.js` — logs `incoming request` on arrival and `request completed` on finish. Skips Vite/HMR assets, favicons, service worker, SSE long-polls, and icon paths. Log level auto-scales to request status: `info` for 2xx/3xx, `warn` for 4xx, `error` for 5xx.
+`server/request-logger.js` — logs `incoming request` on arrival and `request completed` on finish. Skips Vite/HMR assets, favicons, the service worker, and icon paths. Log level auto-scales to request status: `info` for 2xx/3xx, `warn` for 4xx, `error` for 5xx.
 
 ## CORS
 
-`server/security.ts` ships a `corsMiddleware` configured from `CORS_ORIGINS` (comma-separated, defaults to `http://localhost:3000`). Allows: `X-CSRF-Token`, `X-API-Key`, `If-Match`, `Idempotency-Key`, `X-Correlation-Id`, `X-Request-Id`. Credentials mode is on.
+`server/security.ts` ships a `corsMiddleware` configured from `CORS_ORIGINS` (comma-separated, defaults to `http://localhost:3000`). Allowed request headers: `Content-Type`, `X-CSRF-Token`, `If-Match`, `X-Correlation-Id`, `X-Request-Id`. Credentials mode is on.
+
+`requireSameOrigin`, mounted right after it in `server/app.ts`, refuses state-changing requests whose `Origin` is not the app's own (`APP_URL` plus the `CORS_ORIGINS` list).
 
 ## Rate limiting
 
-Three pre-configured limiters in `server/security.ts`:
+Four limiters in `server/security.ts`, all mounted in `server/app.ts`:
 
-| Name              | Window | Limit | Scope                      | Mounted                                                 |
-| ----------------- | ------ | ----- | -------------------------- | ------------------------------------------------------- |
-| `generalLimiter`  | 15 min | 300   | Every request              | Globally via `app.use(generalLimiter)` in server/app.ts |
-| `mutationLimiter` | 1 min  | 50    | POST/PUT/PATCH/DELETE only | Not mounted — apps mount where needed                   |
-| `authLimiter`     | 1 min  | 10    | Every request              | Not mounted — apps mount on `/login`, `/signup`, etc.   |
+| Name              | Window | Limit | Scope                      | Mounted                                                                                                              |
+| ----------------- | ------ | ----- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `generalLimiter`  | 15 min | 300   | Every request              | Globally via `app.use(generalLimiter)` in server/app.ts                                                              |
+| `mutationLimiter` | 1 min  | 50    | POST/PUT/PATCH/DELETE only | Globally via `app.use(mutationLimiter)`                                                                              |
+| `authLimiter`     | 1 min  | 10    | Non-GET requests           | On `AUTH_LIMITED_PATHS` — login, forgot/reset password, verify, change-expired-password, accept-invite, SSO callback |
+| `searchLimiter`   | 1 min  | 15    | Every request              | On `/api/search-people`                                                                                              |
 
-Limits are keyed per-user when authenticated, per-IP otherwise. Health checks (`/up`, `/healthz`) are skipped. Override `generalLimiter` via `RATE_LIMIT_WINDOW_MS` + `RATE_LIMIT_MAX_REQUESTS` env vars.
+Limits are keyed per-user when authenticated, per-IP otherwise. Health checks (`/up`, `/healthz`) are skipped. Override `generalLimiter` via `RATE_LIMIT_WINDOW_MS` + `RATE_LIMIT_MAX_REQUESTS`, and `searchLimiter` via `RATE_LIMIT_SEARCH_WINDOW_MS` + `RATE_LIMIT_SEARCH_MAX`.
 
 ## Rate-limit audit
 
@@ -70,7 +73,7 @@ onShutdown(() => redis.quit());
 onShutdown(async () => await queueDrainer.drain());
 ```
 
-A single `SIGTERM` / `SIGINT` handler in `server/app.ts` runs every hook in registration order, awaits async ones, swallows individual failures, and exits cleanly. Phase 13 registers two hooks by default: `flushRateLimitBuffer` + `stopJobProcessor`.
+A single `SIGTERM` / `SIGINT` handler in `server/app.ts` runs every hook in registration order, awaits async ones, swallows individual failures, and exits cleanly. One hook is registered by default: `flushRateLimitBuffer`.
 
 ## Env additions
 
@@ -86,24 +89,22 @@ A single `SIGTERM` / `SIGINT` handler in `server/app.ts` runs every hook in regi
 
 ## Logger sweep
 
-Every `console.info/warn/error/debug` in server-only files from phases 6–12 got rewritten to `logger.*`. Files touched (the webhook services swept at the time have since been removed):
+Every `console.info/warn/error/debug` in server-only files from phases 6–12 got rewritten to `logger.*`. Files touched that still exist (the webhook and job-queue files swept at the time have since been removed):
 
 - `app/services/sso.server.ts`
 - `app/utils/auth/audit.server.ts`, `app/utils/auth/sso-state.server.ts`
-- `app/utils/events/job-handlers.server.ts`, `app/utils/events/job-queue.server.ts`
 
 Files outside `app/` (namely `public/sw.js` and `tests/**`) were deliberately NOT touched.
 
 ## Deviations
 
 - **Migration baseline skipped.** Template continues to ship with `db push`.
-- **No helmet wiring.** Template ships `@nichtsam/helmet` as a dep but `server/app.ts` doesn't apply it. A production-grade CSP needs app-specific decisions about `unsafe-inline`, worker-src, blob:, and nonce plumbing.
+- **Content-Security-Policy is set in `app/entry.server.tsx`, not in Express.** It uses `contentSecurity` from `@nichtsam/helmet` with a per-request nonce; `server/app.ts` applies no helmet middleware of its own.
 - **No suspicious-request blocker.** Aggressive and false-positive-prone in dev.
-- **No `/healthz` / `/up` route.** `skipHealthCheck` in the rate limiter handles both paths, but no actual route is mounted.
+- **Health routes.** `app/routes/healthz.tsx` (process + database) and `app/routes/up.tsx` (process only) exist; `skipHealthCheck` keeps both out of the rate limiters.
 - **Sentry replay not wired.** Client init references sample rates but the `Replay` integration isn't installed.
-- **`mutationLimiter` and `authLimiter` are not mounted.** Apps mount them where appropriate.
 - **Rate-limit buffer is in-process.** Not Redis-backed. Multi-process deploys need `rate-limit-redis`.
 - **Request-logger skiplist is hand-curated.** Apps adding high-traffic endpoints should add patterns to `request-logger.js`.
 - **`trust proxy` is hardcoded to `1`.** Multi-hop deployments bump this; same-host deploys set it to `false`.
 - **`public/sw.js` keeps `console.*`** — it runs outside the bundler.
-- **Suspicious-request blocker, nonce middleware, permissions-policy header, and a hardened helmet CSP are intentionally NOT shipped.**
+- **No suspicious-request blocker and no permissions-policy header are shipped.**
