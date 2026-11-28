@@ -1,300 +1,230 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpenCheck, CheckCircle2, Languages, Network, ShieldCheck, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CircleAlert, Eye, EyeOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import logoUrl from "~/assets/logo.svg";
-import { LanguageSwitcher } from "~/components/language-switcher";
-import type { SupportedLanguage } from "~/utils/i18n";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { cn } from "~/utils/misc";
 
-// Rotating editorial highlights — what a visitor will find inside Greenbook.
-// Rewrite freely; the panel advances every 6s and supports click-to-select.
-const HIGHLIGHTS = [
-  {
-    icon: BookOpenCheck,
-    title: "A living directory of the African Union",
-    body: "Organizations, people, and positions — searchable, verified, and kept current by each participating body's editorial team.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Editorial workflow, end to end",
-    body: "Focal persons submit changes, managers review and approve, and every entry carries a full audit trail before it publishes.",
-  },
-  {
-    icon: Network,
-    title: "Reporting lines made visible",
-    body: "Walk the chain from any post up to its principal organ. Successions, transitions, and acting roles are all tracked.",
-  },
-];
+/** Small-caps line used for the imprint and section labels. */
+export const AUTH_SMALL_CAPS = "text-xs font-medium tracking-[0.14em] uppercase";
 
-// Counts up to `target` when the element scrolls into view. Runs once.
-function useCountUp(target: number, duration = 1500) {
-  const [value, setValue] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const counted = useRef(false);
+/** Every text input on an auth page: 44px tall, 16px text so iOS does not zoom. */
+export const AUTH_INPUT = "h-11 rounded-sm text-base";
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !counted.current) {
-          counted.current = true;
-          const start = performance.now();
-          const tick = (now: number) => {
-            const progress = Math.min((now - start) / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setValue(Math.round(eased * target));
-            if (progress < 1) requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-        }
-      },
-      { threshold: 0.5 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [target, duration]);
+/** Every full-width action on an auth page. */
+export const AUTH_BUTTON =
+  "h-11 w-full rounded-sm text-base font-medium transition-[color,background-color,box-shadow,transform] active:scale-[0.96] motion-reduce:active:scale-100";
 
-  return { value, ref };
-}
+/** A text link with a 44px-tall hit area. */
+export const AUTH_TEXT_LINK =
+  "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-sm underline-offset-4 transition-colors hover:underline";
 
-function useParallax() {
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const panelRef = useRef<HTMLDivElement>(null);
+// A hairline, then two sheets peeking out underneath, then the lift off the desk.
+const PAGE_STACK =
+  "shadow-[0_0_0_1px_rgb(0_0_0/0.08),3px_3px_0_-1px_var(--paper),3px_3px_0_0_rgb(0_0_0/0.08),6px_6px_0_-1px_var(--paper),6px_6px_0_0_rgb(0_0_0/0.08),0_24px_48px_-16px_rgb(0_0_0/0.25)]";
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    const rect = panel.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-    const y = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-    setOffset({ x, y });
-  }, []);
+const GUTTER =
+  "bg-[linear-gradient(to_right,transparent,rgb(0_0_0/0.07)_48%,rgb(0_0_0/0.12)_50%,rgb(0_0_0/0.07)_52%,transparent)]";
 
-  const handleMouseLeave = useCallback(() => setOffset({ x: 0, y: 0 }), []);
-
-  return { offset, panelRef, handleMouseMove, handleMouseLeave };
-}
-
-/**
- * Branded left panel — only visible on large screens. Rotates editorial
- * highlights, animates stats on scroll-in, and tracks the cursor for a subtle
- * parallax effect. Greenbook-branded (African Union directory).
- */
-export function BrandedPanel() {
-  const [highlightIdx, setHighlightIdx] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setHighlightIdx((i) => (i + 1) % HIGHLIGHTS.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
-  const highlight = HIGHLIGHTS[highlightIdx];
-  const HighlightIcon = highlight.icon;
-
-  const stat1 = useCountUp(55);
-  const stat2 = useCountUp(5);
-  const stat3 = useCountUp(100);
-
-  const { offset, panelRef, handleMouseMove, handleMouseLeave } = useParallax();
-
-  return (
-    <div
-      ref={panelRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="from-primary via-primary/90 to-primary/80 dark:from-primary/80 dark:via-primary/70 dark:to-primary/60 relative hidden overflow-hidden bg-gradient-to-br lg:flex lg:w-1/2"
-    >
-      {/* Dotted grid backdrop */}
-      <div className="absolute inset-0 opacity-[0.07]">
-        <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="1" fill="currentColor" className="text-primary-foreground" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
-      {/* Parallax floating blobs */}
-      <div
-        className="bg-primary-foreground/[0.06] absolute top-20 left-16 size-72 animate-[float_20s_ease-in-out_infinite] rounded-full blur-3xl transition-transform duration-700 ease-out"
-        style={{ transform: `translate(${offset.x * 20}px, ${offset.y * 20}px)` }}
-      />
-      <div
-        className="bg-primary-foreground/[0.06] absolute right-12 bottom-24 size-56 animate-[float_25s_ease-in-out_infinite_2s] rounded-full blur-3xl transition-transform duration-700 ease-out"
-        style={{ transform: `translate(${offset.x * -15}px, ${offset.y * -15}px)` }}
-      />
-      <div
-        className="bg-primary-foreground/[0.04] absolute top-1/3 right-1/3 size-40 animate-[float_18s_ease-in-out_infinite_4s] rounded-full blur-2xl transition-transform duration-700 ease-out"
-        style={{ transform: `translate(${offset.x * 10}px, ${offset.y * -10}px)` }}
-      />
-
-      {/* Decorative rings */}
-      <div className="border-primary-foreground/[0.08] absolute -bottom-32 -left-32 size-96 rounded-full border" />
-      <div className="border-primary-foreground/[0.06] absolute -top-24 -right-24 size-72 rounded-full border" />
-
-      <div className="text-primary-foreground relative z-10 flex flex-col justify-between p-12">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="bg-primary-foreground/15 flex size-28 items-center justify-center rounded-3xl shadow-xl shadow-black/10 backdrop-blur-sm">
-            <img src={logoUrl} alt="" className="size-20 object-contain brightness-0 invert" />
-          </div>
-          <div>
-            <span className="text-xl font-bold tracking-tight">Greenbook</span>
-            <p className="text-primary-foreground/50 text-[11px] tracking-widest uppercase">
-              African Union Directory
-            </p>
-          </div>
-        </div>
-
-        {/* Rotating editorial highlight */}
-        <div className="max-w-lg space-y-10">
-          <div key={highlightIdx} className="animate-[testimonialIn_0.6s_ease-out] space-y-6">
-            <div className="bg-primary-foreground/15 flex size-12 items-center justify-center rounded-xl backdrop-blur-sm">
-              <HighlightIcon className="size-6" />
-            </div>
-            <div className="space-y-4">
-              <p className="text-[1.7rem] leading-snug font-semibold tracking-tight">
-                {highlight.title}
-              </p>
-              <p className="text-primary-foreground/70 max-w-md text-base leading-relaxed">
-                {highlight.body}
-              </p>
-            </div>
-
-            <div className="flex gap-2">
-              {HIGHLIGHTS.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setHighlightIdx(i)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i === highlightIdx
-                      ? "bg-primary-foreground/70 w-6"
-                      : "bg-primary-foreground/25 hover:bg-primary-foreground/40 w-1.5"
-                  }`}
-                  aria-label={`Highlight ${i + 1}`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Feature pills */}
-          <div className="flex flex-wrap gap-3">
-            {[
-              { icon: ShieldCheck, label: "Editorial workflow" },
-              { icon: Network, label: "Reporting hierarchy" },
-              { icon: Languages, label: "English & French" },
-              { icon: Users, label: "Focal-person roles" },
-            ].map(({ icon: Icon, label }) => (
-              <div
-                key={label}
-                className="bg-primary-foreground/10 hover:bg-primary-foreground/15 flex items-center gap-2 rounded-full px-4 py-2 text-sm backdrop-blur-sm transition-colors"
-              >
-                <Icon className="size-3.5" />
-                {label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom stats + footer */}
-        <div className="space-y-6">
-          <div className="flex gap-8">
-            <div ref={stat1.ref}>
-              <p className="animate-[countUp_0.8s_ease-out] text-2xl font-bold">{stat1.value}</p>
-              <p className="text-primary-foreground/50 text-xs">Member states</p>
-            </div>
-            <div className="bg-primary-foreground/10 h-10 w-px" />
-            <div ref={stat2.ref}>
-              <p className="animate-[countUp_0.8s_ease-out_0.2s_both] text-2xl font-bold">
-                {stat2.value}
-              </p>
-              <p className="text-primary-foreground/50 text-xs">Regional groups</p>
-            </div>
-            <div className="bg-primary-foreground/10 h-10 w-px" />
-            <div ref={stat3.ref}>
-              <p className="animate-[countUp_0.8s_ease-out_0.4s_both] text-2xl font-bold">
-                {stat3.value}%
-              </p>
-              <p className="text-primary-foreground/50 text-xs">Reviewed before publish</p>
-            </div>
-          </div>
-          <p className="text-primary-foreground/30 text-xs">
-            &copy; {new Date().getFullYear()} African Union Commission. Greenbook directory.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export type RightPanelProps = {
+export type AuthBookProps = {
   children: React.ReactNode;
-  /** Current resolved language. When provided the top-bar renders a switcher. */
-  currentLanguage?: SupportedLanguage;
-  /** Optional allowlist of language codes (defaults to all supported). */
-  allowedLanguages?: readonly string[];
 };
 
 /**
- * Right-side container for auth routes. Hosts the language switcher (top-bar),
- * a mobile-only logo, the route content, and trust-signal microcopy.
+ * The frame every `_auth/*` page sits in: the Greenbook lying open on a desk.
+ * The left page is the title page and never changes; the route renders on the
+ * right page. On narrow screens the two pages stack.
  */
-export function RightPanel({ children, currentLanguage, allowedLanguages }: RightPanelProps) {
+export function AuthBook({ children }: AuthBookProps) {
+  const { t } = useTranslation("auth");
+
   return (
-    <div className="bg-background flex w-full flex-col lg:w-1/2">
-      <div className="flex justify-end p-4">
-        {currentLanguage && (
-          <LanguageSwitcher currentLanguage={currentLanguage} allowed={allowedLanguages} />
-        )}
-      </div>
+    <div className="bg-muted flex min-h-svh flex-col">
+      <main className="flex flex-1 items-center justify-center px-4 py-10">
+        <div
+          className={cn(
+            "bg-paper relative grid w-full max-w-[62rem] rounded-sm md:min-h-[36rem] md:grid-cols-2",
+            PAGE_STACK,
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-y-0 left-1/2 hidden w-16 -translate-x-1/2 md:block",
+              GUTTER,
+            )}
+          />
 
-      <div className="flex flex-1 flex-col justify-center px-6 pb-12 lg:px-16 xl:px-24">
-        <div className="mb-10 flex items-center gap-3 lg:hidden">
-          <div className="bg-primary text-primary-foreground shadow-primary/25 flex size-20 items-center justify-center rounded-3xl shadow-xl">
-            <img src={logoUrl} alt="" className="size-14 object-contain brightness-0 invert" />
-          </div>
-          <div>
-            <span className="text-xl font-bold tracking-tight">Greenbook</span>
-            <p className="text-muted-foreground text-[11px] tracking-widest uppercase">
-              African Union Directory
+          <section className="flex flex-col items-center justify-between gap-8 px-6 pt-10 pb-2 text-center sm:px-12 md:py-14">
+            <div className="flex flex-col items-center gap-5 md:my-auto">
+              <span className="outline-gilt/60 bg-primary flex size-24 items-center justify-center rounded-full outline outline-offset-[-5px]">
+                <img
+                  src={logoUrl}
+                  alt=""
+                  width={77}
+                  height={77}
+                  className="size-[80%] brightness-0 invert"
+                />
+              </span>
+              <p className="font-serif text-5xl leading-none tracking-tight lg:text-6xl">
+                Greenbook
+              </p>
+              <span className="bg-gilt h-px w-16" />
+              <p className="text-muted-foreground max-w-[26ch] font-serif text-base text-pretty italic">
+                {t("brandSubtitle")}
+              </p>
+            </div>
+            <p
+              className={cn(AUTH_SMALL_CAPS, "text-muted-foreground hidden tabular-nums md:block")}
+            >
+              {t("brandImprint", { year: new Date().getFullYear() })}
             </p>
-          </div>
-        </div>
+          </section>
 
-        {children}
-
-        <div className="mt-10 flex flex-col items-center gap-3">
-          <div className="text-muted-foreground/50 flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-xs">
-              <ShieldCheck className="size-3" />
-              <span>Editorial workflow</span>
-            </div>
-            <div className="bg-muted-foreground/20 size-1 rounded-full" />
-            <div className="flex items-center gap-1.5 text-xs">
-              <CheckCircle2 className="size-3" />
-              <span>Verified records</span>
-            </div>
-          </div>
+          <section className="flex flex-col justify-center gap-6 px-6 py-10 sm:px-12 md:py-14">
+            {children}
+          </section>
         </div>
+      </main>
+    </div>
+  );
+}
+
+/** The heading block at the top of the right page. */
+export function AuthHeading({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className={cn(AUTH_SMALL_CAPS, "text-primary")}>{eyebrow}</p>
+      <h1 className="font-serif text-3xl leading-tight tracking-tight text-balance">{title}</h1>
+      {description ? (
+        <p className="text-muted-foreground text-[15px] text-pretty">{description}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A small-caps label over a group of controls ("With your organization"). */
+export function AuthSectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className={cn(AUTH_SMALL_CAPS, "text-muted-foreground")}>{children}</p>;
+}
+
+/** A message about the whole form (wrong password, failed SSO round trip). */
+export function AuthFormError({
+  id,
+  errors,
+}: {
+  id?: string;
+  errors?: Array<string | null | undefined> | null;
+}) {
+  const messages = errors?.filter(Boolean);
+  if (!messages?.length) return null;
+  return (
+    <div
+      id={id}
+      role="alert"
+      className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-sm border px-3.5 py-3 text-sm"
+    >
+      <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <div className="flex flex-col gap-1">
+        {messages.map((message) => (
+          <p key={message}>{message}</p>
+        ))}
       </div>
     </div>
   );
 }
 
-/**
- * Simple content wrapper applied to each auth route. Constrains width and
- * fades in on mount so route transitions feel intentional.
- */
-export function AuthContent({
-  children,
-  maxWidth = "max-w-sm",
+/** A message about one field, rendered directly under it. */
+export function AuthFieldError({
+  id,
+  errors,
 }: {
+  id?: string;
+  errors?: Array<string | null | undefined> | null;
+}) {
+  const messages = errors?.filter(Boolean);
+  if (!messages?.length) return null;
+  return (
+    <p id={id} className="text-destructive flex items-start gap-1.5 text-sm">
+      <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span>{messages.join(" ")}</span>
+    </p>
+  );
+}
+
+/**
+ * Focus a field when it appears — after hydration, so server and client markup
+ * agree — and never on touch, where it would throw the keyboard open. Runs
+ * again only when `enabled` turns on, so a re-render never steals focus back.
+ */
+export function useFocusOnMount<T extends HTMLElement = HTMLInputElement>(enabled = true) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (enabled && !("ontouchstart" in window)) ref.current?.focus();
+  }, [enabled]);
+  return ref;
+}
+
+/** A password input with a show/hide button laid over its right edge. */
+export function PasswordInput({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof Input>, "type">) {
+  const { t } = useTranslation("auth");
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        {...props}
+        type={shown ? "text" : "password"}
+        className={cn(AUTH_INPUT, "pr-11", className)}
+      />
+      <button
+        type="button"
+        onClick={() => setShown((v) => !v)}
+        aria-label={shown ? t("hidePassword") : t("showPassword")}
+        aria-pressed={shown}
+        className="text-muted-foreground hover:text-foreground absolute top-0 right-0 flex size-11 items-center justify-center rounded-sm transition-colors"
+      >
+        {shown ? (
+          <EyeOff className="size-4" aria-hidden="true" />
+        ) : (
+          <Eye className="size-4" aria-hidden="true" />
+        )}
+      </button>
+    </div>
+  );
+}
+
+/** The submit button: disabled, with a spinner and its own label, while the form is in flight. */
+export function AuthSubmit({
+  pending,
+  pendingLabel,
+  children,
+}: {
+  pending: boolean;
+  /** Shown while pending; the idle label stays when omitted. */
+  pendingLabel?: string;
   children: React.ReactNode;
-  maxWidth?: string;
 }) {
   return (
-    <div className={`mx-auto w-full ${maxWidth} animate-[fadeIn_0.5s_ease-out]`}>{children}</div>
+    <Button type="submit" disabled={pending} className={cn(AUTH_BUTTON, "gap-2")}>
+      {pending ? (
+        <span
+          aria-hidden="true"
+          className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none"
+        />
+      ) : null}
+      {pending && pendingLabel ? pendingLabel : children}
+    </Button>
   );
 }

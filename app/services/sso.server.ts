@@ -88,6 +88,19 @@ export async function getActiveSSOConfigurations() {
   });
 }
 
+/**
+ * True when an active provider requires SSO. The login page then hides the
+ * password form and refuses password sign-in to everyone but the global admin,
+ * who keeps it so a broken identity provider cannot lock the platform out.
+ * An inactive provider enforces nothing.
+ */
+export async function isSSOEnforced(): Promise<boolean> {
+  const enforcing = await prisma.sSOConfiguration.count({
+    where: { isActive: true, enforceSSO: true },
+  });
+  return enforcing > 0;
+}
+
 export async function getSSOConfigById(id: string) {
   return prisma.sSOConfiguration.findUnique({ where: { id } });
 }
@@ -107,6 +120,7 @@ export async function createSSOConfiguration(input: CreateSSOConfigInput, ctx: S
       callbackUrl: input.callbackUrl,
       autoProvision: input.autoProvision === "on",
       enforceSSO: input.enforceSSO === "on",
+      isActive: input.isActive === "on",
       defaultRoleId: input.defaultRoleId || undefined,
       x509Certificate: input.x509Certificate || undefined,
       ssoUrl: input.ssoUrl || undefined,
@@ -143,6 +157,7 @@ export async function updateSSOConfiguration(
       callbackUrl: input.callbackUrl,
       autoProvision: input.autoProvision === "on",
       enforceSSO: input.enforceSSO === "on",
+      isActive: input.isActive === "on",
       defaultRoleId: input.defaultRoleId || null,
       ...(input.x509Certificate ? { x509Certificate: input.x509Certificate } : {}),
       ssoUrl: input.ssoUrl || null,

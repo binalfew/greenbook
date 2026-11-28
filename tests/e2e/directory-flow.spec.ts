@@ -17,7 +17,7 @@ async function login(page: import("@playwright/test").Page, email: string, passw
   await page.getByRole("textbox", { name: "Password" }).fill(password);
   await Promise.all([
     page.waitForResponse((r) => r.url().includes("/login") && r.request().method() === "POST"),
-    page.getByRole("button", { name: /log in/i }).click(),
+    page.getByRole("button", { name: /sign in/i }).click(),
   ]);
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 15_000 });
 }

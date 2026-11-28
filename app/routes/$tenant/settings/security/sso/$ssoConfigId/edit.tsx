@@ -106,6 +106,7 @@ export default function EditSSOConfigPage({
       callbackUrl: config.callbackUrl,
       autoProvision: config.autoProvision ? "on" : "",
       enforceSSO: config.enforceSSO ? "on" : "",
+      isActive: config.isActive ? "on" : "",
       defaultRoleId: config.defaultRoleId ?? "",
       x509Certificate: config.x509Certificate ?? "",
       ssoUrl: config.ssoUrl ?? "",
@@ -300,6 +301,12 @@ export default function EditSSOConfigPage({
                 <CheckboxField meta={fields.enforceSSO} />
                 <label htmlFor={fields.enforceSSO.id} className="cursor-pointer text-sm">
                   {t("enforceSsoLabel")}
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckboxField meta={fields.isActive} />
+                <label htmlFor={fields.isActive.id} className="cursor-pointer text-sm">
+                  {t("isActiveLabel")}
                 </label>
               </div>
             </div>

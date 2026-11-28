@@ -4,12 +4,16 @@ import { Form, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { HoneypotInputs } from "remix-utils/honeypot/react";
 import { z } from "zod";
-import { ErrorList } from "~/components/error-list";
+import {
+  AuthFieldError,
+  AuthFormError,
+  AuthHeading,
+  AuthSubmit,
+  PasswordInput,
+  useFocusOnMount,
+} from "~/components/auth/auth-layout";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
-import { StatusButton } from "~/components/ui/status-button";
+import { Label } from "~/components/ui/label";
 import { writeAudit } from "~/utils/auth/audit.server";
 import {
   addPasswordToHistory,
@@ -157,74 +161,70 @@ export async function action({ request }: Route.ActionArgs) {
 export default function ChangeExpiredPasswordRoute({ actionData }: Route.ComponentProps) {
   const isPending = useIsPending();
   const { t } = useTranslation("auth");
+  const currentRef = useFocusOnMount();
 
   const { form, fields } = useForm(ChangeExpiredPasswordSchema, {
     id: "change-expired-password-form",
     lastResult: actionData?.result,
   });
+  const {
+    key: currentKey,
+    type: _currentType,
+    ...currentProps
+  } = getInputProps(fields.currentPassword, { type: "password" });
+  const {
+    key: newKey,
+    type: _newType,
+    ...newProps
+  } = getInputProps(fields.newPassword, { type: "password" });
+  const {
+    key: confirmKey,
+    type: _confirmType,
+    ...confirmProps
+  } = getInputProps(fields.confirmPassword, { type: "password" });
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("changeExpiredTitle")}</CardTitle>
-            <CardDescription>{t("changeExpiredSubtitle")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form method="POST" {...getFormProps(form)}>
-              <AuthenticityTokenInput />
-              <HoneypotInputs />
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor={fields.currentPassword.id}>
-                    {t("currentPassword")}
-                  </FieldLabel>
-                  <Input
-                    {...getInputProps(fields.currentPassword, { type: "password" })}
-                    key={fields.currentPassword.key}
-                    autoFocus
-                  />
-                  {fields.currentPassword.errors && (
-                    <FieldError>{fields.currentPassword.errors}</FieldError>
-                  )}
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={fields.newPassword.id}>{t("newPassword")}</FieldLabel>
-                  <Input
-                    {...getInputProps(fields.newPassword, { type: "password" })}
-                    key={fields.newPassword.key}
-                  />
-                  {fields.newPassword.errors && (
-                    <FieldError>{fields.newPassword.errors}</FieldError>
-                  )}
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={fields.confirmPassword.id}>
-                    {t("confirmPassword")}
-                  </FieldLabel>
-                  <Input
-                    {...getInputProps(fields.confirmPassword, { type: "password" })}
-                    key={fields.confirmPassword.key}
-                  />
-                  {fields.confirmPassword.errors && (
-                    <FieldError>{fields.confirmPassword.errors}</FieldError>
-                  )}
-                </Field>
-                <ErrorList errors={form.errors} id={form.errorId} />
-                <StatusButton
-                  className="w-full"
-                  status={isPending ? "pending" : (form.status ?? "idle")}
-                  type="submit"
-                  disabled={isPending}
-                >
-                  {t("changePasswordButton")}
-                </StatusButton>
-              </FieldGroup>
-            </Form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <>
+      <AuthHeading
+        eyebrow={t("accountSecurity")}
+        title={t("changeExpiredTitle")}
+        description={t("changeExpiredSubtitle")}
+      />
+
+      <Form method="POST" {...getFormProps(form)} className="flex flex-col gap-4">
+        <AuthenticityTokenInput />
+        <HoneypotInputs />
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields.currentPassword.id}>{t("currentPassword")}</Label>
+          <PasswordInput
+            ref={currentRef}
+            key={currentKey}
+            {...currentProps}
+            autoComplete="current-password"
+          />
+          <AuthFieldError
+            id={fields.currentPassword.errorId}
+            errors={fields.currentPassword.errors}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields.newPassword.id}>{t("newPassword")}</Label>
+          <PasswordInput key={newKey} {...newProps} autoComplete="new-password" />
+          <AuthFieldError id={fields.newPassword.errorId} errors={fields.newPassword.errors} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields.confirmPassword.id}>{t("confirmPassword")}</Label>
+          <PasswordInput key={confirmKey} {...confirmProps} autoComplete="new-password" />
+          <AuthFieldError
+            id={fields.confirmPassword.errorId}
+            errors={fields.confirmPassword.errors}
+          />
+        </div>
+
+        <AuthFormError id={form.errorId} errors={form.errors} />
+
+        <AuthSubmit pending={isPending}>{t("changePasswordButton")}</AuthSubmit>
+      </Form>
+    </>
   );
 }

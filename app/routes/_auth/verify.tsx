@@ -1,12 +1,18 @@
+import { useTranslation } from "react-i18next";
 import { Form, data, useSearchParams, type MetaFunction } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { HoneypotInputs } from "remix-utils/honeypot/react";
-import { ErrorList } from "~/components/error-list";
+import {
+  AUTH_INPUT,
+  AuthFieldError,
+  AuthFormError,
+  AuthHeading,
+  AuthSubmit,
+  useFocusOnMount,
+} from "~/components/auth/auth-layout";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { StatusButton } from "~/components/ui/status-button";
+import { Label } from "~/components/ui/label";
 import {
   codeQueryParam,
   redirectToQueryParam,
@@ -14,8 +20,8 @@ import {
   typeQueryParam,
 } from "~/utils/auth/constants";
 import { validateCSRF } from "~/utils/auth/csrf.server";
-import { VerificationTypeSchema, VerifySchema, type VerificationTypes } from "~/utils/types";
-import { useIsPending } from "~/utils/misc";
+import { VerificationTypeSchema, VerifySchema } from "~/utils/types";
+import { cn, useIsPending } from "~/utils/misc";
 import { validateRequest } from "~/utils/auth/verification.server";
 import type { Route } from "./+types/verify";
 
@@ -48,21 +54,10 @@ export const meta: MetaFunction = () => {
 export default function VerifyRoute({ actionData }: Route.ComponentProps) {
   const [searchParams] = useSearchParams();
   const isPending = useIsPending();
-  const type = VerificationTypeSchema.parse(searchParams.get(typeQueryParam));
-  const checkEmail = (
-    <>
-      <h1 className="text-lg font-semibold">Check your Email</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        We&apos;ve sent you a code to verify your email address. Please enter it below. Check your
-        inbox or spam folder.
-      </p>
-    </>
-  );
-
-  const headings: Record<VerificationTypes, React.ReactNode> = {
-    "reset-password": checkEmail,
-    "change-email": checkEmail,
-  };
+  const { t } = useTranslation("auth");
+  // Refuses a link whose `type` is not one this page can verify.
+  VerificationTypeSchema.parse(searchParams.get(typeQueryParam));
+  const codeRef = useFocusOnMount();
 
   const { form, fields } = useForm(VerifySchema, {
     id: "verify-form",
@@ -74,62 +69,53 @@ export default function VerifyRoute({ actionData }: Route.ComponentProps) {
       redirectTo: searchParams.get(redirectToQueryParam) ?? "",
     },
   });
+  const { key: codeKey, ...codeProps } = getInputProps(fields[codeQueryParam], { type: "text" });
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-lg">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader className="pb-6">
-              <CardTitle className="text-center">{headings[type]}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form className="space-y-6" method="POST" {...getFormProps(form)}>
-                <AuthenticityTokenInput />
-                <HoneypotInputs />
-                <div className="space-y-4">
-                  <Field>
-                    <FieldLabel htmlFor={fields[codeQueryParam].id}>Code</FieldLabel>
-                    <Input
-                      {...getInputProps(fields[codeQueryParam], { type: "text" })}
-                      key={fields[codeQueryParam].key}
-                      placeholder="Enter your code"
-                    />
-                    {fields[codeQueryParam].errors && (
-                      <FieldError>{fields[codeQueryParam].errors}</FieldError>
-                    )}
-                  </Field>
+    <>
+      <AuthHeading
+        eyebrow={t("verification")}
+        title={t("verifyTitle")}
+        description={t("verifySubtitle")}
+      />
 
-                  {/* Hidden Fields */}
-                  <input
-                    {...getInputProps(fields[typeQueryParam], { type: "hidden" })}
-                    key={fields[typeQueryParam].key}
-                  />
-                  <input
-                    {...getInputProps(fields[targetQueryParam], { type: "hidden" })}
-                    key={fields[targetQueryParam].key}
-                  />
-                  <input
-                    {...getInputProps(fields[redirectToQueryParam], { type: "hidden" })}
-                    key={fields[redirectToQueryParam].key}
-                  />
-
-                  <ErrorList errors={form.errors} id={form.errorId} />
-
-                  <StatusButton
-                    className="w-full"
-                    status={isPending ? "pending" : (form.status ?? "idle")}
-                    type="submit"
-                    disabled={isPending}
-                  >
-                    Submit
-                  </StatusButton>
-                </div>
-              </Form>
-            </CardContent>
-          </Card>
+      <Form method="POST" {...getFormProps(form)} className="flex flex-col gap-4">
+        <AuthenticityTokenInput />
+        <HoneypotInputs />
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields[codeQueryParam].id}>{t("verifyCode")}</Label>
+          <Input
+            ref={codeRef}
+            key={codeKey}
+            {...codeProps}
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            className={cn(AUTH_INPUT, "font-mono tracking-[0.2em]")}
+          />
+          <AuthFieldError
+            id={fields[codeQueryParam].errorId}
+            errors={fields[codeQueryParam].errors}
+          />
         </div>
-      </div>
-    </div>
+
+        <input
+          {...getInputProps(fields[typeQueryParam], { type: "hidden" })}
+          key={fields[typeQueryParam].key}
+        />
+        <input
+          {...getInputProps(fields[targetQueryParam], { type: "hidden" })}
+          key={fields[targetQueryParam].key}
+        />
+        <input
+          {...getInputProps(fields[redirectToQueryParam], { type: "hidden" })}
+          key={fields[redirectToQueryParam].key}
+        />
+
+        <AuthFormError id={form.errorId} errors={form.errors} />
+
+        <AuthSubmit pending={isPending}>{t("verifyButton")}</AuthSubmit>
+      </Form>
+    </>
   );
 }

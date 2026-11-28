@@ -14,6 +14,7 @@ export const createSSOConfigSchema = z.object({
   callbackUrl: z.string({ error: "Callback URL is required" }).min(1, "Callback URL is required"),
   autoProvision: z.string().optional(),
   enforceSSO: z.string().optional(),
+  isActive: z.string().optional(),
   defaultRoleId: z.string().optional(),
   // SAML-specific
   x509Certificate: z.string().optional(),

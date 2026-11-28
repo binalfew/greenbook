@@ -5,18 +5,24 @@ import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { HoneypotInputs } from "remix-utils/honeypot/react";
 import { z } from "zod";
-import { ErrorList } from "~/components/error-list";
+import {
+  AUTH_INPUT,
+  AUTH_TEXT_LINK,
+  AuthFieldError,
+  AuthFormError,
+  AuthHeading,
+  AuthSubmit,
+  useFocusOnMount,
+} from "~/components/auth/auth-layout";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { StatusButton } from "~/components/ui/status-button";
+import { Label } from "~/components/ui/label";
 import { requireAnonymous } from "~/utils/auth/auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { prisma } from "~/utils/db/db.server";
 import { sendEmail } from "~/utils/email/email.server";
 import { checkHoneypot } from "~/utils/auth/honeypot.server";
-import { useIsPending } from "~/utils/misc";
+import { cn, useIsPending } from "~/utils/misc";
 import { prepareVerification } from "~/utils/auth/verification.server";
 import type { Route } from "./+types/forgot-password";
 const ForgotPasswordSchema = z.object({
@@ -115,55 +121,44 @@ export default function ForgotPasswordRoute({ actionData }: Route.ComponentProps
   const isPending = useIsPending();
   const { t } = useTranslation("auth");
   const { t: tCommon } = useTranslation("common");
+  const emailRef = useFocusOnMount();
   const { form, fields } = useForm(ForgotPasswordSchema, {
     id: "forgot-password-form",
     lastResult: actionData?.result,
   });
+  const { key: emailKey, ...emailProps } = getInputProps(fields.email, { type: "email" });
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-lg">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">{t("forgotPasswordTitle")}</CardTitle>
-              <CardDescription>{t("forgotPasswordSubtitle")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form className="grid gap-4" method="POST" {...getFormProps(form)}>
-                <AuthenticityTokenInput />
-                <HoneypotInputs />
-                <div className="grid gap-4">
-                  <Field>
-                    <FieldLabel htmlFor={fields.email.id}>{tCommon("email")}</FieldLabel>
-                    <Input
-                      {...getInputProps(fields.email, { type: "email" })}
-                      key={fields.email.key}
-                    />
-                    {fields.email.errors && <FieldError>{fields.email.errors}</FieldError>}
-                  </Field>
+    <>
+      <AuthHeading
+        eyebrow={t("accountRecovery")}
+        title={t("forgotPasswordTitle")}
+        description={t("forgotPasswordSubtitle")}
+      />
 
-                  <ErrorList errors={form.errors} id={form.errorId} />
-
-                  <StatusButton
-                    className="w-full"
-                    status={isPending ? "pending" : (form.status ?? "idle")}
-                    type="submit"
-                    disabled={isPending}
-                  >
-                    {t("sendResetLink")}
-                  </StatusButton>
-                </div>
-              </Form>
-              <div className="mt-4 text-center text-sm">
-                <Link to="/login" className="underline">
-                  {t("backToLogin")}
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+      <Form method="POST" {...getFormProps(form)} className="flex flex-col gap-4">
+        <AuthenticityTokenInput />
+        <HoneypotInputs />
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields.email.id}>{tCommon("email")}</Label>
+          <Input
+            ref={emailRef}
+            key={emailKey}
+            {...emailProps}
+            autoComplete="email"
+            className={AUTH_INPUT}
+          />
+          <AuthFieldError id={fields.email.errorId} errors={fields.email.errors} />
         </div>
-      </div>
-    </div>
+
+        <AuthFormError id={form.errorId} errors={form.errors} />
+
+        <AuthSubmit pending={isPending}>{t("sendResetLink")}</AuthSubmit>
+      </Form>
+
+      <Link to="/login" className={cn(AUTH_TEXT_LINK, "self-start")}>
+        {t("backToLogin")}
+      </Link>
+    </>
   );
 }

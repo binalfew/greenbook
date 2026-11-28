@@ -12,6 +12,7 @@ import { action as loginAction, loader as loginLoader } from "~/routes/_auth/log
 import { action as resetPasswordAction } from "~/routes/_auth/reset-password";
 import { loader as ssoStartLoader } from "~/routes/_auth/sso/start";
 import { action as verifyAction } from "~/routes/_auth/verify";
+import { updateSSOConfiguration } from "~/services/sso.server";
 import { csrf } from "~/utils/auth/csrf.server";
 
 // Sign-in paths that must keep working now that there is no second factor:
@@ -283,10 +284,91 @@ describe("SSO sign-in", () => {
     expect(page.status).toBe(200);
     expect(await page.json()).toEqual({
       ssoOptions: [{ id: config.id, provider: "CUSTOM_SAML", displayName: "AU Staff Login" }],
+      ssoEnforced: false,
     });
 
     const start = await client.get(ssoStartLoader, `/sso/start?configId=${config.id}`);
     expect(start.status).toBe(302);
     expect(start.headers.get("location")).toMatch(/^https:\/\/idp\.example\.org\/saml\/sso\?/);
+  });
+});
+
+describe("SSO provider switches", () => {
+  function samlConfig(overrides: { isActive?: boolean; enforceSSO?: boolean }) {
+    return prisma.sSOConfiguration.create({
+      data: {
+        provider: "CUSTOM_SAML",
+        protocol: "SAML",
+        displayName: "AU Staff Login",
+        issuerUrl: "https://idp.example.org/saml/metadata",
+        callbackUrl: `${ORIGIN}/sso/callback`,
+        ssoUrl: "https://idp.example.org/saml/sso",
+        spEntityId: "greenbook-test",
+        x509Certificate: "MIIBfake",
+        ...overrides,
+      },
+    });
+  }
+
+  async function makeGlobalAdmin(userId: string) {
+    const role = await prisma.role.create({
+      data: { name: "admin", scope: "GLOBAL", description: "Platform admin" },
+    });
+    await prisma.userRole.create({ data: { userId, roleId: role.id } });
+  }
+
+  it("a deactivated provider leaves the login page and enforces nothing", async () => {
+    const config = await samlConfig({ enforceSSO: true });
+    await updateSSOConfiguration(
+      config.id,
+      {
+        provider: "CUSTOM_SAML",
+        protocol: "SAML",
+        callbackUrl: config.callbackUrl,
+        enforceSSO: "on",
+        // An unticked checkbox is absent from the form.
+        isActive: undefined,
+      },
+      { userId: "test" },
+    );
+    const user = await createUser();
+    const client = browser();
+
+    const page = await client.get(loginLoader, "/login");
+    expect(await page.json()).toEqual({ ssoOptions: [], ssoEnforced: false });
+
+    await expectSignedIn(await signIn(client, user.email, PASSWORD), client, user.id);
+  });
+
+  it("with SSO required, a non-admin cannot sign in with a password", async () => {
+    await samlConfig({ enforceSSO: true });
+    const user = await createUser();
+    const client = browser();
+
+    const page = await client.get(loginLoader, "/login");
+    expect((await page.json()).ssoEnforced).toBe(true);
+
+    const right = await signIn(client, user.email, PASSWORD);
+    const wrong = await signIn(client, user.email, "not-the-password");
+
+    expect(right.status).toBe(400);
+    expect(wrong.status).toBe(400);
+    // Same answer either way, so the form does not confirm a password.
+    expect((await right.json()).result.error).toEqual((await wrong.json()).result.error);
+    expect(client.has("admin_session")).toBe(false);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("with SSO required, the global admin still signs in with a password", async () => {
+    await samlConfig({ enforceSSO: true });
+    const user = await createUser();
+    await makeGlobalAdmin(user.id);
+    const client = browser();
+
+    const response = await signIn(client, user.email, PASSWORD);
+
+    expect(response.status).toBe(302);
+    expect(client.has("admin_session")).toBe(true);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(1);
   });
 });

@@ -33,6 +33,7 @@ Back-relation: `User.ssoConnections`. Applied via `db push` (no migration file).
 `~/services/sso.server.ts`:
 
 - **CRUD:** `getSSOConfigurations()`, `getActiveSSOConfigurations()`, `getSSOConfigById`, `createSSOConfiguration`, `updateSSOConfiguration` (preserves `clientSecret` when not provided), `deleteSSOConfiguration`, `getSSOConnectionCount*`.
+- **Switches:** `isActive` and `enforceSSO` are both set from the provider form. An inactive provider is not offered on the login page, cannot start or finish a flow, and enforces nothing. `isSSOEnforced()` is true when an active provider has `enforceSSO`: `/login` then hides the password form (the loader returns `ssoEnforced`) and its action refuses password sign-in to everyone but the global admin, with one message for a wrong password and a non-admin alike. The admin keeps password sign-in (the "Administrator sign-in" link, `/login?password=1`) so a broken identity provider cannot lock the platform out — do not remove that exception.
 - **Test:** `testSSOConfiguration(id)` — dispatches to `testOIDCDiscovery` or `testSAMLConfiguration` based on protocol. Returns `{ success, error? }`.
 - **Flow initiation:** `initiateSSOFlow(configId)` — builds authorization URL + captures state/nonce/PKCE/requestId; caller persists flow state via cookie (OIDC) or RelayState (SAML).
 - **Callback:** `handleSSOCallback({ protocol, ...params })` — dispatches to `handleOIDCCallback` (exchanges code for claims, calls `resolveOrProvisionUser`) or `handleSAMLCallback` (validates SAML Response, extracts `nameId`/email/name).

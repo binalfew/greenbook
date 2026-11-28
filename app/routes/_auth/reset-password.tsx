@@ -4,16 +4,21 @@ import { Form, Link, data, redirect } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { HoneypotInputs } from "remix-utils/honeypot/react";
 import { z } from "zod";
-import { ErrorList } from "~/components/error-list";
+import {
+  AUTH_TEXT_LINK,
+  AuthFieldError,
+  AuthFormError,
+  AuthHeading,
+  AuthSubmit,
+  PasswordInput,
+  useFocusOnMount,
+} from "~/components/auth/auth-layout";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Field, FieldError, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
-import { StatusButton } from "~/components/ui/status-button";
+import { Label } from "~/components/ui/label";
 import { resetUserPassword } from "~/utils/auth/auth.server";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { checkHoneypot } from "~/utils/auth/honeypot.server";
-import { useIsPending } from "~/utils/misc";
+import { cn, useIsPending } from "~/utils/misc";
 import { requireResetPasswordEmail, verifySessionStorage } from "~/utils/auth/verification.server";
 import type { Route } from "./+types/reset-password";
 const ResetPasswordSchema = z
@@ -63,71 +68,64 @@ export async function action({ request }: Route.ActionArgs) {
   });
 }
 
-export default function PasswordResetRoute({ loaderData, actionData }: Route.ComponentProps) {
+export default function PasswordResetRoute({ actionData }: Route.ComponentProps) {
   const isPending = useIsPending();
   const { t } = useTranslation("auth");
+  const passwordRef = useFocusOnMount();
 
   const { form, fields } = useForm(ResetPasswordSchema, {
     id: "password-reset-form",
     lastResult: actionData?.result,
   });
+  const {
+    key: passwordKey,
+    type: _passwordType,
+    ...passwordProps
+  } = getInputProps(fields.password, { type: "password" });
+  const {
+    key: confirmKey,
+    type: _confirmType,
+    ...confirmProps
+  } = getInputProps(fields.confirmPassword, { type: "password" });
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-lg">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">{t("resetPasswordTitle")}</CardTitle>
-              <CardDescription>{t("resetPasswordSubtitle")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form className="grid gap-4" method="POST" {...getFormProps(form)}>
-                <AuthenticityTokenInput />
-                <HoneypotInputs />
-                <div className="grid gap-4">
-                  <Field>
-                    <FieldLabel htmlFor={fields.password.id}>{t("newPassword")}</FieldLabel>
-                    <Input
-                      {...getInputProps(fields.password, { type: "password" })}
-                      key={fields.password.key}
-                    />
-                    {fields.password.errors && <FieldError>{fields.password.errors}</FieldError>}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={fields.confirmPassword.id}>
-                      {t("confirmPassword")}
-                    </FieldLabel>
-                    <Input
-                      {...getInputProps(fields.confirmPassword, { type: "password" })}
-                      key={fields.confirmPassword.key}
-                    />
-                    {fields.confirmPassword.errors && (
-                      <FieldError>{fields.confirmPassword.errors}</FieldError>
-                    )}
-                  </Field>
+    <>
+      <AuthHeading
+        eyebrow={t("accountRecovery")}
+        title={t("resetPasswordTitle")}
+        description={t("resetPasswordSubtitle")}
+      />
 
-                  <ErrorList errors={form.errors} id={form.errorId} />
-
-                  <StatusButton
-                    className="w-full"
-                    status={isPending ? "pending" : (form.status ?? "idle")}
-                    type="submit"
-                    disabled={isPending}
-                  >
-                    {t("resetPasswordButton")}
-                  </StatusButton>
-                </div>
-              </Form>
-              <div className="mt-4 text-center text-sm">
-                <Link to="/login" className="underline">
-                  {t("backToLogin")}
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+      <Form method="POST" {...getFormProps(form)} className="flex flex-col gap-4">
+        <AuthenticityTokenInput />
+        <HoneypotInputs />
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields.password.id}>{t("newPassword")}</Label>
+          <PasswordInput
+            ref={passwordRef}
+            key={passwordKey}
+            {...passwordProps}
+            autoComplete="new-password"
+          />
+          <AuthFieldError id={fields.password.errorId} errors={fields.password.errors} />
         </div>
-      </div>
-    </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={fields.confirmPassword.id}>{t("confirmPassword")}</Label>
+          <PasswordInput key={confirmKey} {...confirmProps} autoComplete="new-password" />
+          <AuthFieldError
+            id={fields.confirmPassword.errorId}
+            errors={fields.confirmPassword.errors}
+          />
+        </div>
+
+        <AuthFormError id={form.errorId} errors={form.errors} />
+
+        <AuthSubmit pending={isPending}>{t("resetPasswordButton")}</AuthSubmit>
+      </Form>
+
+      <Link to="/login" className={cn(AUTH_TEXT_LINK, "self-start")}>
+        {t("backToLogin")}
+      </Link>
+    </>
   );
 }

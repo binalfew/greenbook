@@ -1,20 +1,29 @@
 import { parseWithZod } from "@conform-to/zod/v4";
-import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Form, Link, data, redirect, useSearchParams } from "react-router";
 import { AuthenticityTokenInput } from "remix-utils/csrf/react";
 import { HoneypotInputs } from "remix-utils/honeypot/react";
 import { safeRedirect } from "remix-utils/safe-redirect";
-import { ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail } from "lucide-react";
 import { z } from "zod";
-import { AuthContent } from "~/components/auth/auth-layout";
+import {
+  AUTH_BUTTON,
+  AUTH_INPUT,
+  AUTH_TEXT_LINK,
+  AuthFieldError,
+  AuthFormError,
+  AuthHeading,
+  AuthSectionLabel,
+  AuthSubmit,
+  PasswordInput,
+  useFocusOnMount,
+} from "~/components/auth/auth-layout";
 import { getFormProps, getInputProps, useForm } from "~/components/form";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { SSOProvider } from "~/generated/prisma/client";
-import { getActiveSSOConfigurations } from "~/services/sso.server";
+import { getActiveSSOConfigurations, isSSOEnforced } from "~/services/sso.server";
 import { isPasswordExpired, login, requireAnonymous } from "~/utils/auth/auth.server";
 import { writeAudit } from "~/utils/auth/audit.server";
 import { resolvePostLoginRedirect } from "~/utils/auth/post-login-redirect.server";
@@ -23,7 +32,7 @@ import { sessionKey, unverifiedSessionIdKey } from "~/utils/auth/constants";
 import { validateCSRF } from "~/utils/auth/csrf.server";
 import { checkHoneypot } from "~/utils/auth/honeypot.server";
 import { authSessionStorage } from "~/utils/auth/session.server";
-import { useIsPending } from "~/utils/misc";
+import { cn, useIsPending } from "~/utils/misc";
 import { verifySessionStorage } from "~/utils/auth/verification.server";
 import type { Route } from "./+types/login";
 
@@ -63,17 +72,27 @@ function labelFor(config: { displayName: string | null; provider: SSOProvider })
   return config.displayName?.trim() || PROVIDER_LABELS[config.provider];
 }
 
+const PASSWORD_SIGN_IN_ADMINS_ONLY =
+  "Password sign-in is only available to administrators. Use single sign-on instead.";
+
+async function isGlobalAdminUser(userId: string): Promise<boolean> {
+  const held = await prisma.userRole.count({
+    where: { userId, role: { name: "admin", scope: "GLOBAL" } },
+  });
+  return held > 0;
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAnonymous(request);
 
-  const configs = await getActiveSSOConfigurations();
+  const [configs, ssoEnforced] = await Promise.all([getActiveSSOConfigurations(), isSSOEnforced()]);
   const ssoOptions: SSOOption[] = configs.map((c) => ({
     id: c.id,
     provider: c.provider,
     displayName: labelFor(c),
   }));
 
-  return data({ ssoOptions });
+  return data({ ssoOptions, ssoEnforced });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -82,6 +101,8 @@ export async function action({ request }: Route.ActionArgs) {
 
   await validateCSRF(formData, request.headers);
   checkHoneypot(formData);
+
+  const ssoEnforced = await isSSOEnforced();
 
   const submission = await parseWithZod(formData, {
     schema: (intent) =>
@@ -98,8 +119,16 @@ export async function action({ request }: Route.ActionArgs) {
           if (!session) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              message: "Invalid email or password",
+              message: ssoEnforced ? PASSWORD_SIGN_IN_ADMINS_ONLY : "Invalid email or password",
             });
+            return z.NEVER;
+          }
+
+          // Checked after the password so the answer is the same for a wrong
+          // password and a non-admin: the form cannot be used to test either.
+          if (ssoEnforced && !(await isGlobalAdminUser(session.userId))) {
+            await prisma.session.delete({ where: { id: session.id } });
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: PASSWORD_SIGN_IN_ADMINS_ONLY });
             return z.NEVER;
           }
 
@@ -179,20 +208,33 @@ async function resolveDefaultRedirect(userId: string): Promise<string> {
   return resolvePostLoginRedirect(userId);
 }
 
+function MicrosoftMark() {
+  return (
+    <svg viewBox="0 0 21 21" aria-hidden="true" className="size-4 shrink-0">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
+  );
+}
+
 export default function LoginRoute({ loaderData, actionData }: Route.ComponentProps) {
-  const { ssoOptions } = loaderData;
+  const { ssoOptions, ssoEnforced } = loaderData;
   const isPending = useIsPending();
   const { t } = useTranslation("auth");
   const { t: tCommon } = useTranslation("common");
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? "";
   const ssoError = searchParams.get("error") ?? "";
-  const emailRef = useRef<HTMLInputElement>(null);
-  const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    emailRef.current?.focus();
-  }, []);
+  const hasSso = ssoOptions.length > 0;
+  // With SSO required, the password form is the global admin's way in only,
+  // reached through the link below the provider buttons (or after a failed try).
+  const showPasswordForm =
+    !ssoEnforced || searchParams.get("password") === "1" || actionData !== undefined;
+  // The email takes focus when it is the obvious next step: there is no
+  // provider button to press first, or the admin asked for the form.
+  const emailRef = useFocusOnMount(showPasswordForm && (!hasSso || ssoEnforced));
 
   const { form, fields } = useForm(LoginFormSchema, {
     id: "login-form",
@@ -200,181 +242,106 @@ export default function LoginRoute({ loaderData, actionData }: Route.ComponentPr
     lastResult: actionData?.result,
   });
 
+  const { key: emailKey, ...emailProps } = getInputProps(fields.email, { type: "email" });
+  const {
+    key: passwordKey,
+    type: _passwordType,
+    ...passwordProps
+  } = getInputProps(fields.password, { type: "password" });
+
   return (
-    <AuthContent>
-      <div className="mb-8">
-        <h1 className="text-foreground text-3xl font-bold tracking-tight">{t("loginTitle")}</h1>
-        <p className="text-muted-foreground mt-2">{t("loginSubtitle")}</p>
-      </div>
+    <>
+      <AuthHeading eyebrow={t("staffAccess")} title={t("loginTitle")} />
 
-      {ssoError ? (
-        <div className="border-destructive/30 bg-destructive/5 mb-6 flex items-start gap-3 rounded-lg border px-4 py-3">
-          <Lock className="text-destructive mt-0.5 size-4 shrink-0" />
-          <p className="text-destructive text-sm">{ssoError}</p>
+      <AuthFormError errors={ssoError ? [ssoError] : null} />
+
+      {hasSso ? (
+        <div className="flex flex-col gap-2.5">
+          <AuthSectionLabel>{t("ssoSectionLabel")}</AuthSectionLabel>
+          {ssoOptions.map((option) => {
+            const params = new URLSearchParams({ configId: option.id });
+            if (redirectTo) params.set("redirectTo", redirectTo);
+            return (
+              <Button
+                key={option.id}
+                asChild
+                variant="outline"
+                // Long provider names wrap instead of pushing the button wider than the page.
+                className={cn(AUTH_BUTTON, "h-auto min-h-11 gap-2.5 px-4 py-2.5 whitespace-normal")}
+              >
+                <Link to={`/sso/start?${params.toString()}`} prefetch="intent">
+                  {option.provider === "AZURE_AD" ? <MicrosoftMark /> : null}
+                  <span className="text-balance">
+                    {t("continueWith", { name: option.displayName })}
+                  </span>
+                </Link>
+              </Button>
+            );
+          })}
         </div>
       ) : null}
 
-      {ssoOptions.length > 0 ? (
-        <>
-          <div className="mb-6 space-y-3">
-            {ssoOptions.map((option) => {
-              const params = new URLSearchParams({ configId: option.id });
-              if (redirectTo) params.set("redirectTo", redirectTo);
-              return (
-                <Button
-                  key={option.id}
-                  asChild
-                  variant="outline"
-                  size="lg"
-                  className="h-11 w-full justify-start gap-3 text-base font-medium"
+      {showPasswordForm ? (
+        <div className="flex flex-col gap-3">
+          {hasSso ? <AuthSectionLabel>{t("passwordSectionLabel")}</AuthSectionLabel> : null}
+          <Form method="post" {...getFormProps(form)} className="flex flex-col gap-4">
+            <AuthenticityTokenInput />
+            <HoneypotInputs />
+            <input
+              {...getInputProps(fields.redirectTo, { type: "hidden" })}
+              key={fields.redirectTo.key}
+            />
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={fields.email.id}>{tCommon("email")}</Label>
+              <Input
+                ref={emailRef}
+                key={emailKey}
+                {...emailProps}
+                placeholder="name@africanunion.org"
+                autoComplete="email"
+                className={AUTH_INPUT}
+              />
+              <AuthFieldError id={fields.email.errorId} errors={fields.email.errors} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-4">
+                <Label htmlFor={fields.password.id}>{tCommon("password")}</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-muted-foreground hover:text-foreground relative text-sm underline-offset-4 transition-colors before:absolute before:-inset-x-2 before:-inset-y-3 hover:underline"
                 >
-                  <Link to={`/sso/start?${params.toString()}`} prefetch="intent">
-                    <KeyRound className="text-primary size-4" />
-                    <span className="flex-1 text-left">Sign in with {option.displayName}</span>
-                    <ArrowRight className="text-muted-foreground size-4" />
-                  </Link>
-                </Button>
-              );
-            })}
-          </div>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="border-border w-full border-t" />
+                  {t("forgotPassword")}
+                </Link>
+              </div>
+              <PasswordInput key={passwordKey} {...passwordProps} autoComplete="current-password" />
+              <AuthFieldError id={fields.password.errorId} errors={fields.password.errors} />
             </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-background text-muted-foreground px-3">
-                or sign in with email
-              </span>
-            </div>
-          </div>
-        </>
-      ) : null}
 
-      <Form method="post" {...getFormProps(form)} className="space-y-5">
-        <AuthenticityTokenInput />
-        <HoneypotInputs />
-        <input
-          {...getInputProps(fields.redirectTo, { type: "hidden" })}
-          key={fields.redirectTo.key}
-        />
+            <label className="text-muted-foreground flex min-h-11 cursor-pointer items-center gap-2.5 text-sm select-none">
+              <Checkbox id={fields.remember.id} name={fields.remember.name} />
+              {t("rememberMe")}
+            </label>
 
-        {form.errors && form.errors.length > 0 && (
-          <div className="border-destructive/30 bg-destructive/5 flex animate-[shake_0.5s_ease-in-out] items-center gap-3 rounded-lg border px-4 py-3">
-            <div className="bg-destructive/15 flex size-8 shrink-0 items-center justify-center rounded-full">
-              <Lock className="text-destructive size-4" />
-            </div>
-            <p id={form.errorId} className="text-destructive text-sm">
-              {form.errors[0]}
-            </p>
-          </div>
-        )}
+            <AuthFormError id={form.errorId} errors={form.errors} />
 
-        <div className="space-y-2">
-          <Label htmlFor={fields.email.id} className="text-sm font-medium">
-            {tCommon("email")}
-          </Label>
-          <div className="group relative">
-            <Mail className="text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 size-4 -translate-y-1/2 transition-colors" />
-            {(() => {
-              const { key, ...emailProps } = getInputProps(fields.email, { type: "email" });
-              return (
-                <Input
-                  ref={emailRef}
-                  key={key}
-                  {...emailProps}
-                  placeholder="you@company.com"
-                  autoComplete="email"
-                  className="focus-visible:shadow-primary/10 h-11 pl-10 transition-shadow focus-visible:shadow-md"
-                />
-              );
-            })()}
-          </div>
-          {fields.email.errors && (
-            <p className="text-destructive text-sm">{fields.email.errors[0]}</p>
-          )}
+            <AuthSubmit pending={isPending} pendingLabel={t("signingIn")}>
+              {t("loginButton")}
+            </AuthSubmit>
+          </Form>
         </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor={fields.password.id} className="text-sm font-medium">
-              {tCommon("password")}
-            </Label>
-            <Link
-              to="/forgot-password"
-              className="text-muted-foreground hover:text-primary text-xs transition-colors"
-            >
-              {t("forgotPassword")}
-            </Link>
-          </div>
-          <div className="group relative">
-            <Lock className="text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 size-4 -translate-y-1/2 transition-colors" />
-            {(() => {
-              const { key, ...passwordProps } = getInputProps(fields.password, {
-                type: showPassword ? "text" : "password",
-              });
-              return (
-                <Input
-                  key={key}
-                  {...passwordProps}
-                  autoComplete="current-password"
-                  className="focus-visible:shadow-primary/10 h-11 pr-10 pl-10 transition-shadow focus-visible:shadow-md"
-                />
-              );
-            })()}
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-              tabIndex={-1}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
-          </div>
-          {fields.password.errors && (
-            <p className="text-destructive text-sm">{fields.password.errors[0]}</p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Checkbox id={fields.remember.id} name={fields.remember.name} />
-          <label
-            htmlFor={fields.remember.id}
-            className="text-muted-foreground cursor-pointer text-sm select-none"
+      ) : (
+        <div className="flex flex-col">
+          <p className="text-muted-foreground text-sm text-pretty">{t("ssoRequired")}</p>
+          <Link
+            to={`/login?${new URLSearchParams({ password: "1", ...(redirectTo ? { redirectTo } : {}) })}`}
+            className={cn(AUTH_TEXT_LINK, "self-start")}
           >
-            {t("rememberMe")}
-          </label>
+            {t("adminPasswordSignIn")}
+          </Link>
         </div>
-
-        <div className="space-y-3">
-          <Button
-            type="submit"
-            size="lg"
-            disabled={isPending}
-            className="shadow-primary/25 hover:shadow-primary/30 h-11 w-full text-base font-medium shadow-lg transition-all hover:shadow-xl"
-          >
-            {isPending ? (
-              <span className="flex items-center gap-2">
-                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                {t("loginButton")}…
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                {t("loginButton")}
-                <ArrowRight className="size-4" />
-              </span>
-            )}
-          </Button>
-          <p className="text-muted-foreground/60 text-center text-[11px]">
-            Press{" "}
-            <kbd className="border-border bg-muted rounded border px-1.5 py-0.5 font-mono text-[10px]">
-              Enter
-            </kbd>{" "}
-            to sign in
-          </p>
-        </div>
-      </Form>
-    </AuthContent>
+      )}
+    </>
   );
 }

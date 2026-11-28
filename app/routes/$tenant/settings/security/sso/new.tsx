@@ -101,6 +101,7 @@ export default function NewSSOConfigPage({ loaderData, actionData, params }: Rou
       callbackUrl,
       autoProvision: "",
       enforceSSO: "",
+      isActive: "on",
       defaultRoleId: "",
       x509Certificate: "",
       ssoUrl: "",
@@ -325,6 +326,12 @@ export default function NewSSOConfigPage({ loaderData, actionData, params }: Rou
                 <CheckboxField meta={fields.enforceSSO} />
                 <label htmlFor={fields.enforceSSO.id} className="cursor-pointer text-sm">
                   {t("enforceSsoLabel")}
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckboxField meta={fields.isActive} />
+                <label htmlFor={fields.isActive.id} className="cursor-pointer text-sm">
+                  {t("isActiveLabel")}
                 </label>
               </div>
             </div>
