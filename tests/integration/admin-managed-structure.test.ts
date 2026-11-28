@@ -5,6 +5,7 @@ import { action as moveAction } from "~/routes/$tenant/_directory/api/organizati
 import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
 import { action as batchApproveAction } from "~/routes/$tenant/_directory/approvals/batch-approve";
+import { loader as directoryLayoutLoader } from "~/routes/$tenant/_directory/_layout";
 import { loader as organizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId._layout";
 import { loader as deleteOrganizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
 import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
@@ -297,6 +298,108 @@ describe("the global admin and the organogram and positions", () => {
   });
 });
 
+// The admin's home is the system tenant, which has no directory of people.
+// The shared structure is kept from there all the same.
+describe("the global admin in the system tenant", () => {
+  async function arrangeSystem() {
+    const a = await arrange();
+    const system = await prisma.tenant.create({ data: buildTenant({ slug: "system" }) });
+    return { ...a, working: a, slug: system.slug, systemId: system.id };
+  }
+
+  it("reads and keeps the organogram and positions there", async () => {
+    const a = await arrangeSystem();
+
+    const pages: [Handler, string, Record<string, string>][] = [
+      [directoryLayoutLoader as Handler, "organogram", {}],
+      [organogramLoader as Handler, "organogram", {}],
+      [treeLoader as Handler, "organogram/tree", {}],
+      [organizationLoader as Handler, `organogram/${a.org.id}`, { orgId: a.org.id }],
+      [newOrganizationLoader as Handler, "organogram/new", {}],
+      [positionsLoader as Handler, "positions", {}],
+      [newPositionLoader as Handler, "positions/new", {}],
+    ];
+    for (const [handler, path, params] of pages) {
+      expect([path, statusOf(await load(a, handler, path, a.admin, params))]).toEqual([path, 200]);
+    }
+
+    const created = await send(
+      a,
+      organizationEditorAction as Handler,
+      "organogram/new",
+      a.admin,
+      orgForm(a, "New Unit"),
+    );
+    expect(statusOf(created)).toBe(302);
+    const unit = await prisma.organization.findFirstOrThrow({ where: { name: "New Unit" } });
+
+    const post = await send(
+      a,
+      positionEditorAction as Handler,
+      "positions/new",
+      a.admin,
+      positionForm(a, "Deputy", { organizationId: unit.id }),
+    );
+    expect(statusOf(post)).toBe(302);
+    const deputy = await prisma.position.findFirstOrThrow({ where: { title: "Deputy" } });
+
+    // What the admin made in the system tenant is what a working tenant sees.
+    const seen = await load(
+      a.working,
+      positionLoader as Handler,
+      `positions/${deputy.id}`,
+      a.manager,
+      {
+        positionId: deputy.id,
+      },
+    );
+    expect(payloadOf(seen)).toMatchObject({ position: { title: "Deputy" } });
+  });
+
+  it("offers no assignment on a position there, and takes none", async () => {
+    const a = await arrangeSystem();
+
+    const shown = await load(a, positionLoader as Handler, `positions/${a.position.id}`, a.admin, {
+      positionId: a.position.id,
+    });
+    expect(payloadOf(shown)).toMatchObject({ canWrite: true, canAssign: false });
+
+    const assigned = await send(
+      a,
+      assignAction as Handler,
+      `positions/${a.position.id}/assign`,
+      a.admin,
+      { positionId: a.position.id, personId: a.person.id, startDate: "2026-01-01" },
+      { positionId: a.position.id },
+    );
+    expect(statusOf(assigned)).toBe(404);
+    expect(await prisma.positionAssignment.count()).toBe(0);
+  });
+
+  it("has no people, approvals or submissions pages there", async () => {
+    const a = await arrangeSystem();
+
+    for (const path of ["people", "people/new", "approvals", "submissions", ""]) {
+      expect([
+        path,
+        statusOf(await load(a, directoryLayoutLoader as Handler, path, a.admin)),
+      ]).toEqual([path, 404]);
+    }
+  });
+
+  it("gives a tenant without a directory no organogram or positions", async () => {
+    const a = await arrange();
+    const plain = await prisma.tenant.create({ data: buildTenant({ slug: "plain" }) });
+    const there = { ...a, slug: plain.slug };
+
+    for (const path of ["organogram", "positions"]) {
+      expect(statusOf(await load(there, directoryLayoutLoader as Handler, path, a.admin))).toBe(
+        404,
+      );
+    }
+  });
+});
+
 // One organogram and one set of positions for every tenant; the people
 // holding the positions stay each tenant's own.
 describe("the organogram and positions across tenants", () => {
@@ -372,6 +475,84 @@ describe("the organogram and positions across tenants", () => {
 
 // Requests written before the rule: a focal person's draft, pending or
 // rejected change to a unit or a post. They can be closed, never carried on.
+// A position is a post in a unit, not a single seat.
+describe("several people on one position", () => {
+  async function assign(a: Arranged, personId: string, positionId = a.position.id) {
+    return send(
+      a,
+      assignAction as Handler,
+      `positions/${positionId}/assign`,
+      a.manager,
+      { positionId, personId, startDate: "2026-01-01" },
+      { positionId },
+    );
+  }
+
+  const current = () =>
+    prisma.positionAssignment.findMany({
+      where: { isCurrent: true, deletedAt: null },
+      select: { personId: true, positionId: true },
+    });
+
+  it("keeps the people already holding it when one more is assigned", async () => {
+    const a = await arrange();
+    const second = await prisma.person.create({
+      data: { tenantId: a.tenantId, firstName: "Kwame", lastName: "Mensah", languages: [] },
+    });
+
+    expect(statusOf(await assign(a, a.person.id))).toBe(302);
+    expect(statusOf(await assign(a, second.id))).toBe(302);
+
+    expect(new Set((await current()).map((c) => c.personId))).toEqual(
+      new Set([a.person.id, second.id]),
+    );
+    const shown = await load(
+      a,
+      positionLoader as Handler,
+      `positions/${a.position.id}`,
+      a.manager,
+      {
+        positionId: a.position.id,
+      },
+    );
+    const holders = (
+      payloadOf(shown) as { position: { assignments: { isCurrent: boolean }[] } }
+    ).position.assignments.filter((x) => x.isCurrent);
+    expect(holders).toHaveLength(2);
+
+    const unit = await load(a, organizationLoader as Handler, `organogram/${a.org.id}`, a.manager, {
+      orgId: a.org.id,
+    });
+    const people = (payloadOf(unit) as { people: { person: { lastName: string } }[] }).people;
+    expect(people.map((p) => p.person.lastName).sort()).toEqual(["Diallo", "Mensah"]);
+  });
+
+  it("lets a person hold a second position without ending the first", async () => {
+    const a = await arrange();
+    const other = await prisma.position.create({
+      data: { organizationId: a.otherOrg.id, typeId: a.positionTypeId, title: "Registrar" },
+    });
+
+    expect(statusOf(await assign(a, a.person.id))).toBe(302);
+    expect(statusOf(await assign(a, a.person.id, other.id))).toBe(302);
+
+    expect(new Set((await current()).map((c) => c.positionId))).toEqual(
+      new Set([a.position.id, other.id]),
+    );
+  });
+
+  it("refuses to assign a person to a position they already hold", async () => {
+    const a = await arrange();
+
+    expect(statusOf(await assign(a, a.person.id))).toBe(302);
+    const again = await assign(a, a.person.id);
+
+    expect(statusOf(again)).toBe(409);
+    expect(JSON.stringify(payloadOf(again))).toContain("This person already holds this position.");
+    expect(await current()).toHaveLength(1);
+  });
+});
+
 describe("an organization or position change left over from before the rule", () => {
   const rename = (a: Arranged) =>
     saveDraft(

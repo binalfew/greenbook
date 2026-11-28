@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Network } from "lucide-react";
+import { ArrowLeft, Building2, Network, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, data } from "react-router";
 import { PendingBadge } from "~/components/directory/pending-badge";
@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InfoRow } from "~/components/ui/info-row";
 import { findPendingChange } from "~/services/directory-changes.server";
 import { getOrganization, getOrganizationAncestry } from "~/services/organizations.server";
+import { listPeopleInOrganization } from "~/services/position-assignments.server";
 import { hasPermission } from "~/utils/auth/require-auth.server";
 import { requireDirectoryAccess } from "~/utils/directory-access.server";
 import { formatDate } from "~/utils/format-date";
@@ -24,20 +25,23 @@ import type { Route } from "./+types/$orgId._layout";
 export const handle = { breadcrumb: "Organizational unit" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { user, tenantId, canDirect, canPropose } = await requireDirectoryAccess(request, {
-    write: "organization",
-  });
+  const { user, tenantId, hasPeople, canDirect, canPropose } = await requireDirectoryAccess(
+    request,
+    { write: "organization" },
+  );
   const canWrite = canDirect;
   const canDelete = hasPermission(user, "organization", "delete");
 
-  const [org, ancestry, pendingChange] = await Promise.all([
+  const [org, people, ancestry, pendingChange] = await Promise.all([
     getOrganization(params.orgId),
+    hasPeople ? listPeopleInOrganization(params.orgId, tenantId) : [],
     getOrganizationAncestry(params.orgId),
     findPendingChange(tenantId, "ORGANIZATION", params.orgId),
   ]);
 
   return data({
     org,
+    people,
     ancestry,
     pendingChange,
     canWrite,
@@ -50,7 +54,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function OrganizationDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
-  const { org, ancestry, pendingChange, canWrite, canDelete, canSubmit, currentUserId } =
+  const { org, people, ancestry, pendingChange, canWrite, canDelete, canSubmit, currentUserId } =
     loaderData;
   const base = `/${params.tenant}/organogram`;
 
@@ -153,6 +157,40 @@ export default function OrganizationDetailLayout({ loaderData, params }: Route.C
                       {c.acronym ? (
                         <span className="text-muted-foreground text-xs">{c.acronym}</span>
                       ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {people.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <Users className="size-4" />
+                  {t("organizations.cards.people")} ({people.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-y">
+                  {people.map((entry) => (
+                    <li key={entry.id} className="py-2 text-sm">
+                      <Link
+                        to={`/${params.tenant}/people/${entry.person.id}`}
+                        className="font-medium underline-offset-4 hover:underline"
+                      >
+                        {entry.person.honorific ? `${entry.person.honorific} ` : ""}
+                        {entry.person.firstName} {entry.person.lastName}
+                      </Link>
+                      <div className="text-muted-foreground text-xs">
+                        <Link
+                          to={`/${params.tenant}/positions/${entry.position.id}`}
+                          className="underline-offset-4 hover:underline"
+                        >
+                          {entry.position.title}
+                        </Link>
+                      </div>
                     </li>
                   ))}
                 </ul>

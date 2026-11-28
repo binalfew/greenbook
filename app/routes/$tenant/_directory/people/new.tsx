@@ -50,7 +50,9 @@ export default function NewPerson({ loaderData, params, actionData }: Route.Comp
     <div className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">{t("people.new")}</h1>
-        <p className="text-muted-foreground text-sm">{t("people.newSubtitle")}</p>
+        <p className="text-muted-foreground text-sm">
+          {t(loaderData.canDirect ? "people.newSubtitleDirect" : "people.newSubtitle")}
+        </p>
       </header>
       <RejectionNotes rejection={loaderData.draft?.rejection} tenant={params.tenant} />
       <PersonEditor

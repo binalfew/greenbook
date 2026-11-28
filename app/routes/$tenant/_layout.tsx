@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { DashboardLayout } from "~/components/layout/dashboard-layout";
+import { DIRECTORY_STRUCTURE } from "~/config/navigation";
 import { RoleScope } from "~/generated/prisma/client";
 import { requireAuth } from "~/utils/auth/require-auth.server";
 import { FEATURE_FLAG_KEYS } from "~/utils/config/feature-flag-keys";
@@ -8,6 +9,7 @@ import { getSetting } from "~/utils/config/settings.server";
 import { supportedLanguages } from "~/utils/i18n";
 import { getLangFromRequest } from "~/utils/i18n-cookie.server";
 import { getUnreadCount, listNotifications } from "~/services/notifications.server";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 import { resolveTenant } from "~/utils/tenant.server";
 import { getSidebarState, getSidebarGroupState } from "~/utils/sidebar.server";
 import { getLayoutMode } from "~/utils/layout-mode.server";
@@ -46,6 +48,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     FEATURE_FLAG_KEYS.DIRECTORY,
     { tenantId: tenant.id },
   );
+  // The organogram and the positions are shared, so the system tenant has
+  // those two pages as well: it is where the global admin keeps them.
+  enabledFeatures[DIRECTORY_STRUCTURE] =
+    enabledFeatures[FEATURE_FLAG_KEYS.DIRECTORY] || tenant.slug === SYSTEM_TENANT_SLUG;
 
   const currentLanguage = getLangFromRequest(request) ?? "en";
 

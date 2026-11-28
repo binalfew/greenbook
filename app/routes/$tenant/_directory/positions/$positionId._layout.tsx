@@ -18,12 +18,8 @@ import type { Route } from "./+types/$positionId._layout";
 export const handle = { breadcrumb: "Position" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { user, tenantId, canDirect, canSubmit, canPropose } = await requireDirectoryAccess(
-    request,
-    {
-      write: "position",
-    },
-  );
+  const { user, tenantId, hasPeople, canDirect, canSubmit, canPropose } =
+    await requireDirectoryAccess(request, { write: "position" });
   const canWrite = canDirect;
   const canDelete = hasPermission(user, "position", "delete");
   const canAssignDirect = hasPermission(user, "position-assignment", "write");
@@ -39,7 +35,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     canWrite,
     canDelete,
     canSubmit: canPropose,
-    canAssign: canAssignDirect || canSubmit,
+    canAssign: hasPeople && (canAssignDirect || canSubmit),
+    hasPeople,
     currentUserId: user.id,
   });
 }
@@ -47,8 +44,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function PositionDetailLayout({ loaderData, params }: Route.ComponentProps) {
   const { t } = useTranslation("directory");
   const { t: tc } = useTranslation("common");
-  const { position, pendingChange, canWrite, canDelete, canSubmit, canAssign, currentUserId } =
-    loaderData;
+  const {
+    position,
+    pendingChange,
+    canWrite,
+    canDelete,
+    canSubmit,
+    canAssign,
+    hasPeople,
+    currentUserId,
+  } = loaderData;
   const base = `/${params.tenant}/positions`;
   const peopleBase = `/${params.tenant}/people`;
   const orgBase = `/${params.tenant}/organogram`;
@@ -56,7 +61,7 @@ export default function PositionDetailLayout({ loaderData, params }: Route.Compo
   const canEdit = canWrite || canSubmit;
   const canDel = canDelete || canSubmit;
   const locked = pendingChange !== null;
-  const currentHolder = position.assignments.find((a) => a.isCurrent);
+  const currentHolders = position.assignments.filter((a) => a.isCurrent);
 
   return (
     <div className="space-y-4">
@@ -106,39 +111,51 @@ export default function PositionDetailLayout({ loaderData, params }: Route.Compo
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <UserCog className="size-4" />
-                {t("positions.currentHolder")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {currentHolder ? (
-                <div className="space-y-1">
-                  <Link
-                    to={`${peopleBase}/${currentHolder.person.id}`}
-                    className="text-lg font-medium underline-offset-4 hover:underline"
-                  >
-                    {currentHolder.person.honorific ? `${currentHolder.person.honorific} ` : ""}
-                    {currentHolder.person.firstName} {currentHolder.person.lastName}
-                  </Link>
-                  <p className="text-muted-foreground text-xs">
-                    {t("assignments.timelineFrom", {
-                      date: formatDate(currentHolder.startDate),
-                    })}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <UserX className="text-muted-foreground size-4" />
-                  <span className="text-muted-foreground text-sm">
-                    {t("positions.noCurrentHolder")}
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {hasPeople ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <UserCog className="size-4" />
+                  {t("positions.currentHolder")}
+                  {currentHolders.length > 1 ? ` (${currentHolders.length})` : ""}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {currentHolders.length > 0 ? (
+                  <ul className="divide-y">
+                    {currentHolders.map((holder) => (
+                      <li key={holder.id} className="space-y-1 py-2 first:pt-0 last:pb-0">
+                        <Link
+                          to={`${peopleBase}/${holder.person.id}`}
+                          className="font-medium underline-offset-4 hover:underline"
+                        >
+                          {holder.person.honorific ? `${holder.person.honorific} ` : ""}
+                          {holder.person.firstName} {holder.person.lastName}
+                        </Link>
+                        <p className="text-muted-foreground text-xs">
+                          {t("assignments.timelineFrom", { date: formatDate(holder.startDate) })}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <UserX className="text-muted-foreground size-4" />
+                    <span className="text-muted-foreground text-sm">
+                      {t("positions.noCurrentHolder")}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Users className="size-4 shrink-0" />
+                {t("positions.holdersElsewhere")}
+              </CardContent>
+            </Card>
+          )}
 
           {position.description ? (
             <Card>
@@ -153,31 +170,33 @@ export default function PositionDetailLayout({ loaderData, params }: Route.Compo
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Users className="size-4" />
-                {t("positions.cards.holders")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AssignmentTimeline
-                entries={position.assignments}
-                mode="byPosition"
-                basePrefix={peopleBase}
-                endAction={(entry) =>
-                  entry.isCurrent && canAssign ? (
-                    <Button asChild size="sm" variant="outline">
-                      <Link to={`${base}/${position.id}/assignments/${entry.id}/end`}>
-                        <UserX className="mr-1 size-3" />
-                        {t("assignments.endAssignment")}
-                      </Link>
-                    </Button>
-                  ) : null
-                }
-              />
-            </CardContent>
-          </Card>
+          {hasPeople ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <Users className="size-4" />
+                  {t("positions.cards.holders")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AssignmentTimeline
+                  entries={position.assignments}
+                  mode="byPosition"
+                  basePrefix={peopleBase}
+                  endAction={(entry) =>
+                    entry.isCurrent && canAssign ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={`${base}/${position.id}/assignments/${entry.id}/end`}>
+                          <UserX className="mr-1 size-3" />
+                          {t("assignments.endAssignment")}
+                        </Link>
+                      </Button>
+                    ) : null
+                  }
+                />
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         <div className="space-y-4">

@@ -22,22 +22,13 @@ export function PersonProfile({ person }: { person: DirectoryProfile }) {
   const fullName = [person.firstName, person.lastName].filter(Boolean).join(" ");
   const initials = `${person.firstName?.[0] ?? ""}${person.lastName?.[0] ?? ""}`.toUpperCase();
 
-  // Defensive: the service invariant is "one current per person", but legacy
-  // rows created before the rule landed may still have multiple isCurrent
-  // entries. Pick the most recently started one as the true current and push
-  // the rest into past so the public page shows a single current role.
-  // Also hide zero-duration past rows (startDate === endDate) — these are
-  // auto-closure artifacts, not real historical posts.
-  const currentSorted = person.history
-    .filter((e) => e.isCurrent)
-    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-  const current = currentSorted.slice(0, 1);
-  const past = [...currentSorted.slice(1), ...person.history.filter((e) => !e.isCurrent)]
-    .filter((e) => {
-      if (!e.endDate) return true;
-      return new Date(e.startDate).getTime() !== new Date(e.endDate).getTime();
-    })
-    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+  // A person can hold several positions at once: every current one is shown,
+  // most recently started first, which is also the one named in the header
+  // and at the end of the reporting line.
+  const byStartDesc = (a: { startDate: Date | string }, b: { startDate: Date | string }) =>
+    new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+  const current = person.history.filter((e) => e.isCurrent).sort(byStartDesc);
+  const past = person.history.filter((e) => !e.isCurrent).sort(byStartDesc);
 
   return (
     <div className={inWorkspace ? "" : "mx-auto w-full max-w-6xl px-4 pt-6 pb-12 sm:px-6 lg:px-8"}>

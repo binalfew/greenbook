@@ -17,9 +17,9 @@
     "emptyTitle": "No organizational units yet",
     "emptyDescription": "Submit the first organizational unit to populate the organogram.",
     "new": "New organizational unit",
-    "newSubtitle": "Submit a new organizational unit for review.",
+    "newSubtitle": "Add an organizational unit. It is published at once.",
     "edit": "Edit organizational unit",
-    "editSubtitle": "Your edit will go to the approval queue before becoming public.",
+    "editSubtitle": "Your edit is published at once.",
     "deleteTitle": "Delete this organizational unit?",
     "deleteDescription": "The organizational unit will be soft-deleted after the change is approved. Its child units must be reparented first.",
     "deleteButton": "Save deletion as draft",
@@ -49,7 +49,8 @@
     "cards": {
       "basics": "Basics",
       "contact": "Contact",
-      "metadata": "Metadata"
+      "metadata": "Metadata",
+      "people": "People in this unit"
     },
     "tree": {
       "title": "Tree view",
@@ -73,8 +74,10 @@
     "emptyDescription": "Submit the first person record to populate the directory.",
     "new": "New person",
     "newSubtitle": "Submit a new person for review.",
+    "newSubtitleDirect": "Add a person. The record is published at once.",
     "edit": "Edit person",
     "editSubtitle": "Your edit will go to the approval queue before becoming public.",
+    "editSubtitleDirect": "Your edit is published at once.",
     "deleteTitle": "Delete this person?",
     "deleteDescription": "The person record will be soft-deleted after approval. End their current assignments first.",
     "deleteButton": "Save deletion as draft",
@@ -123,7 +126,7 @@
       "initialAssignment": "Initial position",
       "initialAssignmentHelp": "The position this person holds. The assignment is created together with the person — no separate approval cycle."
     },
-    "currentPosition": "Current position",
+    "currentPosition": "Current positions",
     "noCurrentAssignments": "Not currently holding a position.",
     "visibility": {
       "contactPublic": "Contact info public",
@@ -137,9 +140,9 @@
     "emptyTitle": "No positions yet",
     "emptyDescription": "Submit the first position to populate the directory.",
     "new": "New position",
-    "newSubtitle": "Submit a new position for review.",
+    "newSubtitle": "Add a position. It is published at once.",
     "edit": "Edit position",
-    "editSubtitle": "Your edit will go to the approval queue before becoming public.",
+    "editSubtitle": "Your edit is published at once.",
     "deleteTitle": "Delete this position?",
     "deleteDescription": "The position will be soft-deleted after approval. End the current assignment first.",
     "deleteButton": "Save deletion as draft",
@@ -166,17 +169,18 @@
       "holders": "Holders",
       "metadata": "Metadata"
     },
-    "currentHolder": "Current holder",
+    "currentHolder": "Current holders",
     "noCurrentHolder": "Vacant",
+    "holdersElsewhere": "People are assigned to this position from each organization's own workspace.",
     "directReports": "Direct reports"
   },
   "assignments": {
     "assignPerson": "Assign person",
     "assignToPosition": "Assign to position",
-    "assignToPositionSubtitle": "Create a new assignment for this person. The position's current holder (if any) will be closed on approval.",
-    "assignSubtitle": "Create a new assignment. The current holder (if any) will be closed on approval.",
+    "assignToPositionSubtitle": "Create a new assignment for this person. It is added to the positions they already hold; nobody else's assignment is affected.",
+    "assignSubtitle": "Create a new assignment. The position's other holders and the person's other positions are not affected.",
     "endAssignment": "End assignment",
-    "endSubtitle": "Set the end date and optional notes. The position becomes vacant after approval.",
+    "endSubtitle": "Set the end date and optional notes. The person no longer holds the position after approval.",
     "fields": {
       "person": "Person",
       "personPlaceholder": "Select a person",
@@ -349,7 +353,8 @@
     "BATCH_TOO_LARGE": "Too many changes selected. Select 100 or fewer and try again.",
     "ADMIN_MANAGED": "Organizational units and positions are managed by the system administrator. This change cannot be saved, submitted or approved here.",
     "UNKNOWN": "This change could not be processed. Open it to see what is wrong.",
-    "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review."
+    "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review.",
+    "ALREADY_ASSIGNED": "This person already holds this position."
   },
   "duplicates": {
     "title": "Possible duplicates",

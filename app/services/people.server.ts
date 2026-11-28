@@ -185,8 +185,7 @@ export async function _applyCreatePerson(
 
   // If the payload carries an initial-assignment block, create the
   // PositionAssignment inside the same transaction. _applyCreateAssignment
-  // handles the one-current-per-position + one-current-per-person auto-close
-  // invariants; if the position isn't reachable, it throws and the outer
+  // checks the references; if the position isn't reachable, it throws and the outer
   // transaction rolls back — the person doesn't get created alone.
   if (payload.initialAssignment) {
     await _applyCreateAssignment(

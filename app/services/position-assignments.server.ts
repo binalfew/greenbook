@@ -9,10 +9,13 @@ type Db = Prisma.TransactionClient | typeof prisma;
 // Position Assignments — the temporal link between a Person and a Position.
 //
 // Invariants:
-// - One current assignment per position, one current assignment per person.
-//   On CREATE, any existing `isCurrent` row that collides on either side
-//   (same position OR same person) is auto-closed (endDate := startDate of
-//   the new assignment, isCurrent := false).
+// - A position is a post in an organizational unit, not a single seat: any
+//   number of a tenant's people hold it at once.
+// - A person holds any number of positions at once. Nothing is closed when
+//   an assignment is made; an assignment ends only when someone ends it.
+// - A person holds a given position once at a time: a second current
+//   assignment of the same person to the same position is refused
+//   (`ALREADY_ASSIGNED`).
 // - On UPDATE, if `endDate` is set, `isCurrent` is auto-flipped to false.
 // - Soft-delete via deletedAt; history survives.
 
@@ -123,10 +126,68 @@ async function assertReferencedPerson(personId: string, tenantId: string, db: Db
   }
 }
 
+/** Ceiling on the people listed on an organizational unit's page. */
+const ORG_PEOPLE_TAKE = 200;
+
+/**
+ * The tenant's people currently in an organizational unit: everyone holding
+ * one of the unit's positions, with the position each holds.
+ */
+export async function listPeopleInOrganization(organizationId: string, tenantId: string) {
+  return prisma.positionAssignment.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      isCurrent: true,
+      person: { deletedAt: null },
+      position: { organizationId, deletedAt: null },
+    },
+    orderBy: [
+      { position: { sortOrder: "asc" } },
+      { position: { title: "asc" } },
+      { person: { lastName: "asc" } },
+      { person: { firstName: "asc" } },
+    ],
+    take: ORG_PEOPLE_TAKE,
+    select: {
+      id: true,
+      person: { select: { id: true, firstName: true, lastName: true, honorific: true } },
+      position: { select: { id: true, title: true } },
+    },
+  });
+}
+
+/** Refuse a second current assignment of one person to one position. */
+async function assertNotAlreadyAssigned(
+  db: Db,
+  tenantId: string,
+  payload: Pick<PositionAssignmentPayload, "positionId" | "personId">,
+  exceptId?: string,
+) {
+  const existing = await db.positionAssignment.findFirst({
+    where: {
+      tenantId,
+      deletedAt: null,
+      isCurrent: true,
+      positionId: payload.positionId,
+      personId: payload.personId,
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new PositionAssignmentError(
+      "This person already holds this position",
+      409,
+      "ALREADY_ASSIGNED",
+    );
+  }
+}
+
 // ─── Internal writers ───────────────────────────────────────────────────
 //
 // Writers accept an optional `tx` and fall back to the global prisma client.
-// The approval pipeline always passes `tx` so the auto-close + create are
+// The approval pipeline always passes `tx` so the check + create are
 // atomic with the ChangeRequest update. Tests and future non-approval
 // callers can omit `tx` — a local helper opens one on their behalf.
 
@@ -139,24 +200,7 @@ async function createAssignmentInTx(
   const newEnd = payload.endDate ? new Date(payload.endDate) : null;
   const isCurrent = !newEnd;
 
-  if (isCurrent) {
-    // Auto-close any existing current assignment that collides — either on
-    // the same position (position already filled) or on the same person (a
-    // person may only hold one current post at a time).
-    await tx.positionAssignment.updateMany({
-      where: {
-        tenantId,
-        deletedAt: null,
-        isCurrent: true,
-        OR: [{ positionId: payload.positionId }, { personId: payload.personId }],
-      },
-      data: {
-        isCurrent: false,
-        endDate: newStart,
-        version: { increment: 1 },
-      },
-    });
-  }
+  if (isCurrent) await assertNotAlreadyAssigned(tx, tenantId, payload);
 
   return tx.positionAssignment.create({
     data: {
@@ -219,22 +263,7 @@ export async function _applyUpdateAssignment(
     "applying UPDATE position assignment",
   );
 
-  if (isCurrent) {
-    // Mirror the CREATE path's auto-close: an UPDATE that (re)opens this
-    // assignment as current must close any OTHER current assignment that
-    // collides on the same position or person, or we'd end up with two
-    // `isCurrent` rows and a nondeterministic "current holder".
-    await db.positionAssignment.updateMany({
-      where: {
-        tenantId,
-        deletedAt: null,
-        isCurrent: true,
-        id: { not: id },
-        OR: [{ positionId: payload.positionId }, { personId: payload.personId }],
-      },
-      data: { isCurrent: false, endDate: startDate, version: { increment: 1 } },
-    });
-  }
+  if (isCurrent) await assertNotAlreadyAssigned(db, tenantId, payload, id);
 
   return db.positionAssignment.update({
     where: { id },

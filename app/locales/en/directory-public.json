@@ -69,7 +69,7 @@
     "nationality": "Nationality",
     "languages": "Languages",
     "biography": "Biography",
-    "currentPositions": "Current position",
+    "currentPositions": "Current positions",
     "pastPositions": "Previously",
     "reportingLine": "Reporting line",
     "since": "Since {{date}}",

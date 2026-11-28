@@ -243,6 +243,13 @@ describe("the system tenant has no directory", () => {
     expect((await openDirectory(a.adminCookie, "system")).status).toBe(404);
   });
 
+  it("shows the global admin the Organogram and Positions pages in the system tenant", async () => {
+    const a = await arrange();
+
+    expect((await navFeatures(a.adminCookie, "system")).DIRECTORY_STRUCTURE).toBe(true);
+    expect((await navFeatures(a.adminCookie, "medical")).DIRECTORY_STRUCTURE).toBe(true);
+  });
+
   it("shows the global admin the Directory section of a working tenant", async () => {
     const a = await arrange();
 

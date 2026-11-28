@@ -58,7 +58,7 @@ export async function loader({ request }: Route.LoaderArgs) {
             current.organization
               ? ` · ${current.organization.acronym ?? current.organization.name}`
               : ""
-          }`
+          }${p.currentAssignments.length > 1 ? ` (+${p.currentAssignments.length - 1})` : ""}`
         : null,
       memberState: p.memberState?.abbreviation ?? null,
     };

@@ -14,6 +14,14 @@ import {
 
 export type Permission = { resource: string; action: string };
 
+/**
+ * Key in `enabledFeatures` for the pages that keep the shared structure (the
+ * organogram and the positions). Not a feature flag: the tenant layout sets
+ * it, on for a tenant with a directory and for the system tenant, where the
+ * global admin keeps the structure without a directory of people around it.
+ */
+export const DIRECTORY_STRUCTURE = "DIRECTORY_STRUCTURE";
+
 export type NavChild = {
   title: string;
   tKey?: string;
@@ -101,7 +109,7 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           description: "Organs, departments, offices and units, and how they fit together.",
           url: `${basePrefix}/organogram`,
           icon: Network,
-          featureFlag: "FF_DIRECTORY",
+          featureFlag: DIRECTORY_STRUCTURE,
           permission: "organization:read",
         },
         {
@@ -119,7 +127,7 @@ export function buildNavigationGroups(basePrefix: string): NavGroup[] {
           description: "Formal posts and who holds them.",
           url: `${basePrefix}/positions`,
           icon: BriefcaseBusiness,
-          featureFlag: "FF_DIRECTORY",
+          featureFlag: DIRECTORY_STRUCTURE,
           permission: "position:read",
         },
         {

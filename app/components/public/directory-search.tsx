@@ -104,6 +104,7 @@ function PersonRow({
   noCurrentRole: string;
 }) {
   const current = person.currentAssignments[0];
+  const otherRoles = person.currentAssignments.length - 1;
   const base = useDirectoryBase();
   return (
     <li>
@@ -126,6 +127,7 @@ function PersonRow({
                     <span>{current.organization.acronym ?? current.organization.name}</span>
                   </>
                 )}
+                {otherRoles > 0 ? ` (+${otherRoles})` : ""}
               </>
             ) : (
               noCurrentRole

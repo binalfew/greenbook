@@ -5,6 +5,7 @@ import { isFeatureEnabled } from "~/utils/config/feature-flags.server";
 import type { ChangeContext } from "~/services/directory-changes.server";
 import { buildServiceContext } from "~/utils/request-context.server";
 import type { DirectoryEntityKey } from "~/utils/schemas/directory";
+import { SYSTEM_TENANT_SLUG } from "~/utils/system-tenant";
 
 // The directory subsystem has a specific role shape: a viewer can read, a
 // focal person can submit change requests, and a manager can write directly.
@@ -28,6 +29,20 @@ const ADMIN_MANAGED: Partial<Record<DirectoryResource, DirectoryEntityKey>> = {
   position: "POSITION",
 };
 
+/**
+ * True for the pages that keep the shared structure: the organogram, the
+ * positions and the tree's API. A position's assignment dialogs are not among
+ * them, since an assignment belongs to a tenant's own people.
+ */
+export function isStructurePath(pathname: string): boolean {
+  const [, section, ...rest] = pathname
+    .replace(/\.data$/, "")
+    .split("/")
+    .filter(Boolean);
+  if (section === "organogram" || section === "api") return true;
+  return section === "positions" && !rest.some((s) => s === "assign" || s === "assignments");
+}
+
 export type DirectoryAccess = {
   user: AuthUser;
   /**
@@ -35,6 +50,11 @@ export type DirectoryAccess = {
    * need not be their home tenant. Scope every query and write by this.
    */
   tenantId: string;
+  /**
+   * The tenant keeps people and assigns them to positions. False in the
+   * system tenant, where the admin keeps the shared structure and nothing else.
+   */
+  hasPeople: boolean;
   /** User can direct-apply CRUD against the named resource (manager path). */
   canDirect: boolean;
   /** User can propose changes: `saveDraft`, then `submitDrafts` (focal-person path). */
@@ -57,11 +77,15 @@ export async function requireDirectoryAccess(
   request: Request,
   options: { write?: DirectoryResource } = {},
 ): Promise<DirectoryAccess> {
-  const { user, tenantId } = await requireActingTenant(request);
+  const { user, tenantId, tenantSlug } = await requireActingTenant(request);
   // The directory is on or off per tenant, and the tenant that counts is the
-  // acting one, for the global admin too: a tenant that is not opted in
-  // (the system tenant never is) has no directory for anyone.
-  if (!(await isFeatureEnabled("FF_DIRECTORY", { tenantId }))) {
+  // acting one, for the global admin too: a tenant that is not opted in has
+  // no directory for anyone. The system tenant never is, and has no people;
+  // what it does have is the shared structure, which the admin keeps there.
+  const hasPeople = await isFeatureEnabled("FF_DIRECTORY", { tenantId });
+  const structureOnly =
+    tenantSlug === SYSTEM_TENANT_SLUG && isStructurePath(new URL(request.url).pathname);
+  if (!hasPeople && !structureOnly) {
     throw data({ error: "Not Found" }, { status: 404 });
   }
   const canDirect = options.write ? hasPermission(user, options.write, "write") : false;
@@ -70,7 +94,17 @@ export async function requireDirectoryAccess(
   const canReview = hasPermission(user, "directory-change", "read-all");
   const canApprove = hasPermission(user, "directory-change", "approve");
   const canReject = hasPermission(user, "directory-change", "reject");
-  return { user, tenantId, canDirect, canSubmit, canPropose, canReview, canApprove, canReject };
+  return {
+    user,
+    tenantId,
+    hasPeople,
+    canDirect,
+    canSubmit,
+    canPropose,
+    canReview,
+    canApprove,
+    canReject,
+  };
 }
 
 /**

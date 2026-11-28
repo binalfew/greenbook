@@ -50,6 +50,7 @@ const CONFLICT_CODES = [
   "EMPTY_BATCH",
   "BATCH_TOO_LARGE",
   "ADMIN_MANAGED",
+  "ALREADY_ASSIGNED",
 ] as const;
 
 export type DirectoryConflictCode = (typeof CONFLICT_CODES)[number];

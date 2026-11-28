@@ -23,6 +23,8 @@ export type ActingTenant = {
   user: AuthUser;
   /** Id of the tenant named in the URL. */
   tenantId: string;
+  /** Its slug. */
+  tenantSlug: string;
   isGlobalAdmin: boolean;
 };
 
@@ -43,7 +45,7 @@ export async function requireActingTenant(request: Request): Promise<ActingTenan
   if (!globalAdmin && user.tenantId !== tenant.id) {
     throw data({ error: "You do not have access to this tenant" }, { status: 403 });
   }
-  return { user, tenantId: tenant.id, isGlobalAdmin: globalAdmin };
+  return { user, tenantId: tenant.id, tenantSlug: tenant.slug, isGlobalAdmin: globalAdmin };
 }
 
 /** `requirePermission`, scoped to the acting tenant. */

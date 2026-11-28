@@ -17,9 +17,9 @@
     "emptyTitle": "Aucune unité organisationnelle",
     "emptyDescription": "Soumettez la première unité organisationnelle pour peupler l'organigramme.",
     "new": "Nouvelle unité organisationnelle",
-    "newSubtitle": "Soumettez une nouvelle unité organisationnelle pour revue.",
+    "newSubtitle": "Ajoutez une unité organisationnelle. Elle est publiée immédiatement.",
     "edit": "Modifier l'unité organisationnelle",
-    "editSubtitle": "Votre modification passera par la file d'approbation avant de devenir publique.",
+    "editSubtitle": "Votre modification est publiée immédiatement.",
     "deleteTitle": "Supprimer cette unité organisationnelle ?",
     "deleteDescription": "L'unité organisationnelle sera supprimée (soft-delete) après approbation. Ses unités enfants doivent d'abord être réaffectées.",
     "deleteButton": "Enregistrer la suppression comme brouillon",
@@ -49,7 +49,8 @@
     "cards": {
       "basics": "Informations",
       "contact": "Contact",
-      "metadata": "Métadonnées"
+      "metadata": "Métadonnées",
+      "people": "Personnes dans cette unité"
     },
     "tree": {
       "title": "Vue en arbre",
@@ -73,8 +74,10 @@
     "emptyDescription": "Soumettez la première personne pour peupler le répertoire.",
     "new": "Nouvelle personne",
     "newSubtitle": "Soumettez une nouvelle personne pour revue.",
+    "newSubtitleDirect": "Ajoutez une personne. La fiche est publiée immédiatement.",
     "edit": "Modifier la personne",
     "editSubtitle": "Votre modification passera par la file d'approbation.",
+    "editSubtitleDirect": "Votre modification est publiée immédiatement.",
     "deleteTitle": "Supprimer cette personne ?",
     "deleteDescription": "Le dossier sera supprimé (soft-delete) après approbation. Mettez fin aux affectations en cours avant.",
     "deleteButton": "Enregistrer la suppression comme brouillon",
@@ -123,7 +126,7 @@
       "initialAssignment": "Poste initial",
       "initialAssignmentHelp": "Le poste occupé par cette personne. L'affectation est créée en même temps que la personne — un seul cycle d'approbation."
     },
-    "currentPosition": "Poste actuel",
+    "currentPosition": "Postes actuels",
     "noCurrentAssignments": "Aucun poste actuel.",
     "visibility": {
       "contactPublic": "Contact visible publiquement",
@@ -137,9 +140,9 @@
     "emptyTitle": "Aucun poste",
     "emptyDescription": "Soumettez le premier poste pour peupler le répertoire.",
     "new": "Nouveau poste",
-    "newSubtitle": "Soumettez un nouveau poste pour revue.",
+    "newSubtitle": "Ajoutez un poste. Il est publié immédiatement.",
     "edit": "Modifier le poste",
-    "editSubtitle": "Votre modification passera par la file d'approbation.",
+    "editSubtitle": "Votre modification est publiée immédiatement.",
     "deleteTitle": "Supprimer ce poste ?",
     "deleteDescription": "Le poste sera supprimé (soft-delete) après approbation. Clôturez l'affectation en cours avant.",
     "deleteButton": "Enregistrer la suppression comme brouillon",
@@ -166,17 +169,18 @@
       "holders": "Titulaires",
       "metadata": "Métadonnées"
     },
-    "currentHolder": "Titulaire actuel",
+    "currentHolder": "Titulaires actuels",
     "noCurrentHolder": "Vacant",
+    "holdersElsewhere": "Les personnes sont affectées à ce poste depuis l'espace de travail de chaque organisation.",
     "directReports": "Rapports directs"
   },
   "assignments": {
     "assignPerson": "Affecter une personne",
     "assignToPosition": "Affecter à un poste",
-    "assignToPositionSubtitle": "Créer une nouvelle affectation pour cette personne. Le titulaire actuel du poste (s'il existe) sera clôturé à l'approbation.",
-    "assignSubtitle": "Créer une nouvelle affectation. Le titulaire actuel (s'il existe) sera clôturé à l'approbation.",
+    "assignToPositionSubtitle": "Créer une nouvelle affectation pour cette personne. Elle s'ajoute aux postes qu'elle occupe déjà ; aucune autre affectation n'est modifiée.",
+    "assignSubtitle": "Créer une nouvelle affectation. Les autres titulaires du poste et les autres postes de la personne ne sont pas concernés.",
     "endAssignment": "Clôturer l'affectation",
-    "endSubtitle": "Définir la date de fin et les notes. Le poste devient vacant après approbation.",
+    "endSubtitle": "Définir la date de fin et les notes. La personne n'occupe plus le poste après approbation.",
     "fields": {
       "person": "Personne",
       "personPlaceholder": "Sélectionner une personne",
@@ -349,7 +353,8 @@
     "BATCH_TOO_LARGE": "Trop de modifications sélectionnées. Sélectionnez-en 100 au maximum et réessayez.",
     "ADMIN_MANAGED": "Les unités organisationnelles et les postes sont gérés par l'administrateur du système. Cette modification ne peut pas être enregistrée, soumise ni approuvée ici.",
     "UNKNOWN": "Cette modification n'a pas pu être traitée. Ouvrez-la pour voir ce qui ne va pas.",
-    "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue."
+    "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue.",
+    "ALREADY_ASSIGNED": "Cette personne occupe déjà ce poste."
   },
   "duplicates": {
     "title": "Doublons possibles",

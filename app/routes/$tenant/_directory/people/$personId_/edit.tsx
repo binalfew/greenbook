@@ -43,7 +43,9 @@ export default function EditPerson({ loaderData, params, actionData }: Route.Com
     <div className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">{t("people.edit")}</h1>
-        <p className="text-muted-foreground text-sm">{t("people.editSubtitle")}</p>
+        <p className="text-muted-foreground text-sm">
+          {t(canDirect ? "people.editSubtitleDirect" : "people.editSubtitle")}
+        </p>
       </header>
       <RejectionNotes rejection={loaderData.draft?.rejection} tenant={params.tenant} />
       <PersonEditor

@@ -114,7 +114,7 @@ export default function PositionsIndex({ loaderData, params }: Route.ComponentPr
       header: t("positions.currentHolder"),
       cell: (row) =>
         row._count.assignments > 0 ? (
-          <Badge variant="default">●</Badge>
+          <Badge variant="default">{row._count.assignments}</Badge>
         ) : (
           <Badge variant="outline">{t("positions.noCurrentHolder")}</Badge>
         ),
