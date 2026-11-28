@@ -147,6 +147,10 @@ COPY --from=build --chown=node:node /app/server            ./server
 COPY --from=build --chown=node:node /app/app/generated     ./app/generated
 COPY --from=build --chown=node:node /app/prisma            ./prisma
 COPY --from=build --chown=node:node /app/prisma.config.ts  ./prisma.config.ts
+COPY --from=build --chown=node:node /app/app/utils/config/tenant-flag-membership.server.ts ./app/utils/config/tenant-flag-membership.server.ts
+# The one app source file prisma/seed.ts imports (its own imports are
+# relative, into app/generated). Without it `npx tsx prisma/seed.ts` fails
+# in this image with ERR_MODULE_NOT_FOUND.
 # Seven things must land in the runtime image, in order of importance:
 #   1. server.js         — root-level Express bootstrap (npm run start target)
 #   2. server/           — correlation, logger, rate-limit, security, sentry,
