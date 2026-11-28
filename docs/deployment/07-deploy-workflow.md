@@ -93,10 +93,10 @@ Greenbook's env validation (`app/utils/config/env.server.ts`) uses Zod to enforc
 
 The seed ([§7.7](#77-first-run-bootstrap-one-time)) creates exactly one account, the global admin, from these two variables. It has no built-in account and no built-in password, and it stops before writing anything when either variable is missing or the password is shorter than 8 characters.
 
-| Variable              | Read by          | Notes                                                                                                   |
-| --------------------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `SEED_ADMIN_EMAIL`    | `prisma/seed.ts` | Login of the global admin. Use a mailbox you control, so password reset works.                          |
-| `SEED_ADMIN_PASSWORD` | `prisma/seed.ts` | Used only when the account is created. A later seed run never resets it. Generate it; do not reuse one. |
+| Variable              | Read by          | Notes                                                                          |
+| --------------------- | ---------------- | ------------------------------------------------------------------------------ |
+| `SEED_ADMIN_EMAIL`    | `prisma/seed.ts` | Login of the global admin. Use a mailbox you control, so password reset works. |
+| `SEED_ADMIN_PASSWORD` | `prisma/seed.ts` | The admin's password after every seed run. Generate it; do not reuse one.      |
 
 The running app never reads either variable. Once the first-run seed has created the account you can remove `SEED_ADMIN_PASSWORD` from `/etc/greenbook.env`; put it back (any value of 8+ characters) if you ever run the seed again.
 
@@ -199,8 +199,8 @@ SESSION_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_48
 # Honeypot-field encryption seed. Generate with: openssl rand -base64 32
 HONEYPOT_SECRET=REPLACE_WITH_OPENSSL_RAND_BASE64_32
 
-# The global admin the first-run seed creates (§7.7). The password is used
-# only when the account is created. Generate with: openssl rand -base64 24
+# The global admin the seed creates (§7.7). Every seed run empties the
+# database and sets this password. Generate with: openssl rand -base64 24
 SEED_ADMIN_EMAIL=REPLACE_WITH_THE_ADMINS_MAILBOX
 SEED_ADMIN_PASSWORD=REPLACE_WITH_OPENSSL_RAND_BASE64_24
 
@@ -603,11 +603,20 @@ $ docker run --rm \
     --env-file /etc/greenbook.env \
     greenbook:$VERSION \
     npx --no-install prisma db push
+
 # Code-only deploy:
 #   "The database is already in sync with the Prisma schema."
 # Schema-changed deploy:
 #   "🚀 Your database is now in sync with your schema."
 # Safe to run on every deploy — costs <1 s when there's nothing to apply.
+
+# Seed database — ONLY when a clean database is required. The seed EMPTIES
+# EVERY TABLE first: tenants, users, people, units, positions, change
+# requests and the audit log are deleted. Take a backup before running it.
+$ docker run --rm \
+    --env-file /etc/greenbook.env \
+    greenbook:$VERSION \
+    npx tsx prisma/seed.ts
 
 # ── STEP 5. Promote — pin and recreate ────────────────────────────
 $ echo "APP_VERSION=$VERSION" > /opt/greenbook/.env
@@ -1298,21 +1307,12 @@ $ docker run --rm --env-file /etc/greenbook.env \
 # Expected on a fresh database: tenants 1 (system), roles 4, users 1 (the admin).
 ```
 
-The seed script is safe to re-run on a database that holds data: it leaves existing tenants, directory records and reference data alone, and it never removes a tenant from a feature flag's enabled list. A re-run still restores the permissions of the four canonical roles, and re-creates the admin named by `SEED_ADMIN_EMAIL` if that account is missing. It never resets the password of an account that exists.
+**The seed empties the database before it writes.** Every table is truncated, then the baseline is created again, so a re-run deletes every tenant, user, person, organizational unit, position, change request, session and audit-log entry made since, and sets the admin's password to `SEED_ADMIN_PASSWORD`. Run it on a first deploy, or when you want a clean database; never as a routine re-deploy step. Back the database up first if it holds anything you need.
 
 The seed creates no working tenant, no demo users and no directory records. After it runs, sign in as the admin and create the tenants, and their managers and focal persons, in the UI.
 
-> **⚠ A database seeded by an earlier version still has the old demo accounts**
+> **⚠ A database seeded by an earlier version had demo accounts with published passwords**
 >
-> Earlier versions of `prisma/seed.ts` created four accounts with fixed passwords that were published in this repository, plus a `demo` tenant with starter records. The current seed does not create them, and does not remove them either:
->
-> | Account                    | Do this                                                     |
-> | -------------------------- | ----------------------------------------------------------- |
-> | `admin@africanunion.org`   | change the password, or delete it once another admin exists |
-> | `manager@africanunion.org` | delete                                                      |
-> | `focal@africanunion.org`   | delete                                                      |
-> | `user@africanunion.org`    | delete                                                      |
->
-> If `SEED_ADMIN_EMAIL` names a different address, a re-run adds that admin beside the old one; the old account keeps working until you deal with it.
+> Earlier versions of `prisma/seed.ts` created `admin@`, `manager@`, `focal@` and `user@africanunion.org` with fixed passwords that are readable in this repository's history. Running the current seed removes them along with everything else. On a database you cannot empty, change or delete those accounts by hand instead.
 
 ---

@@ -49,41 +49,4 @@ describe("running the seed", () => {
       ["read"],
     );
   });
-
-  it("removes unused permissions from an existing database and keeps the others", async () => {
-    await runSeed();
-    const admin = await prisma.role.findFirstOrThrow({ where: { name: "admin" } });
-    for (const [resource, action] of [
-      ["tenant", "create"],
-      ["permission", "delete"],
-      ["role", "update"],
-      ["notification", "read"],
-      ["saved-view", "write"],
-      ["report", "read"],
-      ["reference-data", "write"],
-      ["reference-data", "delete"],
-    ]) {
-      await prisma.permission.create({
-        data: {
-          resource,
-          action,
-          module: "system",
-          rolePermissions: { create: { roleId: admin.id, access: "any" } },
-        },
-      });
-    }
-
-    await runSeed();
-
-    const left = await prisma.permission.findMany({
-      where: {
-        OR: [
-          { resource: { in: ["tenant", "permission", "notification", "saved-view", "report"] } },
-          { resource: "role", action: { not: "read" } },
-          { resource: "reference-data", action: { not: "read" } },
-        ],
-      },
-    });
-    expect(left.map((p) => `${p.resource}:${p.action}`)).toEqual(["report:read"]);
-  });
 });

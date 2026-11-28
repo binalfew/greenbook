@@ -20,9 +20,7 @@ function handleDuplicate(entity: string): never {
 }
 
 // The reference tables are one shared set, so a code is unique across the
-// whole table. Checked here rather than by a database constraint: databases
-// that predate the shared set hold one copy per tenant until the seed's
-// `mergeDuplicateReferenceData` step has collapsed them.
+// whole table. Checked here rather than by a database constraint.
 const codeHolders = {
   title: (code: string) => prisma.title.findFirst({ where: { code }, select: { id: true } }),
   organizationType: (code: string) =>

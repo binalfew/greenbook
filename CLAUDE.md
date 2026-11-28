@@ -47,7 +47,7 @@ npm run format           # Prettier format all files
 npm run docker:up        # Start PostgreSQL (dev + test containers; host ports from DB_PORT / DB_TEST_PORT)
 npm run docker:down      # Stop containers
 npm run db:push          # Remove duplicate user-role rows (upgrade step), then sync Prisma schema to DB
-npm run db:seed          # Seed roles, permissions, feature flags, reference data, the system tenant and the global admin
+npm run db:seed          # EMPTIES every table, then seeds roles, permissions, feature flags, reference data, the system tenant and the global admin
 npm run db:studio        # Prisma Studio GUI
 ```
 
@@ -180,7 +180,7 @@ Four entities. `Organization` and `Position` have **no `tenantId`**: there is on
 - **`Position`** — shared; formal post inside an org, with a `reportsToId` self-reference for internal reporting chains.
 - **`PositionAssignment`** — tenant-scoped temporal link between a tenant's Person and a shared Position (`startDate`, `endDate`, `isCurrent`). Auto-closes the prior current assignment when a new one starts on the same position **within the same tenant**; two tenants can each have a current holder of one position.
 
-Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 member states with region joins), `OrganizationType`, `PositionType`, plus `Title`. These tables have no `tenantId`: one set is shared by every tenant, seeded create-only by `seedDirectoryReference()` / `seedTitles()` in `prisma/seed.ts`, and only the global admin can edit it (`app/utils/reference-data-access.server.ts`).
+Supporting reference data: `RegionalGroup` (5 AU regions), `MemberState` (55 member states with region joins), `OrganizationType`, `PositionType`, plus `Title`. These tables have no `tenantId`: one set is shared by every tenant, seeded by `seedDirectoryReference()` / `seedTitles()` in `prisma/seed.ts`, and only the global admin can edit it (`app/utils/reference-data-access.server.ts`).
 
 ### Editorial workflow (ChangeRequest engine)
 
@@ -305,9 +305,9 @@ There are four roles, and they are global: each is one row with `tenantId = null
 - `focal` (scope `TENANT`) — directory reads + `directory-change:{submit, withdraw-own, read-own}` in the user's home tenant; proposes changes to people and assignments only
 - `manager` (scope `TENANT`) — everything `focal` has + writes and deletes on `person` and `position-assignment` (not `organization` or `position`) + `directory-change:{read-all, approve, reject}` + `user:{read,create,update,delete}` and `role:read` in the user's home tenant
 
-The seed creates one tenant and one account, and no demo data: the `system` tenant and the global admin, whose email and password come from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (`adminAccountFromEnv` in `prisma/seed.ts`). The seed stops before writing anything when either is missing or the password is under 8 characters, and it never resets the password of an account that exists. There is no demo tenant, no seeded focal person, manager or reader, and no starter directory: working tenants and their users are created in the UI. Do not reintroduce an account with a built-in password.
+The seed creates one tenant and one account, and no demo data: the `system` tenant and the global admin, whose email and password come from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (`adminAccountFromEnv` in `prisma/seed.ts`). **The seed empties the database first** (`emptyDatabase` truncates every table), so each run ends with exactly that baseline: tenants, users, directory records, sessions and the audit log made since are gone, and the admin's password is whatever the environment says. It is a reset, not an upgrade step — do not run it on a database whose data matters. The seed stops before emptying or writing anything when either variable is missing or the password is under 8 characters. There is no demo tenant, no seeded focal person, manager or reader, and no starter directory: working tenants and their users are created in the UI. Do not reintroduce an account with a built-in password.
 
-The `system` tenant is admin-only: it holds no people, assignments or change requests, is on neither directory flag's enabled list, and no user in it can hold a tenant-scope role (`SystemTenantRoleError` in `app/services/users.server.ts`, `SystemTenantDirectoryError` in `app/services/tenant-features.server.ts`). It is recognised by its slug (`SYSTEM_TENANT_SLUG`), which cannot be changed, and it cannot be deleted (`updateTenant` / `deleteTenant` in `app/services/tenants.server.ts`). The seed step `emptySystemTenantDirectory` (`prisma/seed-system-tenant.ts`) moves the people, assignments and change requests an older database kept there into the `misd` tenant, when that tenant exists.
+The `system` tenant is admin-only: it holds no people, assignments or change requests, is on neither directory flag's enabled list, and no user in it can hold a tenant-scope role (`SystemTenantRoleError` in `app/services/users.server.ts`, `SystemTenantDirectoryError` in `app/services/tenant-features.server.ts`). It is recognised by its slug (`SYSTEM_TENANT_SLUG`), which cannot be changed, and it cannot be deleted (`updateTenant` / `deleteTenant` in `app/services/tenants.server.ts`).
 
 ### Feature flags
 

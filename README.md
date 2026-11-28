@@ -70,12 +70,12 @@ The Postgres containers publish on the host ports named by `DB_PORT` (default 54
 
 ### The first account
 
-`npm run db:seed` creates one tenant and one account, and no demo data:
+`npm run db:seed` **empties the database** (every table is truncated), then creates one tenant and one account, and no demo data:
 
 - the `system` tenant, the global admin's home, which holds no directory records;
-- the global admin, with the email and password in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. The seed stops without writing anything when either is missing or the password is under 8 characters.
+- the global admin, with the email and password in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. The seed stops without emptying or writing anything when either is missing or the password is under 8 characters.
 
-The password is used only when the account is created; running the seed again never resets it. Sign in as that admin and create the working tenants, and their managers and focal persons, under **Tenants** and **Settings → Security → Users**.
+Running the seed again is a reset: everything created since, tenants, users and directory records included, is deleted, and the admin gets the password in the environment. Sign in as that admin and create the working tenants, and their managers and focal persons, under **Tenants** and **Settings → Security → Users**.
 
 ## Project layout
 
@@ -106,7 +106,7 @@ greenbook/
 │   └── root.tsx                 # SSR shell
 ├── prisma/
 │   ├── schema.prisma            # Single Prisma schema
-│   └── seed.ts                  # Re-runnable seed (roles, permissions, flags, reference data, system tenant, admin)
+│   └── seed.ts                  # Seed: empties the database, then roles, permissions, flags, reference data, system tenant, admin
 ├── public/                      # Service worker, manifest, robots.txt
 ├── server/                      # Express middleware (correlation, request log, rate limit, CORS, Sentry, shutdown)
 ├── tests/
@@ -134,7 +134,7 @@ npm run format               # Prettier
 # Database
 npm run docker:up            # Start the dev and test Postgres containers
 npm run db:push              # Sync schema to DB (no migration files); first removes duplicate user-role rows
-npm run db:seed              # Re-runnable seed
+npm run db:seed              # Empty the database and seed the baseline
 npm run db:studio            # Prisma Studio GUI
 
 # Production
@@ -154,7 +154,7 @@ Read [CLAUDE.md](./CLAUDE.md) first. It maps each subsystem to its files, descri
 
 ## Feature flags
 
-Flags live in the `FeatureFlag` table and are seeded by `prisma/seed.ts`; the seed removes any flag that is not in this list. A tenant-scoped flag is on for exactly the tenants in its enabled list. `/$tenant/settings/features` lists the flags; a tenant's own opt-ins are managed from its Features page under `/$tenant/tenants/$tenantId/features`.
+Flags live in the `FeatureFlag` table and are seeded by `prisma/seed.ts`. A tenant-scoped flag is on for exactly the tenants in its enabled list. `/$tenant/settings/features` lists the flags; a tenant's own opt-ins are managed from its Features page under `/$tenant/tenants/$tenantId/features`.
 
 | Key                   | Scope  | Seeded state       | What it gates                                      |
 | --------------------- | ------ | ------------------ | -------------------------------------------------- |

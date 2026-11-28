@@ -7,7 +7,6 @@ import { loader as userRolesLoader } from "~/routes/$tenant/settings/security/us
 import { loader as newUserLoader } from "~/routes/$tenant/settings/security/users/new";
 import { csrf } from "~/utils/auth/csrf.server";
 import { createSessionCookie } from "./helpers/session";
-import { detachRolesFromTenants } from "../../prisma/seed-role-tenancy";
 
 // Roles are platform-wide definitions: the canonical `manager` and `focal`
 // rows belong to no tenant. These tests pin down that a role an admin creates
@@ -139,93 +138,5 @@ describe("a tenant-scope role created by an admin", () => {
     expect(
       await prisma.role.count({ where: { name: { equals: "editor", mode: "insensitive" } } }),
     ).toBe(1);
-  });
-});
-
-describe("roles stored against a tenant the old way", () => {
-  it("are moved to no tenant, keeping their holders and permissions", async () => {
-    const a = await arrange();
-    const perm = await prisma.permission.findFirstOrThrow();
-    const old = await prisma.role.create({
-      data: {
-        name: "editor",
-        scope: "TENANT",
-        tenantId: a.adminHome.id,
-        rolePermissions: { create: { permissionId: perm.id } },
-        userRoles: { create: { userId: a.colleague.id } },
-      },
-    });
-
-    await detachRolesFromTenants(prisma);
-    await detachRolesFromTenants(prisma);
-
-    const role = await prisma.role.findUniqueOrThrow({
-      where: { id: old.id },
-      select: {
-        name: true,
-        tenantId: true,
-        _count: { select: { rolePermissions: true, userRoles: true } },
-      },
-    });
-    expect(role).toEqual({
-      name: "editor",
-      tenantId: null,
-      _count: { rolePermissions: 1, userRoles: 1 },
-    });
-
-    const newUser = await newUserLoader(
-      args(get(a.managerCookie, a.elsewhere.slug), { tenant: a.elsewhere.slug }),
-    );
-    expect(names(newUser.data.roles)).toEqual(["editor", "focal", "manager"]);
-  });
-
-  it("are renamed after their tenant when the name is already taken", async () => {
-    const a = await arrange();
-    await prisma.role.create({ data: { name: "Editor", scope: "TENANT" } });
-    await prisma.role.createMany({
-      data: [
-        { name: "editor", scope: "TENANT", tenantId: a.adminHome.id },
-        { name: "editor", scope: "TENANT", tenantId: a.elsewhere.id },
-        { name: "manager", scope: "TENANT", tenantId: a.elsewhere.id },
-      ],
-    });
-
-    await detachRolesFromTenants(prisma);
-    await detachRolesFromTenants(prisma);
-
-    const roles = await prisma.role.findMany({ select: { name: true, tenantId: true } });
-    expect(roles.every((r) => r.tenantId === null)).toBe(true);
-    expect(names(roles)).toEqual(
-      [
-        "Editor",
-        "admin",
-        `editor (${a.adminHome.slug})`,
-        `editor (${a.elsewhere.slug})`,
-        "focal",
-        "manager",
-        `manager (${a.elsewhere.slug})`,
-      ].sort(),
-    );
-  });
-
-  it("end up with a name each, the oldest keeping a name only tenants' roles shared", async () => {
-    const a = await arrange();
-    const clash = `editor (${a.elsewhere.slug})`;
-    await prisma.role.create({ data: { name: clash, scope: "TENANT" } });
-    const first = await prisma.role.create({
-      data: { name: "editor", scope: "TENANT", tenantId: a.adminHome.id },
-    });
-    const second = await prisma.role.create({
-      data: { name: "Editor", scope: "TENANT", tenantId: a.elsewhere.id },
-    });
-
-    await detachRolesFromTenants(prisma);
-    await detachRolesFromTenants(prisma);
-
-    const roles = await prisma.role.findMany({ select: { id: true, name: true } });
-    const lowered = roles.map((r) => r.name.toLowerCase());
-    expect(new Set(lowered).size).toBe(lowered.length);
-    expect(roles.find((r) => r.id === first.id)?.name).toBe("editor");
-    expect(roles.find((r) => r.id === second.id)?.name).toBe(`Editor (${a.elsewhere.slug} 2)`);
   });
 });

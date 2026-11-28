@@ -189,7 +189,43 @@ describe("running the seed", () => {
     expect(await prisma.userStatus.count()).toBe(0);
   });
 
-  it("leaves the admin's password alone when run again with another one", async () => {
+  it("empties the database before it writes: a second run leaves the baseline and nothing else", async () => {
+    await runSeed();
+    const working = await prisma.tenant.create({ data: buildTenant() });
+    await arrangeWorkingDirectory(working.id);
+    await prisma.organizationType.updateMany({
+      where: { code: "UNIT" },
+      data: { name: "Renamed by hand" },
+    });
+    for (const key of DIRECTORY_FLAGS) {
+      await prisma.featureFlag.update({
+        where: { key },
+        data: { enabledForTenants: { push: working.id } },
+      });
+    }
+
+    await runSeed();
+
+    expect((await prisma.tenant.findMany()).map((t) => t.slug)).toEqual(["system"]);
+    expect((await prisma.user.findMany()).map((u) => u.email)).toEqual([ADMIN_EMAIL]);
+    const { organizations, positions, people, assignments, changeRequests } =
+      await directorySnapshot();
+    expect([organizations, positions, people, assignments, changeRequests]).toEqual([
+      [],
+      [],
+      [],
+      [],
+      [],
+    ]);
+    const unit = await prisma.organizationType.findFirstOrThrow({ where: { code: "UNIT" } });
+    expect(unit.name).not.toBe("Renamed by hand");
+    expect(await prisma.memberState.count()).toBe(55);
+    for (const key of DIRECTORY_FLAGS) {
+      expect(await enabledTenants(key)).toEqual([]);
+    }
+  });
+
+  it("sets the admin's password from the environment on every run", async () => {
     await runSeed();
     vi.stubEnv("SEED_ADMIN_PASSWORD", "a-different-password");
 
@@ -199,152 +235,18 @@ describe("running the seed", () => {
       where: { email: ADMIN_EMAIL },
       select: { password: { select: { hash: true } } },
     });
-    expect(await compare(process.env.SEED_ADMIN_PASSWORD!, admin.password!.hash)).toBe(false);
+    expect(await compare("a-different-password", admin.password!.hash)).toBe(true);
     expect(await prisma.user.count()).toBe(1);
   });
 
-  it("moves directory records out of an existing system tenant into the misd tenant", async () => {
-    // A database seeded before the system tenant became admin-only: the
-    // directory, both flags and the working accounts all sit in `system`.
-    await runSeed();
-    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
-    const { manager, person } = await arrangeWorkingDirectory(system.id);
-    const photo = await prisma.personPhoto.create({
-      data: {
-        tenantId: system.id,
-        contentType: "image/webp",
-        width: 1,
-        height: 1,
-        size: 1,
-        data: new Uint8Array([0]),
-      },
-    });
-    await prisma.person.update({ where: { id: person.id }, data: { photoId: photo.id } });
-    await prisma.featureFlag.updateMany({
-      where: { key: { in: DIRECTORY_FLAGS } },
-      data: { enabledForTenants: [system.id] },
-    });
-    const { organizations, positions, people, assignments, changeRequests } =
-      await directorySnapshot();
-    const inMisd = <T extends { tenantId: string }>(rows: T[]) =>
-      rows.map((row) => ({ ...row, tenantId: misd.id }));
-
-    await runSeed();
-
-    expect(await directoryCounts(system.id)).toEqual(NO_DIRECTORY_RECORDS);
-    const after = await directorySnapshot();
-    expect(after.organizations).toEqual(organizations);
-    expect(after.positions).toEqual(positions);
-    expect(after.people).toEqual(inMisd(people));
-    expect(after.assignments).toEqual(inMisd(assignments));
-    expect(after.changeRequests).toEqual(inMisd(changeRequests));
-    expect((await prisma.personPhoto.findUniqueOrThrow({ where: { id: photo.id } })).tenantId).toBe(
-      misd.id,
-    );
-    for (const key of DIRECTORY_FLAGS) {
-      expect(await enabledTenants(key)).toEqual([misd.id]);
-    }
-    expect(await homeTenantSlug(manager.email)).toBe("misd");
-    expect(await homeTenantSlug(ADMIN_EMAIL)).toBe("system");
-  });
-
-  it("creates no tenant to move a system tenant's directory into", async () => {
-    await runSeed();
-    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    await arrangeWorkingDirectory(system.id);
-    const before = await directorySnapshot();
-
-    await runSeed();
-
-    expect(await prisma.tenant.count()).toBe(1);
-    expect(await directorySnapshot()).toEqual(before);
-  });
-
-  it("leaves existing directory records untouched when run again", async () => {
+  it("empties nothing when the admin login is missing", async () => {
     await runSeed();
     const working = await prisma.tenant.create({ data: buildTenant() });
-    await arrangeWorkingDirectory(working.id);
-    await prisma.organizationType.updateMany({
-      where: { code: "UNIT" },
-      data: { name: "Renamed by hand" },
-    });
-    const etiopia = await prisma.memberState.findFirstOrThrow({
-      where: { abbreviation: "ETH" },
-    });
-    await prisma.memberStateRegion.deleteMany({ where: { memberStateId: etiopia.id } });
+    vi.stubEnv("SEED_ADMIN_PASSWORD", "");
 
-    const before = await directorySnapshot();
-    await runSeed();
+    await expect(runSeed()).rejects.toThrow(/SEED_ADMIN_/);
 
-    expect(await directorySnapshot()).toEqual(before);
-    expect(await prisma.tenant.count()).toBe(2);
-  });
-
-  it("keeps every tenant already on a flag's enabled list when run again", async () => {
-    await runSeed();
-    const optedIn = await prisma.tenant.create({ data: buildTenant() });
-    for (const key of [...DIRECTORY_FLAGS, "FF_NOTIFICATIONS"]) {
-      await prisma.featureFlag.update({
-        where: { key },
-        data: { enabledForTenants: { push: optedIn.id } },
-      });
-    }
-
-    await runSeed();
-
-    for (const key of [...DIRECTORY_FLAGS, "FF_NOTIFICATIONS"]) {
-      expect(await enabledTenants(key)).toEqual([optedIn.id]);
-    }
-  });
-
-  it("opts the tenants that use the directory into notifications when the system tenant hands its directory over", async () => {
-    await runSeed();
-    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
-    const working = await prisma.tenant.create({ data: buildTenant() });
-    const idle = await prisma.tenant.create({ data: buildTenant() });
-    // The state of a database seeded before the system tenant became
-    // admin-only: it is a directory tenant and nobody has notifications.
-    await prisma.featureFlag.updateMany({
-      where: { key: { in: DIRECTORY_FLAGS } },
-      data: { enabledForTenants: [system.id, working.id] },
-    });
-
-    await runSeed();
-
-    for (const key of DIRECTORY_FLAGS) {
-      expect(await enabledTenants(key)).toEqual([misd.id, working.id].sort());
-    }
-    const notified = await enabledTenants("FF_NOTIFICATIONS");
-    expect(notified).toEqual([misd.id, working.id].sort());
-    expect(notified).not.toContain(idle.id);
-  });
-
-  it("hands the system tenant's place on notifications to the misd tenant", async () => {
-    await runSeed();
-    const system = await prisma.tenant.findFirstOrThrow({ where: { slug: "system" } });
-    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
-    await prisma.featureFlag.update({
-      where: { key: "FF_NOTIFICATIONS" },
-      data: { enabledForTenants: { push: system.id } },
-    });
-
-    await runSeed();
-
-    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([misd.id]);
-  });
-
-  it("leaves a tenant opted out of notifications by hand opted out when run again", async () => {
-    await runSeed();
-    const misd = await prisma.tenant.create({ data: buildTenant({ slug: "misd" }) });
-    await prisma.featureFlag.update({
-      where: { key: "FF_DIRECTORY" },
-      data: { enabledForTenants: { push: misd.id } },
-    });
-
-    await runSeed();
-
-    expect(await enabledTenants("FF_NOTIFICATIONS")).toEqual([]);
+    expect(await prisma.tenant.count({ where: { id: working.id } })).toBe(1);
+    expect(await prisma.user.count()).toBe(1);
   });
 });

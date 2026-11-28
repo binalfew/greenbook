@@ -28,7 +28,7 @@ Only `reference-data:read` is seeded. Changes are gated on the global admin role
 - `seedTitles()` — Mr., Mrs., Ms., Dr., Prof.
 - `seedDirectoryReference()` — organization types, position types, the five AU regional groups and the 55 member states with their region links.
 
-Both are create-only: a row whose code already exists is left exactly as it is, so edits made in the app survive a re-seed. `mergeDuplicateReferenceData` in `prisma/seed-shared-reference-data.ts` runs first and folds together rows that an older, tenant-scoped database held once per tenant.
+The seed empties the database before it writes, so a re-seed puts both sets back as shipped: edits made to reference data in the app do not survive it.
 
 ## Admin UI
 

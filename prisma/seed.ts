@@ -2,10 +2,6 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
 import { pathToFileURL } from "node:url";
 import { PrismaClient } from "../app/generated/prisma/client";
-import { addTenantToFlag } from "../app/utils/config/tenant-flag-membership.server";
-import { detachRolesFromTenants } from "./seed-role-tenancy";
-import { mergeDuplicateReferenceData } from "./seed-shared-reference-data";
-import { emptySystemTenantDirectory } from "./seed-system-tenant";
 
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter });
@@ -47,14 +43,21 @@ const UNIQUE_PERMISSIONS = [
   { resource: "directory-change", action: "reject", module: "directory", description: "Reject directory change requests" },
 ];
 
-/** The whole seed. Safe to run again on a database that already holds data. */
+/**
+ * The whole seed. It EMPTIES THE DATABASE FIRST: every table is truncated,
+ * then the baseline is written again — statuses, the system tenant,
+ * permissions, roles, feature flags, the global admin and the shared
+ * reference data. Tenants, users, people, units, positions, change requests,
+ * sessions and the audit log made since the last run are gone afterwards.
+ */
 export async function runSeed() {
   console.log("🌱 Starting seeding...");
 
   // Read first, so a missing value stops the seed before it writes anything.
   const admin = adminAccountFromEnv();
 
-  await releaseDeletedUserEmails();
+  console.log("Emptying the database...");
+  await emptyDatabase();
 
   // Create default user statuses
   console.log("Creating default user statuses...");
@@ -94,33 +97,21 @@ export async function runSeed() {
     },
   });
 
-  // Resolve or create the system tenant, the global admin's home. It is
-  // recognised by its `system` slug, which the app does not let anyone change. Once the row exists, the seed
-  // leaves it alone — admins can edit name/contact/brand from the UI without
-  // worrying about being overwritten on the next run.
-  console.log("Resolving default tenant...");
-  const existingTenant = await prisma.tenant.findFirst({
-    where: { slug: "system", deletedAt: null },
+  // The system tenant, the global admin's home. It is recognised by its
+  // `system` slug, which the app does not let anyone change.
+  console.log("Creating the system tenant...");
+  const tenant = await prisma.tenant.create({
+    data: {
+      name: "System",
+      slug: "system",
+      email: "info@africanunion.org",
+      phone: "+251 11 551 7700",
+      city: "",
+      state: "",
+      address: "",
+      brandTheme: "auc",
+    },
   });
-  const tenant =
-    existingTenant ??
-    (await prisma.tenant.create({
-      data: {
-        name: "System",
-        slug: "system",
-        email: "info@africanunion.org",
-        phone: "+251 11 551 7700",
-        city: "",
-        state: "",
-        address: "",
-        brandTheme: "auc",
-      },
-    }));
-
-  // Webhooks were removed from the product: drop their permissions (role
-  // grants cascade) and any stored settings left behind in older databases.
-  await prisma.permission.deleteMany({ where: { resource: "webhook" } });
-  await prisma.systemSetting.deleteMany({ where: { key: { startsWith: "webhooks." } } });
 
   // Create permissions (unique by resource+action)
   console.log("Creating default permissions...");
@@ -131,25 +122,6 @@ export async function runSeed() {
       create: perm,
     });
   }
-
-  // 2FA was removed (#25): clear what it left behind in an existing database.
-  // Safe to re-run; each step is a no-op once the rows are gone.
-  await prisma.permission.deleteMany({ where: { resource: "two-factor" } });
-  await prisma.systemSetting.deleteMany({ where: { key: "security.require2fa" } });
-  await prisma.verification.deleteMany({ where: { type: { in: ["2fa", "2fa-verify"] } } });
-
-  // Permissions nothing checks (#20): tenant, permission and role management
-  // and changes to reference data are gated on the global admin role, not on
-  // a permission. Safe to re-run.
-  await prisma.permission.deleteMany({
-    where: {
-      OR: [
-        { resource: { in: ["tenant", "permission", "notification", "saved-view"] } },
-        { resource: "role", action: { in: ["create", "update", "delete"] } },
-        { resource: "reference-data", action: { in: ["write", "delete"] } },
-      ],
-    },
-  });
 
   // Create roles
   //
@@ -215,12 +187,6 @@ export async function runSeed() {
     "TENANT",
     "Approves focal submissions, edits people and their assignments, and manages users within the user's home tenant",
   );
-
-  // Data move (#18): roles created before roles became platform-wide were
-  // stored against a tenant. Runs after the canonical roles exist so those
-  // keep their names.
-  const detachedRoles = await detachRolesFromTenants(prisma);
-  if (detachedRoles > 0) console.log(`Moved ${detachedRoles} role(s) out of their tenant.`);
 
   // Assign permissions via RolePermission
   console.log("Assigning permissions to roles...");
@@ -310,13 +276,11 @@ export async function runSeed() {
   console.log("Seeding default feature flags...");
   await seedFeatureFlags();
 
-  // The global admin, whose home is the system tenant. The password is set
-  // only when the account is created: a later run never resets it.
+  // The global admin, whose home is the system tenant: the only account the
+  // seed creates.
   console.log("Creating admin user...");
-  await prisma.user.upsert({
-    where: { email: admin.email },
-    update: { tenantId: tenant.id },
-    create: {
+  await prisma.user.create({
+    data: {
       email: admin.email,
       firstName: "Admin",
       lastName: "User",
@@ -326,41 +290,6 @@ export async function runSeed() {
       password: { create: { hash: await hash(admin.password, 10) } },
     },
   });
-
-  // One-time data move (#24): the system tenant is the global admin's home and
-  // nothing else, but older databases kept the directory in it. Hand its
-  // records, its focal persons and managers and its place on the tenant flags
-  // to the `misd` working tenant, where that tenant exists. Once done there is
-  // nothing left to move.
-  const misd = await prisma.tenant.findFirst({
-    where: { slug: "misd", deletedAt: null },
-    select: { id: true, slug: true },
-  });
-  if (misd) {
-    const directoryFlag = await prisma.featureFlag.findUniqueOrThrow({
-      where: { key: "FF_DIRECTORY" },
-    });
-    const systemHeldDirectory = directoryFlag.enabledForTenants.includes(tenant.id);
-    const movedOutOfSystem = await emptySystemTenantDirectory(prisma, tenant.id, misd.id);
-    if (movedOutOfSystem > 0) {
-      console.log(
-        `Moved ${movedOutOfSystem} directory record(s) and user(s) from "${tenant.slug}" to "${misd.slug}".`,
-      );
-    }
-
-    // One-time data move (#10), tied to the hand-over above so it cannot run
-    // twice: a database from before it had workflow notifications on for no
-    // tenant, so nobody they were addressed to saw the bell. Every tenant that
-    // uses the directory is opted in. Later runs leave the list to the admins.
-    if (systemHeldDirectory) await optDirectoryTenantsIntoNotifications();
-  }
-
-  // Data move (#6): reference data used to be stored once per tenant. Collapse
-  // those copies into the one shared set before seeding it. Idempotent.
-  const mergedReferenceRows = await mergeDuplicateReferenceData(prisma);
-  if (mergedReferenceRows > 0) {
-    console.log(`Merged ${mergedReferenceRows} per-tenant reference row(s) into the shared set.`);
-  }
 
   // Seed the shared reference data: titles, org types, position types,
   // regions, member states. One set, read by every tenant, so a tenant
@@ -392,8 +321,7 @@ function adminAccountFromEnv(): { email: string; password: string } {
 }
 
 /**
- * The flags the app checks. Create-only, so a flag's settings and enabled
- * lists are never rewritten; flags nothing checks are removed.
+ * The flags the app checks.
  *
  * Tenant-scoped flags are off for a tenant until it is on `enabledForTenants`
  * (see evaluateFlag in feature-flags.server.ts); their `enabled` boolean is
@@ -440,22 +368,6 @@ async function seedFeatureFlags() {
       create: f,
     });
   }
-  await prisma.featureFlag.deleteMany({
-    where: { key: { notIn: DEFAULT_FLAGS.map((f) => f.key) } },
-  });
-}
-
-/** Opt every tenant on FF_DIRECTORY into FF_NOTIFICATIONS, if no tenant has them yet. */
-async function optDirectoryTenantsIntoNotifications() {
-  const flags = await prisma.featureFlag.findMany({
-    where: { key: { in: ["FF_DIRECTORY", "FF_NOTIFICATIONS"] } },
-    select: { key: true, enabledForTenants: true },
-  });
-  const tenantsOn = (key: string) => flags.find((f) => f.key === key)?.enabledForTenants ?? [];
-  if (tenantsOn("FF_NOTIFICATIONS").length > 0) return;
-  for (const tenantId of tenantsOn("FF_DIRECTORY")) {
-    await addTenantToFlag(prisma, "FF_NOTIFICATIONS", tenantId);
-  }
 }
 
 /** True when no row of the shared table holds this code yet, deleted rows included. */
@@ -463,7 +375,7 @@ async function isNewCode(holder: Promise<{ id: string } | null>) {
   return (await holder) === null;
 }
 
-/** Shared titles. Create-only: an existing code is left as it is. */
+/** Shared titles. */
 async function seedTitles() {
   const titles = [
     { code: "MR", name: "Mr." },
@@ -578,10 +490,7 @@ const MEMBER_STATES: Array<{
 ];
 
 // Directory reference data — organization types, position types, regional
-// groups, and member states. One set shared by every tenant. Idempotent and
-// create-only: a row is keyed on its code / abbreviation and an existing row
-// (deleted ones included) is left as it is, so edits made in the app survive
-// a re-run.
+// groups, and member states. One set shared by every tenant.
 async function seedDirectoryReference() {
   for (const [i, t] of ORGANIZATION_TYPES.entries()) {
     const held = prisma.organizationType.findFirst({ where: { code: t.code }, select: { id: true } });
@@ -623,16 +532,18 @@ async function seedDirectoryReference() {
   }
 }
 
-// Data move (#14): users deleted before deletion started releasing the email
-// still hold their address. Give them the same placeholder `softDeleteUser`
-// writes (`releasedEmail` in app/services/users.server.ts). Idempotent.
-async function releaseDeletedUserEmails() {
-  const released = await prisma.$executeRaw`
-    UPDATE "User"
-    SET "email" = 'deleted-' || "id" || '@deleted.invalid'
-    WHERE "deletedAt" IS NOT NULL
-      AND "email" <> 'deleted-' || "id" || '@deleted.invalid'`;
-  if (released > 0) console.log(`Released the email of ${released} deleted user(s).`);
+/**
+ * Truncate every table of the schema in one statement, so the seed always
+ * starts from nothing. `_prisma_migrations` is kept, for a database that is
+ * ever moved to `prisma migrate`.
+ */
+async function emptyDatabase() {
+  const tables = await prisma.$queryRaw<{ tablename: string }[]>`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = current_schema() AND tablename <> '_prisma_migrations'`;
+  if (tables.length === 0) return;
+  const names = tables.map((t) => `"${t.tablename}"`).join(", ");
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${names} RESTART IDENTITY CASCADE`);
 }
 
 // Run only as a script (`npx tsx prisma/seed.ts`), not when a test imports `runSeed`.
