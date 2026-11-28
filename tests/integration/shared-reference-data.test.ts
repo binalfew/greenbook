@@ -115,11 +115,13 @@ describe("a tenant created through the UI", () => {
         userRoles: { create: { roleId: managerRole.id } },
       },
     });
+    // The global admin keeps the organizational units and positions; the
+    // tenant's manager adds the people.
     const cookie = await createSessionCookie(prisma, manager.id);
     const params = { tenant: "peacefund" };
 
     const orgForm = (await newOrganizationLoader(
-      args(get(cookie, "/peacefund/organogram/new"), params),
+      args(get(adminCookie, "/peacefund/organogram/new"), params),
     )) as unknown as { data: { types: { id: string; code: string }[] } };
     expect(orgForm.data.types.map((t) => t.code).sort()).toEqual([
       "DEPARTMENT",
@@ -138,14 +140,14 @@ describe("a tenant created through the UI", () => {
     expect(personForm.data.titles.length).toBeGreaterThan(0);
 
     const positionForm = (await newPositionLoader(
-      args(get(cookie, "/peacefund/positions/new"), params),
+      args(get(adminCookie, "/peacefund/positions/new"), params),
     )) as unknown as { data: { types: { id: string }[] } };
     expect(positionForm.data.types.length).toBeGreaterThan(0);
 
     const orgSaved = await outcomeOf(async () =>
       organizationAction(
         args(
-          await post(cookie, "/peacefund/organogram/new", {
+          await post(adminCookie, "/peacefund/organogram/new", {
             name: "Peace Fund Secretariat",
             typeId: orgForm.data.types.find((t) => t.code === "OFFICE")!.id,
             isActive: "true",
@@ -157,13 +159,13 @@ describe("a tenant created through the UI", () => {
     );
     expect(orgSaved.status).toBe(302);
     const org = await prisma.organization.findFirstOrThrow({
-      where: { tenantId: tenant.id, name: "Peace Fund Secretariat" },
+      where: { name: "Peace Fund Secretariat" },
     });
 
     const positionSaved = await outcomeOf(async () =>
       positionAction(
         args(
-          await post(cookie, "/peacefund/positions/new", {
+          await post(adminCookie, "/peacefund/positions/new", {
             title: "Executive Secretary",
             organizationId: org.id,
             typeId: positionForm.data.types[0].id,
@@ -176,7 +178,7 @@ describe("a tenant created through the UI", () => {
     );
     expect(positionSaved.status).toBe(302);
     const position = await prisma.position.findFirstOrThrow({
-      where: { tenantId: tenant.id, title: "Executive Secretary" },
+      where: { title: "Executive Secretary" },
     });
 
     const ethiopia = personForm.data.memberStates.find((m) => m.abbreviation === "ETH")!;
@@ -391,11 +393,10 @@ describe("moving a database that held one copy of the reference data per tenant"
       await prisma.title.create({ data: { code: "DR", name: "Dr.", createdAt } });
 
       const organization = await prisma.organization.create({
-        data: { tenantId: tenant.id, name: `Org ${tenant.slug}`, typeId: orgType.id },
+        data: { name: `Org ${tenant.slug}`, typeId: orgType.id },
       });
       const position = await prisma.position.create({
         data: {
-          tenantId: tenant.id,
           organizationId: organization.id,
           typeId: positionType.id,
           title: `Head ${tenant.slug}`,

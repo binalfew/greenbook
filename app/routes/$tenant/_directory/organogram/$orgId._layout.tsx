@@ -24,15 +24,15 @@ import type { Route } from "./+types/$orgId._layout";
 export const handle = { breadcrumb: "Organizational unit" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { user, tenantId, canDirect, canSubmit } = await requireDirectoryAccess(request, {
+  const { user, tenantId, canDirect, canPropose } = await requireDirectoryAccess(request, {
     write: "organization",
   });
   const canWrite = canDirect;
   const canDelete = hasPermission(user, "organization", "delete");
 
   const [org, ancestry, pendingChange] = await Promise.all([
-    getOrganization(params.orgId, tenantId),
-    getOrganizationAncestry(params.orgId, tenantId),
+    getOrganization(params.orgId),
+    getOrganizationAncestry(params.orgId),
     findPendingChange(tenantId, "ORGANIZATION", params.orgId),
   ]);
 
@@ -42,7 +42,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     pendingChange,
     canWrite,
     canDelete,
-    canSubmit,
+    canSubmit: canPropose,
     currentUserId: user.id,
   });
 }

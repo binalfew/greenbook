@@ -6,8 +6,9 @@ import { prisma } from "../setup/integration-setup";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
 import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
 import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { personForm } from "./helpers/directory-actors";
 import { createSessionCookie } from "./helpers/session";
 
 beforeEach(() => {
@@ -48,13 +49,13 @@ async function arrange() {
   }
 
   const focalSession = await createUser("focal", [
-    ["organization", "read"],
+    ["person", "read"],
     ["directory-change", "submit"],
     ["directory-change", "read-own"],
   ]);
   const managerSession = await createUser("manager", [
-    ["organization", "read"],
-    ["organization", "write"],
+    ["person", "read"],
+    ["person", "write"],
     ["directory-change", "submit"],
     ["directory-change", "read-all"],
     ["directory-change", "approve"],
@@ -75,15 +76,10 @@ async function arrange() {
     update: { enabledForTenants: { set: [tenant.id] } },
   });
 
-  // The focal person proposes an organization; the change waits for review.
-  const form = new URLSearchParams({
-    name: "Proposed Org",
-    typeId: orgType.id,
-    isActive: "true",
-    sortOrder: "0",
-  });
-  await organizationEditorAction({
-    request: new Request(`http://localhost/${tenant.slug}/organogram/new`, {
+  // The focal person proposes a person; the change waits for review.
+  const form = new URLSearchParams(personForm("Proposed Person"));
+  await personEditorAction({
+    request: new Request(`http://localhost/${tenant.slug}/people/new`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie: focalSession },
       body: form.toString(),

@@ -53,7 +53,7 @@
     },
     "tree": {
       "title": "Tree view",
-      "subtitle": "Read-only view of the current published hierarchy. Use the list view to submit changes.",
+      "subtitle": "Read-only view of the current published hierarchy.",
       "subtitleManager": "Drag any unit onto another to reparent. Moves are applied immediately and recorded in the approval history.",
       "viewList": "List view",
       "viewTree": "Tree view",
@@ -347,6 +347,7 @@
     "NOT_REJECTED": "Only a rejected request can be reopened. Reload the page to see its current status.",
     "EMPTY_BATCH": "Select at least one change.",
     "BATCH_TOO_LARGE": "Too many changes selected. Select 100 or fewer and try again.",
+    "ADMIN_MANAGED": "Organizational units and positions are managed by the system administrator. This change cannot be saved, submitted or approved here.",
     "UNKNOWN": "This change could not be processed. Open it to see what is wrong.",
     "lockedByPendingChange": "Edit and Delete are unavailable while a change to this record is waiting for review."
   },

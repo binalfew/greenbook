@@ -18,9 +18,12 @@ import type { Route } from "./+types/$positionId._layout";
 export const handle = { breadcrumb: "Position" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { user, tenantId, canDirect, canSubmit } = await requireDirectoryAccess(request, {
-    write: "position",
-  });
+  const { user, tenantId, canDirect, canSubmit, canPropose } = await requireDirectoryAccess(
+    request,
+    {
+      write: "position",
+    },
+  );
   const canWrite = canDirect;
   const canDelete = hasPermission(user, "position", "delete");
   const canAssignDirect = hasPermission(user, "position-assignment", "write");
@@ -35,7 +38,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     pendingChange,
     canWrite,
     canDelete,
-    canSubmit,
+    canSubmit: canPropose,
     canAssign: canAssignDirect || canSubmit,
     currentUserId: user.id,
   });

@@ -3,14 +3,17 @@ import { buildTenant, buildUser, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
-import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { saveDraft, submitDrafts } from "~/services/directory-changes.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { createSessionCookie } from "./helpers/session";
 
 // Ticket #17, suspicion 2: the approval diff compares the stored record with
-// the submitted form values. A date the focal person did not touch must not
-// be listed as a change.
+// the submitted form values. A date the author did not touch must not be
+// listed as a change.
+//
+// Organizations are edited by the global admin alone, so no editor produces a
+// pending organization edit any more. The change is put in review through the
+// engine, as one submitted before that rule would be.
 
 beforeEach(() => {
   clearFlagCache();
@@ -57,7 +60,6 @@ async function arrange() {
   });
   const org = await prisma.organization.create({
     data: {
-      tenantId: tenant.id,
       name: "Peace and Security Council",
       typeId: orgType.id,
       establishmentDate: new Date("2002-07-09"),
@@ -80,49 +82,33 @@ async function arrange() {
     slug: tenant.slug,
     org,
     orgType,
-    focalCookie: await createSessionCookie(prisma, focal.id),
+    focalId: focal.id,
     managerCookie: await createSessionCookie(prisma, manager.id),
   };
 }
 
 type Arranged = Awaited<ReturnType<typeof arrange>>;
 
-/** Focal person submits the organization edit form; manager opens the change. */
+/** An organization edit carrying the form's values waits for review; the manager opens it. */
 async function diffAfterEdit(a: Arranged, overrides: Record<string, string>) {
-  const form = new URLSearchParams({
-    id: a.org.id,
-    name: a.org.name,
-    typeId: a.orgType.id,
-    establishmentDate: "2002-07-09",
-    isActive: "true",
-    sortOrder: "0",
-    ...overrides,
-  });
-  const submit = new Request(`http://localhost/${a.slug}/organogram/x/edit`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", cookie: a.focalCookie },
-    body: form.toString(),
-  });
-  const response = await organizationEditorAction({
-    request: submit,
-    params: { tenant: a.slug },
-    context: {},
-  } as never);
-  expect((response as Response).status).toBe(302);
-
-  // The save is a draft; the focal person sends it for review.
-  const change = await prisma.changeRequest.findFirstOrThrow({
-    where: { tenantId: a.tenantId, entityId: a.org.id, status: "DRAFT" },
-  });
-  await submitDraftsAction({
-    request: new Request(`http://localhost/${a.slug}/submissions/submit-drafts`, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", cookie: a.focalCookie },
-      body: new URLSearchParams({ "ids[]": change.id }).toString(),
-    }),
-    params: { tenant: a.slug },
-    context: {},
-  } as never);
+  const ctx = { userId: a.focalId, tenantId: a.tenantId };
+  const change = await saveDraft(
+    {
+      entityType: "ORGANIZATION",
+      operation: "UPDATE",
+      entityId: a.org.id,
+      payload: {
+        name: a.org.name,
+        typeId: a.orgType.id,
+        establishmentDate: "2002-07-09",
+        isActive: true,
+        sortOrder: 0,
+        ...overrides,
+      },
+    },
+    ctx,
+  );
+  await submitDrafts([change.id], ctx);
   const detail = (await changeDetailLoader({
     request: new Request(`http://localhost/${a.slug}/approvals/x`, {
       headers: { cookie: a.managerCookie },
@@ -134,13 +120,13 @@ async function diffAfterEdit(a: Arranged, overrides: Record<string, string>) {
 }
 
 describe("approval diff for an organization edit", () => {
-  it("omits a date the focal person did not change", async () => {
+  it("omits a date the author did not change", async () => {
     const a = await arrange();
     const diffs = await diffAfterEdit(a, { name: "Peace & Security Council" });
     expect(diffs.map((d) => d.field)).toEqual(["name"]);
   });
 
-  it("lists a date the focal person changed", async () => {
+  it("lists a date the author changed", async () => {
     const a = await arrange();
     const diffs = await diffAfterEdit(a, { establishmentDate: "2004-05-25" });
     expect(diffs.map((d) => d.field)).toEqual(["establishmentDate"]);

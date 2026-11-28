@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
-import { loader as editOrganizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId_/edit";
-import { loader as newOrganizationLoader } from "~/routes/$tenant/_directory/organogram/new";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
+import { loader as editPersonLoader } from "~/routes/$tenant/_directory/people/$personId_/edit";
+import { loader as newPersonLoader } from "~/routes/$tenant/_directory/people/new";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
 import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
@@ -14,6 +14,7 @@ import { action as batchApproveAction } from "~/routes/$tenant/_directory/approv
 import { loader as approvalQueueLoader } from "~/routes/$tenant/_directory/approvals/index";
 import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { personForm } from "./helpers/directory-actors";
 import { createSessionCookie } from "./helpers/session";
 
 // A rejected request can be reopened by its author as a new draft, corrected
@@ -52,14 +53,14 @@ async function arrange(): Promise<Seeded> {
     });
   }
 
-  await grant(focalRole.id, "organization", "read");
+  await grant(focalRole.id, "person", "read");
   await grant(focalRole.id, "directory-change", "submit");
   await grant(focalRole.id, "directory-change", "read-own");
   await grant(focalRole.id, "directory-change", "withdraw-own");
 
-  await grant(managerRole.id, "organization", "read");
-  await grant(managerRole.id, "organization", "write");
-  await grant(managerRole.id, "organization", "delete");
+  await grant(managerRole.id, "person", "read");
+  await grant(managerRole.id, "person", "write");
+  await grant(managerRole.id, "person", "delete");
   await grant(managerRole.id, "directory-change", "approve");
   await grant(managerRole.id, "directory-change", "reject");
   await grant(managerRole.id, "directory-change", "read-all");
@@ -149,42 +150,38 @@ function locationOf(result: unknown): string | null {
   return result instanceof Response ? result.headers.get("location") : null;
 }
 
-function orgForm(a: Seeded, name: string, extra: Record<string, string> = {}) {
-  return { name, typeId: a.orgTypeId, isActive: "true", sortOrder: "0", ...extra };
-}
-
-/** Save a CREATE-organization draft as the given user; returns the draft row. */
+/** Save a CREATE-person draft as the given user; returns the draft row. */
 async function saveOrgDraft(a: Seeded, cookie: string, name: string) {
   const response = await run(() =>
-    organizationEditorAction({
-      request: post(a, cookie, "organogram/new", orgForm(a, name)),
+    personEditorAction({
+      request: post(a, cookie, "people/new", personForm(name)),
       params: { tenant: a.slug },
       context: {},
     }),
   );
   expect(statusOf(response)).toBe(302);
   const drafts = await draftsOf(a);
-  const draft = drafts.find((d) => (d.payload as { name?: string }).name === name);
+  const draft = drafts.find((d) => (d.payload as { lastName?: string }).lastName === name);
   expect(draft).toBeTruthy();
   return draft!;
 }
 
-/** Save an UPDATE (a rename) of a published organization: a draft for a focal person. */
+/** Save an UPDATE (a rename) of a published person: a draft for a focal person. */
 async function saveRename(
   a: Seeded,
   cookie: string,
-  org: { id: string; version: number },
+  person: { id: string; version: number },
   name: string,
 ) {
   return run(() =>
-    organizationEditorAction({
+    personEditorAction({
       request: post(
         a,
         cookie,
-        `organogram/${org.id}/edit`,
-        orgForm(a, name, { id: org.id, baseVersion: String(org.version) }),
+        `people/${person.id}/edit`,
+        personForm(name, { id: person.id, baseVersion: String(person.version) }),
       ),
-      params: { tenant: a.slug, orgId: org.id },
+      params: { tenant: a.slug, personId: person.id },
       context: {},
     }),
   );
@@ -210,22 +207,22 @@ async function queueIds(a: Seeded, cookie: string) {
   return payloadOf<{ changes: { id: string }[] }>(result).changes.map((c) => c.id);
 }
 
-async function publishedOrg(a: Seeded, cookie: string, name: string) {
+async function publishedPerson(a: Seeded, cookie: string, name: string) {
   await run(() =>
-    organizationEditorAction({
-      request: post(a, cookie, "organogram/new", orgForm(a, name)),
+    personEditorAction({
+      request: post(a, cookie, "people/new", personForm(name)),
       params: { tenant: a.slug },
       context: {},
     }),
   );
-  return prisma.organization.findFirstOrThrow({ where: { tenantId: a.tenantId, name } });
+  return prisma.person.findFirstOrThrow({ where: { tenantId: a.tenantId, lastName: name } });
 }
 
 async function draftsOf(a: Seeded) {
   return prisma.changeRequest.findMany({ where: { tenantId: a.tenantId, status: "DRAFT" } });
 }
 
-const NOTES = "The acronym is missing. Please add it.";
+const NOTES = "The honorific is missing. Please add it.";
 
 async function reject(a: Seeded, id: string) {
   const response = await run(() =>
@@ -246,11 +243,11 @@ async function rejectedCreate(a: Seeded, name: string) {
   return draft.id;
 }
 
-/** focal drafts a rename of a published org, submits it, the manager rejects it. */
-async function rejectedRename(a: Seeded, org: { id: string; version: number }, name: string) {
-  await saveRename(a, a.focal.cookie, org, name);
+/** focal drafts a rename of a published person, submits it, the manager rejects it. */
+async function rejectedRename(a: Seeded, person: { id: string; version: number }, name: string) {
+  await saveRename(a, a.focal.cookie, person, name);
   const draft = await prisma.changeRequest.findFirstOrThrow({
-    where: { tenantId: a.tenantId, status: "DRAFT", entityId: org.id },
+    where: { tenantId: a.tenantId, status: "DRAFT", entityId: person.id },
   });
   await submitDrafts(a, a.focal.cookie, [draft.id]);
   await reject(a, draft.id);
@@ -287,7 +284,7 @@ async function detail(a: Seeded, cookie: string, id: string) {
 describe("reopening a rejected request", () => {
   it("the author reopens it as a draft pre-filled with the rejected values, with the rejection notes", async () => {
     const a = await arrange();
-    const rejectedId = await rejectedCreate(a, "Bureau of Statistics");
+    const rejectedId = await rejectedCreate(a, "Okafor");
 
     expect((await detail(a, a.focal.cookie, rejectedId)).canReopen).toBe(true);
 
@@ -299,23 +296,23 @@ describe("reopening a rejected request", () => {
     const draft = drafts[0];
     expect(draft.id).not.toBe(rejectedId);
     expect(draft.submittedById).toBe(a.focal.id);
-    expect(locationOf(response)).toBe(`/${a.slug}/organogram/new?draft=${draft.id}`);
+    expect(locationOf(response)).toBe(`/${a.slug}/people/new?draft=${draft.id}`);
 
     // The editor resumes the draft with the submitted values and shows why
     // the earlier request was rejected.
-    const loaded = await newOrganizationLoader({
-      request: get(a, a.focal.cookie, `organogram/new?draft=${draft.id}`),
+    const loaded = await newPersonLoader({
+      request: get(a, a.focal.cookie, `people/new?draft=${draft.id}`),
       params: { tenant: a.slug },
       context: {},
     } as never);
     const editor = payloadOf<{
       draft: {
         id: string;
-        values: { name: string; typeId: string };
+        values: { lastName: string };
         rejection: { changeId: string; notes: string; reviewerName: string } | null;
       };
     }>(loaded).draft;
-    expect(editor.values).toMatchObject({ name: "Bureau of Statistics", typeId: a.orgTypeId });
+    expect(editor.values).toMatchObject({ lastName: "Okafor" });
     expect(editor.rejection).toMatchObject({
       changeId: rejectedId,
       notes: NOTES,
@@ -326,14 +323,14 @@ describe("reopening a rejected request", () => {
     const rejected = await prisma.changeRequest.findUniqueOrThrow({ where: { id: rejectedId } });
     expect(rejected.status).toBe("REJECTED");
     expect(rejected.reviewerNotes).toBe(NOTES);
-    expect((rejected.payload as { name: string }).name).toBe("Bureau of Statistics");
+    expect((rejected.payload as { lastName: string }).lastName).toBe("Okafor");
   });
 
   it("an ordinary draft carries no rejection notes", async () => {
     const a = await arrange();
     const draft = await saveOrgDraft(a, a.focal.cookie, "Plain Draft");
-    const loaded = await newOrganizationLoader({
-      request: get(a, a.focal.cookie, `organogram/new?draft=${draft.id}`),
+    const loaded = await newPersonLoader({
+      request: get(a, a.focal.cookie, `people/new?draft=${draft.id}`),
       params: { tenant: a.slug },
       context: {},
     } as never);
@@ -342,7 +339,7 @@ describe("reopening a rejected request", () => {
 
   it("reopen → edit → resubmit → approve publishes the corrected record and keeps the rejection in history", async () => {
     const a = await arrange();
-    const rejectedId = await rejectedCreate(a, "Bureau of Statistics");
+    const rejectedId = await rejectedCreate(a, "Okafor");
     await reopen(a, a.focal.cookie, rejectedId);
     const [draft] = await draftsOf(a);
 
@@ -350,12 +347,12 @@ describe("reopening a rejected request", () => {
     expect(await queueIds(a, a.manager.cookie)).toEqual([]);
 
     const saved = await run(() =>
-      organizationEditorAction({
+      personEditorAction({
         request: post(
           a,
           a.focal.cookie,
-          `organogram/new?draft=${draft.id}`,
-          orgForm(a, "Bureau of Statistics", { acronym: "BOS" }),
+          `people/new?draft=${draft.id}`,
+          personForm("Okafor", { honorific: "Dr" }),
         ),
         params: { tenant: a.slug },
         context: {},
@@ -385,8 +382,8 @@ describe("reopening a rejected request", () => {
       1,
     );
 
-    const orgs = await prisma.organization.findMany({ where: { tenantId: a.tenantId } });
-    expect(orgs.map((o) => [o.name, o.acronym])).toEqual([["Bureau of Statistics", "BOS"]]);
+    const people = await prisma.person.findMany({ where: { tenantId: a.tenantId } });
+    expect(people.map((o) => [o.lastName, o.honorific])).toEqual([["Okafor", "Dr"]]);
 
     const rows = await prisma.changeRequest.findMany({
       where: { tenantId: a.tenantId },
@@ -399,7 +396,7 @@ describe("reopening a rejected request", () => {
 
   it("only the author can reopen their rejected request", async () => {
     const a = await arrange();
-    const rejectedId = await rejectedCreate(a, "Bureau of Statistics");
+    const rejectedId = await rejectedCreate(a, "Okafor");
 
     expect(statusOf(await reopen(a, a.otherFocal.cookie, rejectedId))).toBe(403);
     expect(statusOf(await reopen(a, a.manager.cookie, rejectedId))).toBe(403);
@@ -427,22 +424,22 @@ describe("reopening a rejected request", () => {
 
   it("a reopened update resumes in the record's edit page", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Version One");
-    const rejectedId = await rejectedRename(a, org, "Focal Rename");
+    const person = await publishedPerson(a, a.manager.cookie, "Version One");
+    const rejectedId = await rejectedRename(a, person, "Focal Rename");
 
     const response = await reopen(a, a.focal.cookie, rejectedId);
     const [draft] = await draftsOf(a);
-    expect(locationOf(response)).toBe(`/${a.slug}/organogram/${org.id}/edit?draft=${draft.id}`);
+    expect(locationOf(response)).toBe(`/${a.slug}/people/${person.id}/edit?draft=${draft.id}`);
 
-    const loaded = await editOrganizationLoader({
-      request: get(a, a.focal.cookie, `organogram/${org.id}/edit?draft=${draft.id}`),
-      params: { tenant: a.slug, orgId: org.id },
+    const loaded = await editPersonLoader({
+      request: get(a, a.focal.cookie, `people/${person.id}/edit?draft=${draft.id}`),
+      params: { tenant: a.slug, personId: person.id },
       context: {},
     } as never);
     const editor = payloadOf<{
-      draft: { values: { name: string }; rejection: { notes: string } | null };
+      draft: { values: { lastName: string }; rejection: { notes: string } | null };
     }>(loaded).draft;
-    expect(editor.values.name).toBe("Focal Rename");
+    expect(editor.values.lastName).toBe("Focal Rename");
     expect(editor.rejection?.notes).toBe(NOTES);
   });
 });
@@ -450,10 +447,10 @@ describe("reopening a rejected request", () => {
 describe("reopening is refused with a clear message", () => {
   it("when the record has changed since the request was made", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Version One");
-    const rejectedId = await rejectedRename(a, org, "Focal Rename");
+    const person = await publishedPerson(a, a.manager.cookie, "Version One");
+    const rejectedId = await rejectedRename(a, person, "Focal Rename");
 
-    await saveRename(a, a.manager.cookie, org, "Manager Rename");
+    await saveRename(a, a.manager.cookie, person, "Manager Rename");
 
     const response = await reopen(a, a.focal.cookie, rejectedId);
     expect(statusOf(response)).toBe(409);
@@ -463,9 +460,9 @@ describe("reopening is refused with a clear message", () => {
 
   it("when the record has been deleted since", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Version One");
-    const rejectedId = await rejectedRename(a, org, "Focal Rename");
-    await prisma.organization.update({ where: { id: org.id }, data: { deletedAt: new Date() } });
+    const person = await publishedPerson(a, a.manager.cookie, "Version One");
+    const rejectedId = await rejectedRename(a, person, "Focal Rename");
+    await prisma.person.update({ where: { id: person.id }, data: { deletedAt: new Date() } });
 
     const response = await reopen(a, a.focal.cookie, rejectedId);
     expect(statusOf(response)).toBe(409);
@@ -475,10 +472,10 @@ describe("reopening is refused with a clear message", () => {
 
   it("when the record already has a change waiting for review", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Version One");
-    const rejectedId = await rejectedRename(a, org, "Focal Rename");
+    const person = await publishedPerson(a, a.manager.cookie, "Version One");
+    const rejectedId = await rejectedRename(a, person, "Focal Rename");
 
-    await saveRename(a, a.otherFocal.cookie, org, "Other Rename");
+    await saveRename(a, a.otherFocal.cookie, person, "Other Rename");
     const other = await prisma.changeRequest.findFirstOrThrow({
       where: { tenantId: a.tenantId, status: "DRAFT", submittedById: a.otherFocal.id },
     });
@@ -492,9 +489,9 @@ describe("reopening is refused with a clear message", () => {
 
   it("when the author already has a draft for the record", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Version One");
-    const rejectedId = await rejectedRename(a, org, "Focal Rename");
-    await saveRename(a, a.focal.cookie, org, "Second Attempt");
+    const person = await publishedPerson(a, a.manager.cookie, "Version One");
+    const rejectedId = await rejectedRename(a, person, "Focal Rename");
+    await saveRename(a, a.focal.cookie, person, "Second Attempt");
 
     const response = await reopen(a, a.focal.cookie, rejectedId);
     expect(statusOf(response)).toBe(409);
@@ -504,7 +501,7 @@ describe("reopening is refused with a clear message", () => {
 
   it("when it has already been reopened", async () => {
     const a = await arrange();
-    const rejectedId = await rejectedCreate(a, "Bureau of Statistics");
+    const rejectedId = await rejectedCreate(a, "Okafor");
     expect(statusOf(await reopen(a, a.focal.cookie, rejectedId))).toBe(302);
 
     const again = await reopen(a, a.focal.cookie, rejectedId);

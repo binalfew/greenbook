@@ -22,14 +22,16 @@ import type { Route } from "./+types/$positionId.delete";
 export const handle = { breadcrumb: "Delete" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const { user, tenantId, canSubmit } = await requireDirectoryAccess(request);
+  // Only `position:delete` reaches this page: positions are kept by the
+  // global admin, and nobody proposes a change to one.
+  const { user, tenantId } = await requireDirectoryAccess(request);
   const canDirect = hasPermission(user, "position", "delete");
-  if (!canDirect && !canSubmit) {
+  if (!canDirect) {
     throw new Response("Forbidden", { status: 403 });
   }
 
   const position = await prisma.position.findFirst({
-    where: { id: params.positionId, tenantId, deletedAt: null },
+    where: { id: params.positionId, deletedAt: null },
     select: {
       id: true,
       title: true,

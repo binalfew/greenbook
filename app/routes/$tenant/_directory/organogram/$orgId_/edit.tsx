@@ -18,14 +18,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const draft = await loadEditorDraft(request, access, "ORGANIZATION", params.orgId);
 
   const [org, types, parents] = await Promise.all([
-    getOrganization(params.orgId, tenantId),
+    getOrganization(params.orgId),
     prisma.organizationType.findMany({
       where: { deletedAt: null },
       orderBy: [{ level: "asc" }, { name: "asc" }],
       select: { id: true, name: true, code: true, level: true },
     }),
     prisma.organization.findMany({
-      where: { tenantId, deletedAt: null, id: { not: params.orgId } },
+      where: { deletedAt: null, id: { not: params.orgId } },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       take: 500,
       select: { id: true, name: true, acronym: true },

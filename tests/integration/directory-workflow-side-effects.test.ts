@@ -7,8 +7,9 @@ import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
 import { action as withdrawAction } from "~/routes/$tenant/_directory/submissions/$changeId.withdraw";
 import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { personForm } from "./helpers/directory-actors";
 import { createSessionCookie } from "./helpers/session";
 
 beforeEach(() => {
@@ -44,11 +45,11 @@ async function arrange() {
     });
   }
 
-  await grant(focalRole.id, "organization", "read");
+  await grant(focalRole.id, "person", "read");
   await grant(focalRole.id, "directory-change", "submit");
 
-  await grant(managerRole.id, "organization", "read");
-  await grant(managerRole.id, "organization", "write");
+  await grant(managerRole.id, "person", "read");
+  await grant(managerRole.id, "person", "write");
   await grant(managerRole.id, "directory-change", "read-all");
   await grant(managerRole.id, "directory-change", "approve");
   await grant(managerRole.id, "directory-change", "reject");
@@ -133,13 +134,8 @@ async function auditTrail(a: Arranged, changeId: string) {
 
 async function submitAsFocal(a: Arranged): Promise<string> {
   await run(() =>
-    organizationEditorAction({
-      request: post(`/${a.slug}/organogram/new`, a.focalSession, {
-        name: "Proposed Org",
-        typeId: a.orgTypeId,
-        isActive: "true",
-        sortOrder: "0",
-      }),
+    personEditorAction({
+      request: post(`/${a.slug}/people/new`, a.focalSession, personForm("Proposed Person")),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -173,7 +169,7 @@ describe("directory workflow notifications and audit trail", () => {
     expect(notifications[0]).toMatchObject({
       userId: a.managerId,
       type: "directory.change.submitted",
-      message: "Fatou Focal asked to add an organization",
+      message: "Fatou Focal asked to add a person",
       read: false,
     });
     expect(notifications[0].data).toMatchObject({ changeId });
@@ -219,8 +215,8 @@ describe("directory workflow notifications and audit trail", () => {
     );
     expect((response as Response).status).toBe(302);
 
-    const published = await prisma.organization.count({
-      where: { tenantId: a.tenantId, name: "Proposed Org", deletedAt: null },
+    const published = await prisma.person.count({
+      where: { tenantId: a.tenantId, lastName: "Proposed Person", deletedAt: null },
     });
     expect(published).toBe(1);
 
@@ -228,7 +224,7 @@ describe("directory workflow notifications and audit trail", () => {
     expect(toSubmitter).toHaveLength(1);
     expect(toSubmitter[0]).toMatchObject({
       type: "directory.change.approved",
-      message: "Musa Manager approved your request to add an organization",
+      message: "Musa Manager approved your request to add a person",
     });
     expect(toSubmitter[0].data).toMatchObject({ changeId, outcome: "APPROVED" });
 
@@ -245,7 +241,7 @@ describe("directory workflow notifications and audit trail", () => {
     const response = await run(() =>
       rejectAction({
         request: post(`/${a.slug}/approvals/${changeId}/reject`, a.managerSession, {
-          notes: "Duplicate of an existing office",
+          notes: "Duplicate of an existing record",
         }),
         params: { tenant: a.slug, changeId },
         context: {},
@@ -253,7 +249,7 @@ describe("directory workflow notifications and audit trail", () => {
     );
     expect((response as Response).status).toBe(302);
 
-    const published = await prisma.organization.count({ where: { tenantId: a.tenantId } });
+    const published = await prisma.person.count({ where: { tenantId: a.tenantId } });
     expect(published).toBe(0);
 
     const toSubmitter = await prisma.notification.findMany({ where: { userId: a.focalId } });
@@ -261,7 +257,7 @@ describe("directory workflow notifications and audit trail", () => {
     expect(toSubmitter[0]).toMatchObject({
       type: "directory.change.rejected",
       message:
-        "Musa Manager rejected your request to add an organization: Duplicate of an existing office",
+        "Musa Manager rejected your request to add a person: Duplicate of an existing record",
     });
     expect(toSubmitter[0].data).toMatchObject({ changeId, outcome: "REJECTED" });
 

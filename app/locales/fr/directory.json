@@ -53,7 +53,7 @@
     },
     "tree": {
       "title": "Vue en arbre",
-      "subtitle": "Vue en lecture seule de la hiérarchie publiée. Utilisez la vue en liste pour soumettre des modifications.",
+      "subtitle": "Vue en lecture seule de la hiérarchie publiée.",
       "subtitleManager": "Glissez une unité sur une autre pour la rattacher. Les déplacements sont appliqués immédiatement et consignés dans l'historique d'approbation.",
       "viewList": "Vue en liste",
       "viewTree": "Vue en arbre",
@@ -347,6 +347,7 @@
     "NOT_REJECTED": "Seule une demande rejetée peut être rouverte. Rechargez la page pour voir son statut actuel.",
     "EMPTY_BATCH": "Sélectionnez au moins une modification.",
     "BATCH_TOO_LARGE": "Trop de modifications sélectionnées. Sélectionnez-en 100 au maximum et réessayez.",
+    "ADMIN_MANAGED": "Les unités organisationnelles et les postes sont gérés par l'administrateur du système. Cette modification ne peut pas être enregistrée, soumise ni approuvée ici.",
     "UNKNOWN": "Cette modification n'a pas pu être traitée. Ouvrez-la pour voir ce qui ne va pas.",
     "lockedByPendingChange": "Modifier et Supprimer sont indisponibles tant qu'une modification de cette fiche est en attente de revue."
   },

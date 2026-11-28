@@ -22,15 +22,14 @@ import type { Route } from "./+types/$orgId.delete";
 export const handle = { breadcrumb: "Delete" };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  // Managers hold `organization:delete`, focal persons only `directory-change:submit`.
-  // Either is enough to reach this page — the engine routes the actual write
-  // through the right path.
-  const { user, tenantId, canSubmit } = await requireDirectoryAccess(request);
+  // Only `organization:delete` reaches this page: organizational units are
+  // kept by the global admin, and nobody proposes a change to one.
+  const { user, tenantId } = await requireDirectoryAccess(request);
   const canDirect = hasPermission(user, "organization", "delete");
-  if (!canDirect && !canSubmit) {
+  if (!canDirect) {
     throw new Response("Forbidden", { status: 403 });
   }
-  const org = await getOrganizationForDelete(params.orgId, tenantId);
+  const org = await getOrganizationForDelete(params.orgId);
   return data({
     org: { id: org.id, name: org.name, childCount: org._count.children },
     canDirect,

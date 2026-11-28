@@ -108,7 +108,7 @@ describe("public directory: opt-in gate", () => {
     clearPublicTenantIdsCache();
   });
 
-  it("hides opted-out tenants from every public helper", async () => {
+  it("shows the shared organogram whichever tenant its units were made from", async () => {
     const a = await arrange();
 
     // Create an org in each tenant.
@@ -133,19 +133,14 @@ describe("public directory: opt-in gate", () => {
     const ids = await getPublicTenantIds();
     expect(ids).toEqual([a.tenantA.id]);
 
-    // Roots: only A's root.
+    // Units belong to no tenant, so both roots are part of the directory.
     const roots = await publicListOrganizationTreeRoots(ids);
-    expect(roots.map((r) => r.name)).toEqual(["Visible Root"]);
+    expect(roots.map((r) => r.name).sort()).toEqual(["Hidden Root", "Visible Root"]);
 
-    // Direct fetch of tenant B's org must return null.
-    const hidden = await publicGetOrganization(hiddenRoot.entity!.id, ids);
-    expect(hidden).toBeNull();
+    const other = await publicGetOrganization(hiddenRoot.entity!.id, ids);
+    expect(other?.name).toBe("Hidden Root");
+    expect(await publicListOrganizationChildren(hiddenRoot.entity!.id, ids)).toEqual([]);
 
-    // Children of tenant B's root must not be reachable either.
-    const children = await publicListOrganizationChildren(hiddenRoot.entity!.id, ids);
-    expect(children).toEqual([]);
-
-    // Sanity: tenant A's org IS fetchable.
     const visible = await publicGetOrganization(visibleRoot.entity!.id, ids);
     expect(visible?.name).toBe("Visible Root");
   });
@@ -288,11 +283,10 @@ describe("public directory: PII strip for people", () => {
   it("matches a search on the current position title or organization", async () => {
     const a = await arrange();
     const org = await prisma.organization.create({
-      data: { tenantId: a.tenantA.id, name: "Peace and Security", typeId: a.orgTypeA.id },
+      data: { name: "Peace and Security", typeId: a.orgTypeA.id },
     });
     const position = await prisma.position.create({
       data: {
-        tenantId: a.tenantA.id,
         title: "Special Envoy",
         organizationId: org.id,
         typeId: a.posTypeA.id,
@@ -327,11 +321,10 @@ describe("public directory: PII strip for people", () => {
   it("hides a soft-deleted position from a person's current role and search", async () => {
     const a = await arrange();
     const org = await prisma.organization.create({
-      data: { tenantId: a.tenantA.id, name: "Bureau", typeId: a.orgTypeA.id },
+      data: { name: "Bureau", typeId: a.orgTypeA.id },
     });
     const position = await prisma.position.create({
       data: {
-        tenantId: a.tenantA.id,
         title: "Special Rapporteur",
         organizationId: org.id,
         typeId: a.posTypeA.id,
@@ -367,11 +360,10 @@ describe("public directory: PII strip for people", () => {
   it("does not surface a person via a soft-deleted organization's name", async () => {
     const a = await arrange();
     const org = await prisma.organization.create({
-      data: { tenantId: a.tenantA.id, name: "Legacy Directorate", typeId: a.orgTypeA.id },
+      data: { name: "Legacy Directorate", typeId: a.orgTypeA.id },
     });
     const position = await prisma.position.create({
       data: {
-        tenantId: a.tenantA.id,
         title: "Analyst",
         organizationId: org.id,
         typeId: a.posTypeA.id,
@@ -436,7 +428,7 @@ describe("public directory: publicGetPosition isolation", () => {
     clearPublicTenantIdsCache();
   });
 
-  it("returns null for a position in an opt-out tenant", async () => {
+  it("shows a shared position without the holders from an opt-out tenant", async () => {
     const a = await arrange();
     const org = await submitAndApply(
       {
@@ -460,11 +452,27 @@ describe("public directory: publicGetPosition isolation", () => {
       { tenantId: a.tenantA.id, userId: a.userA.id },
     );
 
-    // Tenant A is NOT opted in.
-    await optInTenants([a.tenantB.id]);
-    const ids = await getPublicTenantIds();
+    const person = await prisma.person.create({
+      data: { tenantId: a.tenantA.id, firstName: "Amina", lastName: "Diallo", languages: [] },
+    });
+    await prisma.positionAssignment.create({
+      data: {
+        tenantId: a.tenantA.id,
+        personId: person.id,
+        positionId: position.entity!.id,
+        startDate: new Date("2025-01-01"),
+        isCurrent: true,
+      },
+    });
 
-    const result = await publicGetPosition(position.entity!.id, ids);
-    expect(result).toBeNull();
+    // Tenant A is NOT opted in: the position is everyone's, its holder is not.
+    await optInTenants([a.tenantB.id]);
+    const hidden = await publicGetPosition(position.entity!.id, await getPublicTenantIds());
+    expect(hidden?.title).toBe("Director");
+    expect(hidden?.assignments).toEqual([]);
+
+    await optInTenants([a.tenantA.id, a.tenantB.id]);
+    const shown = await publicGetPosition(position.entity!.id, await getPublicTenantIds());
+    expect(shown?.assignments.map((x) => x.person.lastName)).toEqual(["Diallo"]);
   });
 });

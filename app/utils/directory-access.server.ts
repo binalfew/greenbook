@@ -2,8 +2,9 @@ import { data } from "react-router";
 import { requireActingTenant } from "~/utils/acting-tenant.server";
 import { hasPermission, type AuthUser } from "~/utils/auth/require-auth.server";
 import { isFeatureEnabled } from "~/utils/config/feature-flags.server";
+import type { ChangeContext } from "~/services/directory-changes.server";
 import { buildServiceContext } from "~/utils/request-context.server";
-import type { TenantServiceContext } from "~/utils/types.server";
+import type { DirectoryEntityKey } from "~/utils/schemas/directory";
 
 // The directory subsystem has a specific role shape: a viewer can read, a
 // focal person can submit change requests, and a manager can write directly.
@@ -12,8 +13,20 @@ import type { TenantServiceContext } from "~/utils/types.server";
 //
 // Pass `resource` to check per-entity write access (Organization, Person,
 // Position, PositionAssignment). Omit it for pure read-only routes.
+//
+// The structure of the directory — organizational units and positions — is
+// kept by the global admin alone. Focal persons and managers read it and
+// assign people to positions, but they can neither change it directly (the
+// seed gives them no `organization:write` / `position:write`) nor propose a
+// change to it: `directory-change:submit` does not reach these two resources.
 
 export type DirectoryResource = "organization" | "person" | "position" | "position-assignment";
+
+/** Resources changed only by direct write, never through a submitted change. */
+const ADMIN_MANAGED: Partial<Record<DirectoryResource, DirectoryEntityKey>> = {
+  organization: "ORGANIZATION",
+  position: "POSITION",
+};
 
 export type DirectoryAccess = {
   user: AuthUser;
@@ -26,6 +39,12 @@ export type DirectoryAccess = {
   canDirect: boolean;
   /** User can propose changes: `saveDraft`, then `submitDrafts` (focal-person path). */
   canSubmit: boolean;
+  /**
+   * User can propose a change to the named resource. Same as `canSubmit`,
+   * except that it is false for organizations and positions, which nobody
+   * proposes changes to. False when no resource was named.
+   */
+  canPropose: boolean;
   /** User can review (read) others' change requests. */
   canReview: boolean;
   /** User can approve pending change requests. */
@@ -47,15 +66,34 @@ export async function requireDirectoryAccess(
   }
   const canDirect = options.write ? hasPermission(user, options.write, "write") : false;
   const canSubmit = hasPermission(user, "directory-change", "submit");
+  const canPropose = canSubmit && !!options.write && !ADMIN_MANAGED[options.write];
   const canReview = hasPermission(user, "directory-change", "read-all");
   const canApprove = hasPermission(user, "directory-change", "approve");
   const canReject = hasPermission(user, "directory-change", "reject");
-  return { user, tenantId, canDirect, canSubmit, canReview, canApprove, canReject };
+  return { user, tenantId, canDirect, canSubmit, canPropose, canReview, canApprove, canReject };
+}
+
+/**
+ * The service context for a change-request call. It names the entity types
+ * this user may not move through the workflow, so a draft or pending change
+ * to an organization or position left over from before they became
+ * admin-only cannot be saved, submitted, reopened or approved by someone
+ * without the write permission.
+ */
+export function directoryContext(
+  request: Request,
+  access: Pick<DirectoryAccess, "user" | "tenantId">,
+): ChangeContext {
+  const lockedEntityTypes = Object.entries(ADMIN_MANAGED)
+    .filter(([resource]) => !hasPermission(access.user, resource, "write"))
+    .map(([, entityType]) => entityType);
+  return { ...buildServiceContext(request, access.user, access.tenantId), lockedEntityTypes };
 }
 
 /**
  * Gate a write route (new / edit / delete): fails 403 when the user has
- * neither direct-write permission nor submit-for-review. Returns the same
+ * neither direct-write permission nor the right to propose a change to this
+ * resource (nobody has the latter for organizations and positions). Returns the same
  * `DirectoryAccess` shape so loaders can pass `canDirect` to the editor
  * for the right button label.
  */
@@ -64,7 +102,7 @@ export async function requireDirectoryWriteAccess(
   resource: DirectoryResource,
 ): Promise<DirectoryAccess> {
   const access = await requireDirectoryAccess(request, { write: resource });
-  if (!access.canDirect && !access.canSubmit) {
+  if (!access.canDirect && !access.canPropose) {
     throw new Response("Forbidden", { status: 403 });
   }
   return access;
@@ -76,23 +114,23 @@ export async function requireDirectoryWriteAccess(
 // the check.
 export async function requireReviewContext(
   request: Request,
-): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
+): Promise<DirectoryAccess & { ctx: ChangeContext }> {
   const access = await requireDirectoryAccess(request);
   if (!access.canReview) {
     throw new Response("Forbidden", { status: 403 });
   }
-  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  const ctx = directoryContext(request, access);
   return { ...access, ctx };
 }
 
 export async function requireSubmitContext(
   request: Request,
-): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
+): Promise<DirectoryAccess & { ctx: ChangeContext }> {
   const access = await requireDirectoryAccess(request);
   if (!access.canSubmit) {
     throw new Response("Forbidden", { status: 403 });
   }
-  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  const ctx = directoryContext(request, access);
   return { ...access, ctx };
 }
 
@@ -103,22 +141,22 @@ export async function requireSubmitContext(
 // unenforced.
 export async function requireApproveContext(
   request: Request,
-): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
+): Promise<DirectoryAccess & { ctx: ChangeContext }> {
   const access = await requireDirectoryAccess(request);
   if (!access.canApprove) {
     throw new Response("Forbidden", { status: 403 });
   }
-  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  const ctx = directoryContext(request, access);
   return { ...access, ctx };
 }
 
 export async function requireRejectContext(
   request: Request,
-): Promise<DirectoryAccess & { ctx: TenantServiceContext }> {
+): Promise<DirectoryAccess & { ctx: ChangeContext }> {
   const access = await requireDirectoryAccess(request);
   if (!access.canReject) {
     throw new Response("Forbidden", { status: 403 });
   }
-  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  const ctx = directoryContext(request, access);
   return { ...access, ctx };
 }

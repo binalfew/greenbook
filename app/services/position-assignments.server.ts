@@ -97,7 +97,7 @@ export async function getAssignment(id: string, tenantId: string) {
 
 async function assertReferencedPosition(positionId: string, tenantId: string, db: Db) {
   const row = await db.position.findFirst({
-    where: { id: positionId, tenantId, deletedAt: null },
+    where: { id: positionId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {

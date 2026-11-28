@@ -40,7 +40,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const [position, people] = await Promise.all([
     prisma.position.findFirst({
-      where: { id: params.positionId, tenantId, deletedAt: null },
+      where: { id: params.positionId, deletedAt: null },
       select: { id: true, title: true },
     }),
     prisma.person.findMany({

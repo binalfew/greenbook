@@ -1,5 +1,4 @@
 import { redirect } from "react-router";
-import { buildServiceContext } from "~/utils/request-context.server";
 import type { ChangeRequest } from "~/generated/prisma/client.js";
 import enDirectory from "~/locales/en/directory.json";
 import frDirectory from "~/locales/fr/directory.json";
@@ -15,6 +14,7 @@ import {
   type SubmitInput,
 } from "~/services/directory-changes.server";
 import {
+  directoryContext,
   requireDirectoryWriteAccess,
   type DirectoryAccess,
   type DirectoryResource,
@@ -49,6 +49,7 @@ const CONFLICT_CODES = [
   "NOT_REJECTED",
   "EMPTY_BATCH",
   "BATCH_TOO_LARGE",
+  "ADMIN_MANAGED",
 ] as const;
 
 export type DirectoryConflictCode = (typeof CONFLICT_CODES)[number];
@@ -146,7 +147,8 @@ export async function runDirectoryBatch(
  * Users with `<resource>:write` direct-apply (manager path). Users with
  * only `directory-change:submit` save a draft (focal-person path) — nothing
  * reaches a manager until the author submits it from their submissions list.
- * Users with neither 403.
+ * Users with neither 403, and so does anyone without `<resource>:write` when
+ * the resource is an organization or a position: those are never proposed.
  *
  * On the draft path a `?draft=<id>` on the request URL means "re-save that
  * draft" instead of creating a new one; the editors get it for free because
@@ -162,9 +164,10 @@ export async function dispatchDirectoryChange(
   resource: DirectoryResource,
   input: SubmitInput,
 ): Promise<DirectorySubmitResult> {
-  const { user, tenantId, canDirect } = await requireDirectoryWriteAccess(request, resource);
+  const access = await requireDirectoryWriteAccess(request, resource);
+  const { canDirect } = access;
 
-  const ctx = buildServiceContext(request, user, tenantId);
+  const ctx = directoryContext(request, access);
   try {
     if (canDirect) {
       const result = await submitAndApply(input, ctx);
@@ -218,7 +221,7 @@ export async function loadEditorDraft(
   entityId?: string,
 ): Promise<EditorDraft | null> {
   if (access.canDirect) return null;
-  const ctx = buildServiceContext(request, access.user, access.tenantId);
+  const ctx = directoryContext(request, access);
   const url = new URL(request.url);
   const draftId = url.searchParams.get(DRAFT_PARAM);
 

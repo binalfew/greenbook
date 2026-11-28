@@ -26,6 +26,6 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: "parentId is required" }, { status: 400 });
   }
 
-  const children = await listOrganizationChildren(parentId, tenantId);
+  const children = await listOrganizationChildren(parentId);
   return data({ children });
 }

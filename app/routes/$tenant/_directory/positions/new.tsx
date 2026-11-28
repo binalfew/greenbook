@@ -18,7 +18,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const [organizations, types, reportsToCandidates] = await Promise.all([
     prisma.organization.findMany({
-      where: { tenantId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       take: 500,
       select: { id: true, name: true, acronym: true },
@@ -29,7 +29,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       select: { id: true, name: true, code: true },
     }),
     prisma.position.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
+      where: { deletedAt: null, isActive: true },
       orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
       take: 500,
       select: { id: true, title: true },

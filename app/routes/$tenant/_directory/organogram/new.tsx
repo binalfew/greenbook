@@ -23,7 +23,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       select: { id: true, name: true, code: true, level: true },
     }),
     prisma.organization.findMany({
-      where: { tenantId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       take: 500,
       select: { id: true, name: true, acronym: true },

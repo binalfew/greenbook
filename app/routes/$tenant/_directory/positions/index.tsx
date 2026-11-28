@@ -19,7 +19,7 @@ import type { Route } from "./+types/index";
 export const handle = { breadcrumb: "Positions" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { user, tenantId, canDirect, canSubmit } = await requireDirectoryAccess(request, {
+  const { user, tenantId, canDirect, canPropose } = await requireDirectoryAccess(request, {
     write: "position",
   });
 
@@ -44,7 +44,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       pageSize,
     }),
     prisma.organization.findMany({
-      where: { tenantId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       take: 500,
       select: { id: true, name: true, acronym: true },
@@ -64,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     types,
     canWrite: canDirect,
     canDelete: hasPermission(user, "position", "delete"),
-    canSubmit,
+    canSubmit: canPropose,
     pagination: { page, pageSize, totalCount: result.total, totalPages } satisfies PaginationMeta,
   });
 }

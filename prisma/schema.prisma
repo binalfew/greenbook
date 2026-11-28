@@ -211,10 +211,8 @@ model Tenant {
   roles               Role[]
   systemSettings      SystemSetting[]
   notifications       Notification[]
-  organizations       Organization[]
   people              Person[]
   personPhotos        PersonPhoto[]
-  positions           Position[]
   positionAssignments PositionAssignment[]
   changeRequests      ChangeRequest[]
 
@@ -465,7 +463,6 @@ model OrganizationType {
 
 model Organization {
   id                String    @id @default(cuid())
-  tenantId          String
   name              String    @db.VarChar(255)
   acronym           String?   @db.VarChar(50)
   typeId            String
@@ -485,15 +482,13 @@ model Organization {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   type      OrganizationType @relation(fields: [typeId], references: [id])
   parent    Organization?    @relation("OrgTree", fields: [parentId], references: [id], onDelete: Restrict)
   children  Organization[]   @relation("OrgTree")
   positions Position[]
 
-  @@index([tenantId])
-  @@index([tenantId, parentId])
-  @@index([tenantId, typeId])
+  @@index([parentId])
+  @@index([typeId])
   @@index([name])
   @@index([acronym])
   @@index([deletedAt])
@@ -580,7 +575,6 @@ model PositionType {
 
 model Position {
   id             String  @id @default(cuid())
-  tenantId       String
   organizationId String
   typeId         String
   title          String  @db.VarChar(255)
@@ -594,16 +588,14 @@ model Position {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   type         PositionType         @relation(fields: [typeId], references: [id])
   reportsTo    Position?            @relation("PositionReports", fields: [reportsToId], references: [id], onDelete: SetNull)
   reports      Position[]           @relation("PositionReports")
   assignments  PositionAssignment[]
 
-  @@index([tenantId])
-  @@index([tenantId, organizationId])
-  @@index([tenantId, typeId])
+  @@index([organizationId])
+  @@index([typeId])
   @@index([deletedAt])
 }
 

@@ -134,7 +134,7 @@ describe("directory-changes: submit → approve round-trip", () => {
 
     // Before approval — nothing exists yet.
     let orgCount = await prisma.organization.count({
-      where: { tenantId: a.tenant.id, deletedAt: null },
+      where: { deletedAt: null },
     });
     expect(orgCount).toBe(0);
 
@@ -146,12 +146,12 @@ describe("directory-changes: submit → approve round-trip", () => {
     expect(result.change.appliedAt).toBeTruthy();
 
     orgCount = await prisma.organization.count({
-      where: { tenantId: a.tenant.id, deletedAt: null },
+      where: { deletedAt: null },
     });
     expect(orgCount).toBe(1);
 
     const org = await prisma.organization.findFirst({
-      where: { tenantId: a.tenant.id, deletedAt: null },
+      where: { deletedAt: null },
     });
     expect(org?.name).toBe("New Org");
   });
@@ -172,7 +172,7 @@ describe("directory-changes: submit → approve round-trip", () => {
     expect(rejected.reviewerNotes).toBe("missing mandate");
 
     const count = await prisma.organization.count({
-      where: { tenantId: a.tenant.id, deletedAt: null },
+      where: { deletedAt: null },
     });
     expect(count).toBe(0);
   });
@@ -433,11 +433,10 @@ describe("directory-changes: optimistic concurrency + delete guards", () => {
   it("shows a new person's nationality and first position by name", async () => {
     const a = await arrange();
     const org = await prisma.organization.create({
-      data: { tenantId: a.tenant.id, name: "Peace Fund", acronym: "PF", typeId: a.orgType.id },
+      data: { name: "Peace Fund", acronym: "PF", typeId: a.orgType.id },
     });
     const position = await prisma.position.create({
       data: {
-        tenantId: a.tenant.id,
         title: "Director",
         organizationId: org.id,
         typeId: a.positionType.id,
@@ -562,7 +561,7 @@ describe("directory-changes: batch approval", () => {
     expect(result.skipped[0]).toEqual({ id: preWithdraw.id, reason: "NOT_PENDING" });
 
     const count = await prisma.organization.count({
-      where: { tenantId: a.tenant.id, deletedAt: null },
+      where: { deletedAt: null },
     });
     expect(count).toBe(5);
   });
@@ -614,9 +613,10 @@ describe("directory-changes: cross-tenant public gate", () => {
     const publicIds = await getPublicTenantIds();
     expect(publicIds).toEqual([a.tenant.id]);
 
+    // Organizational units belong to no tenant: the opt-in decides whose
+    // people are shown, not which units.
     const roots = await publicListOrganizationTreeRoots(publicIds);
-    expect(roots).toHaveLength(1);
-    expect(roots[0].name).toBe("Public-Visible Root");
+    expect(roots.map((r) => r.name).sort()).toEqual(["Public-Visible Root", "Secret Root"]);
     // Response shape MUST NOT include tenantId.
     expect((roots[0] as Record<string, unknown>).tenantId).toBeUndefined();
   });

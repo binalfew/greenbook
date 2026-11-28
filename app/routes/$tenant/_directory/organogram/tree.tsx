@@ -10,14 +10,14 @@ import type { Route } from "./+types/tree";
 export const handle = { breadcrumb: "Tree" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { tenantId, canDirect, canSubmit } = await requireDirectoryAccess(request, {
+  const { tenantId, canDirect } = await requireDirectoryAccess(request, {
     write: "organization",
   });
-  const roots = await listRootOrganizations(tenantId);
+  const roots = await listRootOrganizations();
   return data({
     roots,
     canMove: canDirect,
-    canCreate: canDirect || canSubmit,
+    canCreate: canDirect,
   });
 }
 

@@ -84,6 +84,27 @@ export class ChangeRequestError extends Error {
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
+/**
+ * The context of a change-request call. `lockedEntityTypes` lists the entity
+ * types the caller may not draft, submit, reopen or approve a change to;
+ * routes fill it in from the caller's permissions (`directoryContext`). It
+ * does not apply to `submitAndApply`, which routes gate on the write
+ * permission itself, nor to rejecting, withdrawing or discarding.
+ */
+export type ChangeContext = TenantServiceContext & {
+  lockedEntityTypes?: readonly DirectoryEntityKey[];
+};
+
+function assertEntityTypeOpen(ctx: ChangeContext, entityType: string) {
+  if (ctx.lockedEntityTypes?.some((locked) => locked === entityType)) {
+    throw new ChangeRequestError(
+      "Changes to this kind of record are made by the administrator only",
+      403,
+      "ADMIN_MANAGED",
+    );
+  }
+}
+
 export type SubmitInput = {
   entityType: DirectoryEntityKey;
   operation: ChangeOperationKey;
@@ -186,15 +207,17 @@ async function liveVersion(
   entityType: DirectoryEntityKey,
   entityId: string,
 ): Promise<{ version: number } | null> {
-  const where = { id: entityId, tenantId, deletedAt: null };
+  // Organizational units and positions belong to no tenant.
+  const shared = { id: entityId, deletedAt: null };
+  const where = { ...shared, tenantId };
   const select = { version: true } as const;
   switch (entityType) {
     case "ORGANIZATION":
-      return tx.organization.findFirst({ where, select });
+      return tx.organization.findFirst({ where: shared, select });
     case "PERSON":
       return tx.person.findFirst({ where, select });
     case "POSITION":
-      return tx.position.findFirst({ where, select });
+      return tx.position.findFirst({ where: shared, select });
     case "POSITION_ASSIGNMENT":
       return tx.positionAssignment.findFirst({ where, select });
   }
@@ -279,9 +302,10 @@ function validatePayload(
  */
 export async function saveDraft(
   input: SubmitInput,
-  ctx: TenantServiceContext,
+  ctx: ChangeContext,
   options: { draftId?: string } = {},
 ) {
+  assertEntityTypeOpen(ctx, input.entityType);
   const validated = validatePayload(input.entityType, input.operation, input.payload);
   assertOperationShape(input);
   const entityId = input.entityId ?? null;
@@ -438,7 +462,7 @@ async function hasLiveFollowUp(
  * (`PENDING_REQUEST_EXISTS`), or the author already holds a draft for it
  * (`DRAFT_EXISTS`).
  */
-export async function reopenRejectedChange(id: string, ctx: TenantServiceContext) {
+export async function reopenRejectedChange(id: string, ctx: ChangeContext) {
   const rejected = await prisma.changeRequest.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
@@ -460,6 +484,7 @@ export async function reopenRejectedChange(id: string, ctx: TenantServiceContext
       "NOT_REJECTED",
     );
   }
+  assertEntityTypeOpen(ctx, rejected.entityType);
   const entityType = rejected.entityType as DirectoryEntityKey;
   const entityId = rejected.entityId;
   const payload =
@@ -557,7 +582,7 @@ export async function canReopenChange(
   return !(await hasLiveFollowUp(prisma, change));
 }
 
-async function submitDraft(id: string, ctx: TenantServiceContext): Promise<ChangeListRow> {
+async function submitDraft(id: string, ctx: ChangeContext): Promise<ChangeListRow> {
   // Scoped to the author: someone else's draft is indistinguishable from a
   // missing one.
   const draft = await prisma.changeRequest.findFirst({
@@ -571,6 +596,7 @@ async function submitDraft(id: string, ctx: TenantServiceContext): Promise<Chang
       "NOT_DRAFT",
     );
   }
+  assertEntityTypeOpen(ctx, draft.entityType);
   const entityType = draft.entityType as DirectoryEntityKey;
 
   const change = await prisma.$transaction(async (tx) => {
@@ -622,7 +648,7 @@ async function submitDraft(id: string, ctx: TenantServiceContext): Promise<Chang
  * already has a pending change (`PENDING_REQUEST_EXISTS`) is `failed` and
  * stays a draft. Approvers get ONE notification for the whole call.
  */
-export async function submitDrafts(ids: string[], ctx: TenantServiceContext): Promise<BatchResult> {
+export async function submitDrafts(ids: string[], ctx: ChangeContext): Promise<BatchResult> {
   assertBatchSize(ids);
   const submitted: ChangeListRow[] = [];
   const result = await runBatch(
@@ -743,11 +769,7 @@ function domainEventFor(
 
 // ─── Approve ────────────────────────────────────────────────────────────
 
-export async function approveChange(
-  id: string,
-  { notes }: { notes?: string },
-  ctx: TenantServiceContext,
-) {
+export async function approveChange(id: string, { notes }: { notes?: string }, ctx: ChangeContext) {
   const change = await prisma.changeRequest.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
@@ -762,6 +784,7 @@ export async function approveChange(
       "NOT_PENDING",
     );
   }
+  assertEntityTypeOpen(ctx, change.entityType);
 
   logger.info(
     { tenantId: ctx.tenantId, userId: ctx.userId, changeId: id },
@@ -1101,7 +1124,7 @@ function assertBatchSize(ids: string[]) {
 export async function approveChanges(
   ids: string[],
   { notes }: { notes?: string },
-  ctx: TenantServiceContext,
+  ctx: ChangeContext,
 ): Promise<BatchResult> {
   assertBatchSize(ids);
   return runBatch(ids, (id) => approveChange(id, { notes }, ctx).then((r) => r.change), ctx);
@@ -1425,7 +1448,7 @@ async function resolveNames(
   switch (resolver) {
     case "organization": {
       const rows = await prisma.organization.findMany({
-        where: { id: { in: ids }, tenantId },
+        where: { id: { in: ids } },
         select: { id: true, name: true, acronym: true },
       });
       return Object.fromEntries(
@@ -1457,7 +1480,7 @@ async function resolveNames(
     }
     case "position": {
       const rows = await prisma.position.findMany({
-        where: { id: { in: ids }, tenantId },
+        where: { id: { in: ids } },
         select: {
           id: true,
           title: true,
@@ -1484,7 +1507,7 @@ async function fetchLiveEntity(entityType: DirectoryEntityKey, entityId: string,
   switch (entityType) {
     case "ORGANIZATION":
       return prisma.organization.findFirst({
-        where: { id: entityId, tenantId, deletedAt: null },
+        where: { id: entityId, deletedAt: null },
       });
     case "PERSON":
       return prisma.person.findFirst({
@@ -1492,7 +1515,7 @@ async function fetchLiveEntity(entityType: DirectoryEntityKey, entityId: string,
       });
     case "POSITION":
       return prisma.position.findFirst({
-        where: { id: entityId, tenantId, deletedAt: null },
+        where: { id: entityId, deletedAt: null },
       });
     case "POSITION_ASSIGNMENT":
       return prisma.positionAssignment.findFirst({

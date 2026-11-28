@@ -44,7 +44,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       select: { id: true, firstName: true, lastName: true, honorific: true },
     }),
     prisma.position.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
+      where: { deletedAt: null, isActive: true },
       orderBy: [{ title: "asc" }],
       take: 500,
       select: {

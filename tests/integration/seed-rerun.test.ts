@@ -44,21 +44,19 @@ async function enabledTenants(key: string) {
 }
 
 /** How many directory records of each kind the tenant holds, deleted ones included. */
+// What a tenant holds of the directory. Organizational units and positions
+// are not on the list: they belong to no tenant.
 async function directoryCounts(tenantId: string) {
   const where = { tenantId };
   return {
-    organizations: await prisma.organization.count({ where }),
     people: await prisma.person.count({ where }),
-    positions: await prisma.position.count({ where }),
     assignments: await prisma.positionAssignment.count({ where }),
     changeRequests: await prisma.changeRequest.count({ where }),
   };
 }
 
 const NO_DIRECTORY_RECORDS = {
-  organizations: 0,
   people: 0,
-  positions: 0,
   assignments: 0,
   changeRequests: 0,
 };
@@ -88,13 +86,13 @@ async function arrangeWorkingDirectory(tenantId: string) {
   const orgType = await prisma.organizationType.findFirstOrThrow({ where: { code: "DEPARTMENT" } });
   const positionType = await prisma.positionType.findFirstOrThrow();
   const root = await prisma.organization.create({
-    data: { tenantId, name: "Peace Fund", acronym: "PF", typeId: orgType.id },
+    data: { name: "Peace Fund", acronym: "PF", typeId: orgType.id },
   });
   const child = await prisma.organization.create({
-    data: { tenantId, name: "Secretariat", typeId: orgType.id, parentId: root.id },
+    data: { name: "Secretariat", typeId: orgType.id, parentId: root.id },
   });
   const position = await prisma.position.create({
-    data: { tenantId, title: "Director", organizationId: child.id, typeId: positionType.id },
+    data: { title: "Director", organizationId: child.id, typeId: positionType.id },
   });
   const person = await prisma.person.create({
     data: { tenantId, firstName: "Amina", lastName: "Diallo", languages: [] },
@@ -146,6 +144,22 @@ describe("running the seed", () => {
     expect(users).toEqual([{ email: ADMIN_EMAIL, userRoles: [{ role: { name: "admin" } }] }]);
     expect(await homeTenantSlug(ADMIN_EMAIL)).toBe("system");
     expect(await prisma.memberState.count()).toBe(55);
+  });
+
+  it("keeps organizations and positions for the admin: no other role may write or delete them", async () => {
+    await runSeed();
+
+    const holders = await prisma.rolePermission.findMany({
+      where: {
+        permission: {
+          resource: { in: ["organization", "position"] },
+          action: { in: ["write", "delete"] },
+        },
+      },
+      select: { role: { select: { name: true } } },
+    });
+    expect([...new Set(holders.map((h) => h.role.name))]).toEqual(["admin"]);
+    expect(holders).toHaveLength(4);
   });
 
   it("creates the admin with the email and password it is given", async () => {
@@ -220,8 +234,8 @@ describe("running the seed", () => {
 
     expect(await directoryCounts(system.id)).toEqual(NO_DIRECTORY_RECORDS);
     const after = await directorySnapshot();
-    expect(after.organizations).toEqual(inMisd(organizations));
-    expect(after.positions).toEqual(inMisd(positions));
+    expect(after.organizations).toEqual(organizations);
+    expect(after.positions).toEqual(positions);
     expect(after.people).toEqual(inMisd(people));
     expect(after.assignments).toEqual(inMisd(assignments));
     expect(after.changeRequests).toEqual(inMisd(changeRequests));

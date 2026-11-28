@@ -38,9 +38,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   const [orgCount, personCount, positionCount, pendingCount, myPendingCount] = await Promise.all([
-    prisma.organization.count({ where: { tenantId, deletedAt: null } }),
+    prisma.organization.count({ where: { deletedAt: null } }),
     prisma.person.count({ where: { tenantId, deletedAt: null } }),
-    prisma.position.count({ where: { tenantId, deletedAt: null, isActive: true } }),
+    prisma.position.count({ where: { deletedAt: null, isActive: true } }),
     prisma.changeRequest.count({ where: { tenantId, status: "PENDING" } }),
     prisma.changeRequest.count({
       where: { tenantId, status: "PENDING", submittedById: user.id },

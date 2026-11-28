@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
+import { personForm } from "./helpers/directory-actors";
 import { createSessionCookie } from "./helpers/session";
 
 // Module-level `flagCache` (60s TTL) in feature-flags.server.ts persists
@@ -55,11 +56,11 @@ async function arrange(): Promise<Seeded> {
     });
   }
 
-  await grant(focalRole.id, "organization", "read");
+  await grant(focalRole.id, "person", "read");
   await grant(focalRole.id, "directory-change", "submit");
 
-  await grant(managerRole.id, "organization", "read");
-  await grant(managerRole.id, "organization", "write");
+  await grant(managerRole.id, "person", "read");
+  await grant(managerRole.id, "person", "write");
   await grant(managerRole.id, "directory-change", "approve");
   await grant(managerRole.id, "directory-change", "read-all");
 
@@ -113,7 +114,7 @@ async function arrange(): Promise<Seeded> {
 function buildRequest(cookie: string, body: Record<string, string>): Request {
   const form = new URLSearchParams();
   for (const [k, v] of Object.entries(body)) form.set(k, v);
-  return new Request("http://localhost/medical/organogram/new", {
+  return new Request("http://localhost/medical/people/new", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -123,18 +124,13 @@ function buildRequest(cookie: string, body: Record<string, string>): Request {
   });
 }
 
-describe("organization-editor action (route-level)", () => {
-  it("focal person POST lands as a DRAFT ChangeRequest, no org created", async () => {
+describe("person-editor action (route-level)", () => {
+  it("focal person POST lands as a DRAFT ChangeRequest, no person created", async () => {
     const a = await arrange();
-    const request = buildRequest(a.focalSession, {
-      name: "Proposed Org",
-      typeId: a.orgType.id,
-      isActive: "true",
-      sortOrder: "0",
-    });
+    const request = buildRequest(a.focalSession, personForm("Proposed Person"));
 
     // The action redirects on success.
-    const response = await organizationEditorAction({
+    const response = await personEditorAction({
       request,
       params: { tenant: "medical" },
       context: {},
@@ -142,32 +138,27 @@ describe("organization-editor action (route-level)", () => {
     expect(response instanceof Response).toBe(true);
     expect((response as Response).status).toBe(302);
 
-    const orgs = await prisma.organization.count({
+    const people = await prisma.person.count({
       where: { tenantId: a.tenantId, deletedAt: null },
     });
-    expect(orgs).toBe(0);
+    expect(people).toBe(0);
 
     const draft = await prisma.changeRequest.findFirst({
       where: { tenantId: a.tenantId, status: "DRAFT" },
     });
     expect(draft).toBeTruthy();
     expect(draft?.approvalMode).toBe("REVIEWED");
-    expect(draft?.entityType).toBe("ORGANIZATION");
+    expect(draft?.entityType).toBe("PERSON");
     expect(draft?.operation).toBe("CREATE");
   });
 
-  it("manager POST self-approves and creates the org immediately", async () => {
+  it("manager POST self-approves and creates the person immediately", async () => {
     const a = await arrange();
-    const request = buildRequest(a.managerSession, {
-      name: "Direct Edit Org",
-      typeId: a.orgType.id,
-      isActive: "true",
-      sortOrder: "0",
-    });
+    const request = buildRequest(a.managerSession, personForm("Direct Edit Person"));
 
     let caught: unknown;
     try {
-      await organizationEditorAction({
+      await personEditorAction({
         request,
         params: { tenant: "medical" },
         context: {},
@@ -183,27 +174,24 @@ describe("organization-editor action (route-level)", () => {
       // we redirected to `${base}/${entityId}`. Prove the write happened.
     }
 
-    const org = await prisma.organization.findFirst({
-      where: { tenantId: a.tenantId, deletedAt: null, name: "Direct Edit Org" },
+    const person = await prisma.person.findFirst({
+      where: { tenantId: a.tenantId, deletedAt: null, lastName: "Direct Edit Person" },
     });
-    expect(org).toBeTruthy();
+    expect(person).toBeTruthy();
 
     const change = await prisma.changeRequest.findFirst({
-      where: { tenantId: a.tenantId, status: "APPROVED", entityId: org!.id },
+      where: { tenantId: a.tenantId, status: "APPROVED", entityId: person!.id },
     });
     expect(change?.approvalMode).toBe("SELF_APPROVED");
   });
 
   it("missing required field returns a Conform error reply (not a redirect)", async () => {
     const a = await arrange();
-    const request = buildRequest(a.focalSession, {
-      // name omitted — required field
-      typeId: a.orgType.id,
-      isActive: "true",
-      sortOrder: "0",
-    });
+    // Last name omitted — a required field.
+    const { lastName: _omitted, ...incomplete } = personForm("Incomplete");
+    const request = buildRequest(a.focalSession, incomplete);
 
-    const result = await organizationEditorAction({
+    const result = await personEditorAction({
       request,
       params: { tenant: "medical" },
       context: {},
@@ -220,10 +208,10 @@ describe("organization-editor action (route-level)", () => {
       expect(result).toBeTruthy();
     }
 
-    const orgs = await prisma.organization.count({
+    const people = await prisma.person.count({
       where: { tenantId: a.tenantId, deletedAt: null },
     });
-    expect(orgs).toBe(0);
+    expect(people).toBe(0);
 
     const changes = await prisma.changeRequest.count({
       where: { tenantId: a.tenantId },

@@ -18,7 +18,6 @@ export class PositionError extends Error {
 
 const positionSelect = {
   id: true,
-  tenantId: true,
   organizationId: true,
   typeId: true,
   title: true,
@@ -31,16 +30,19 @@ const positionSelect = {
   updatedAt: true,
 } as const;
 
-const positionListInclude = {
-  organization: { select: { id: true, name: true, acronym: true } },
-  type: { select: { id: true, name: true, code: true } },
-  reportsTo: { select: { id: true, title: true } },
-  _count: {
-    select: {
-      assignments: { where: { deletedAt: null, isCurrent: true } },
+// Positions are shared by every tenant; the people holding them are not. A
+// read made for a tenant counts and lists that tenant's assignments only.
+const positionListInclude = (tenantId: string) =>
+  ({
+    organization: { select: { id: true, name: true, acronym: true } },
+    type: { select: { id: true, name: true, code: true } },
+    reportsTo: { select: { id: true, title: true } },
+    _count: {
+      select: {
+        assignments: { where: { tenantId, deletedAt: null, isCurrent: true } },
+      },
     },
-  },
-} as const;
+  }) as const;
 
 // ─── Reads ──────────────────────────────────────────────────────────────
 
@@ -59,7 +61,6 @@ export async function listPositions(tenantId: string, options: PaginatedQueryOpt
     : {};
 
   const filter: Prisma.PositionWhereInput = {
-    tenantId,
     deletedAt: null,
     ...searchFilter,
     ...(where.organizationId ? { organizationId: where.organizationId as string } : {}),
@@ -73,7 +74,7 @@ export async function listPositions(tenantId: string, options: PaginatedQueryOpt
       orderBy: orderBy ?? [{ sortOrder: "asc" }, { title: "asc" }],
       skip,
       take: pageSize,
-      include: positionListInclude,
+      include: positionListInclude(tenantId),
     }),
     prisma.position.count({ where: filter }),
   ]);
@@ -83,15 +84,15 @@ export async function listPositions(tenantId: string, options: PaginatedQueryOpt
 
 export async function listPositionsForOrganization(organizationId: string, tenantId: string) {
   return prisma.position.findMany({
-    where: { organizationId, tenantId, deletedAt: null },
+    where: { organizationId, deletedAt: null },
     orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
-    include: positionListInclude,
+    include: positionListInclude(tenantId),
   });
 }
 
 export async function getPosition(id: string, tenantId: string) {
   const position = await prisma.position.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     include: {
       organization: { select: { id: true, name: true, acronym: true } },
       type: { select: { id: true, name: true, code: true } },
@@ -102,7 +103,7 @@ export async function getPosition(id: string, tenantId: string) {
         select: { id: true, title: true },
       },
       assignments: {
-        where: { deletedAt: null },
+        where: { tenantId, deletedAt: null },
         orderBy: [{ isCurrent: "desc" }, { startDate: "desc" }],
         include: {
           person: {
@@ -120,9 +121,9 @@ export async function getPosition(id: string, tenantId: string) {
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
-async function assertReferencedOrganization(organizationId: string, tenantId: string, db: Db) {
+async function assertReferencedOrganization(organizationId: string, db: Db) {
   const row = await db.organization.findFirst({
-    where: { id: organizationId, tenantId, deletedAt: null },
+    where: { id: organizationId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {
@@ -148,17 +149,12 @@ async function assertReferencedType(typeId: string, db: Db) {
   }
 }
 
-async function assertReferencedReportsTo(
-  reportsToId: string,
-  tenantId: string,
-  db: Db,
-  selfId?: string,
-) {
+async function assertReferencedReportsTo(reportsToId: string, db: Db, selfId?: string) {
   if (selfId && reportsToId === selfId) {
     throw new PositionError("A position cannot report to itself", 400, "CIRCULAR_REPORTING");
   }
   const row = await db.position.findFirst({
-    where: { id: reportsToId, tenantId, deletedAt: null },
+    where: { id: reportsToId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {
@@ -191,9 +187,9 @@ export async function _applyCreatePosition(
   tx?: Prisma.TransactionClient,
 ) {
   const db: Db = tx ?? prisma;
-  await assertReferencedOrganization(payload.organizationId, tenantId, db);
+  await assertReferencedOrganization(payload.organizationId, db);
   await assertReferencedType(payload.typeId, db);
-  if (payload.reportsToId) await assertReferencedReportsTo(payload.reportsToId, tenantId, db);
+  if (payload.reportsToId) await assertReferencedReportsTo(payload.reportsToId, db);
 
   logger.info(
     { tenantId, userId: ctx.userId, orgId: payload.organizationId, title: payload.title },
@@ -201,7 +197,7 @@ export async function _applyCreatePosition(
   );
 
   return db.position.create({
-    data: { tenantId, ...positionDataFromPayload(payload) },
+    data: positionDataFromPayload(payload),
     select: positionSelect,
   });
 }
@@ -215,14 +211,14 @@ export async function _applyUpdatePosition(
 ) {
   const db: Db = tx ?? prisma;
   const existing = await db.position.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     select: { id: true },
   });
   if (!existing) throw new PositionError("Position not found", 404, "NOT_FOUND");
 
-  await assertReferencedOrganization(payload.organizationId, tenantId, db);
+  await assertReferencedOrganization(payload.organizationId, db);
   await assertReferencedType(payload.typeId, db);
-  if (payload.reportsToId) await assertReferencedReportsTo(payload.reportsToId, tenantId, db, id);
+  if (payload.reportsToId) await assertReferencedReportsTo(payload.reportsToId, db, id);
 
   logger.info({ tenantId, userId: ctx.userId, positionId: id }, "applying UPDATE position");
 
@@ -241,7 +237,7 @@ export async function _applySoftDeletePosition(
 ) {
   const db: Db = tx ?? prisma;
   const existing = await db.position.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     select: {
       id: true,
       _count: { select: { assignments: { where: { deletedAt: null, isCurrent: true } } } },
@@ -270,7 +266,7 @@ export async function _applySoftDeletePosition(
 export async function publicGetPosition(id: string, publicTenantIds: string[]) {
   if (publicTenantIds.length === 0) return null;
   return prisma.position.findFirst({
-    where: { id, tenantId: { in: publicTenantIds }, deletedAt: null, isActive: true },
+    where: { id, deletedAt: null, isActive: true },
     select: {
       id: true,
       title: true,
@@ -279,7 +275,7 @@ export async function publicGetPosition(id: string, publicTenantIds: string[]) {
       type: { select: { id: true, name: true } },
       reportsTo: { select: { id: true, title: true } },
       assignments: {
-        where: { deletedAt: null },
+        where: { tenantId: { in: publicTenantIds }, deletedAt: null },
         orderBy: [{ isCurrent: "desc" }, { startDate: "desc" }],
         take: 20,
         select: {

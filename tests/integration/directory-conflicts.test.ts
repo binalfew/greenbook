@@ -84,14 +84,13 @@ async function arrange() {
     data: { code: "ROOT", name: "Root", level: 0 },
   });
   const org = await prisma.organization.create({
-    data: { tenantId: tenant.id, name: "Commission", typeId: orgType.id },
+    data: { name: "Commission", typeId: orgType.id },
   });
   const positionType = await prisma.positionType.create({
     data: { code: "DIR", name: "Director" },
   });
   const position = await prisma.position.create({
     data: {
-      tenantId: tenant.id,
       organizationId: org.id,
       typeId: positionType.id,
       title: "Director of Testing",

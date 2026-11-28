@@ -46,7 +46,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // tenant has one to offer.
   const needsPosition =
     !formData.get("id") &&
-    (await prisma.position.count({ where: { tenantId, deletedAt: null, isActive: true } })) > 0;
+    (await prisma.position.count({ where: { deletedAt: null, isActive: true } })) > 0;
   const submission = parseWithZod(formData, {
     schema: needsPosition ? personCreateFormSchema : personFormSchema,
   });

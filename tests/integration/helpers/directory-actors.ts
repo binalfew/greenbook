@@ -19,7 +19,8 @@ export const FOCAL_PERMISSIONS: [string, string][] = [
 
 export const MANAGER_PERMISSIONS: [string, string][] = [
   ...FOCAL_PERMISSIONS,
-  ...ENTITIES.flatMap((entity): [string, string][] => [
+  // Organizations and positions are the global admin's: no write, no delete.
+  ...(["person", "position-assignment"] as const).flatMap((entity): [string, string][] => [
     [entity, "write"],
     [entity, "delete"],
   ]),
@@ -106,5 +107,23 @@ export async function seedDirectoryActors(
     orgTypeId: orgType.id,
     /** Add another signed-in user holding `roleId`, in this tenant unless told otherwise. */
     member,
+  };
+}
+
+/**
+ * The person editor's form for someone called "Test <name>". The duplicate
+ * check is confirmed up front, so a save is never held back by its warning.
+ */
+export function personForm(name: string, extra: Record<string, string> = {}) {
+  const local = name.toLowerCase().replace(/[^a-z0-9]+/g, ".");
+  return {
+    firstName: "Test",
+    lastName: name,
+    email: `${local}@people.test`,
+    phone: "+251 11 000 0000",
+    officeEmail: `${local}@office.test`,
+    officePhone: "+251 11 000 0001",
+    confirmDuplicates: "on",
+    ...extra,
   };
 }

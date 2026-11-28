@@ -7,10 +7,8 @@ import type { Route } from "./+types/organizations.move";
 // Posts arrive from react-arborist's onMove flow:
 //   { intent: "move", organizationId: "<id>", parentId: "" | "<parent-id>" }
 //
-// MVP: manager-only. Focal persons do not see the drag handle and the
-// self-approved MOVE path via `dispatchDirectoryChange` will reject them
-// (they lack `organization:write`). A focal-person "propose move" flow
-// with a pending overlay is deferred to Phase E.
+// Global admin only: it takes `organization:write`, which neither focal
+// persons nor managers hold. They do not see the drag handle either.
 
 export async function loader({ params }: Route.LoaderArgs) {
   return redirect(`/${params.tenant}/organogram`);
@@ -18,8 +16,8 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   // Gate at the route boundary too — dispatchDirectoryChange will also
-  // 403 focal persons, but this keeps the error shape consistent and
-  // avoids touching the engine for unauthorized callers.
+  // 403 anyone without the write permission, but this keeps the error shape
+  // consistent and avoids touching the engine for unauthorized callers.
   const access = await requireDirectoryAccess(request, { write: "organization" });
   if (!access.canDirect) {
     throw new Response("Forbidden", { status: 403 });

@@ -10,9 +10,10 @@ import {
  * databases kept the directory in it; this hands all of that to a working
  * tenant instead of deleting it:
  *
- *  - organizations, people and their photos, positions, assignments and
- *    change requests move as they are (same ids, same timestamps), so every
- *    link between them and every change request's history stays valid;
+ *  - people and their photos, assignments and change requests move as they
+ *    are (same ids, same timestamps), so every link between them and every
+ *    change request's history stays valid. Organizational units and positions
+ *    belong to no tenant, so there is nothing of theirs to move;
  *  - users of the system tenant who hold a tenant-scope role (focal persons,
  *    managers) move with the records they work on;
  *  - the system tenant's place on each new-tenant flag's enabled list goes to
@@ -34,10 +35,8 @@ export async function emptySystemTenantDirectory(
   return prisma.$transaction(async (tx) => {
     // Raw updates so `updatedAt` keeps saying when the record last changed.
     const moved = [
-      await tx.$executeRaw`UPDATE "Organization" SET "tenantId" = ${workingTenantId} WHERE "tenantId" = ${systemTenantId}`,
       await tx.$executeRaw`UPDATE "Person" SET "tenantId" = ${workingTenantId} WHERE "tenantId" = ${systemTenantId}`,
       await tx.$executeRaw`UPDATE "PersonPhoto" SET "tenantId" = ${workingTenantId} WHERE "tenantId" = ${systemTenantId}`,
-      await tx.$executeRaw`UPDATE "Position" SET "tenantId" = ${workingTenantId} WHERE "tenantId" = ${systemTenantId}`,
       await tx.$executeRaw`UPDATE "PositionAssignment" SET "tenantId" = ${workingTenantId} WHERE "tenantId" = ${systemTenantId}`,
       await tx.$executeRaw`UPDATE "ChangeRequest" SET "tenantId" = ${workingTenantId} WHERE "tenantId" = ${systemTenantId}`,
       await tx.$executeRaw`

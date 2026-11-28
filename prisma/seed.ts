@@ -28,14 +28,14 @@ const UNIQUE_PERMISSIONS = [
   { resource: "sso", action: "delete", module: "auth", description: "Delete SSO configurations" },
   // Directory — focal authors submissions, manager reviews
   { resource: "organization", action: "read", module: "directory", description: "Read organizations" },
-  { resource: "organization", action: "write", module: "directory", description: "Create or edit organizations (via approval)" },
-  { resource: "organization", action: "delete", module: "directory", description: "Delete organizations (via approval)" },
+  { resource: "organization", action: "write", module: "directory", description: "Create or edit organizations (global admin only)" },
+  { resource: "organization", action: "delete", module: "directory", description: "Delete organizations (global admin only)" },
   { resource: "person", action: "read", module: "directory", description: "Read people" },
   { resource: "person", action: "write", module: "directory", description: "Create or edit people (via approval)" },
   { resource: "person", action: "delete", module: "directory", description: "Delete people (via approval)" },
   { resource: "position", action: "read", module: "directory", description: "Read positions" },
-  { resource: "position", action: "write", module: "directory", description: "Create or edit positions (via approval)" },
-  { resource: "position", action: "delete", module: "directory", description: "Delete positions (via approval)" },
+  { resource: "position", action: "write", module: "directory", description: "Create or edit positions (global admin only)" },
+  { resource: "position", action: "delete", module: "directory", description: "Delete positions (global admin only)" },
   { resource: "position-assignment", action: "read", module: "directory", description: "Read position assignments" },
   { resource: "position-assignment", action: "write", module: "directory", description: "Create or edit position assignments (via approval)" },
   { resource: "position-assignment", action: "delete", module: "directory", description: "Delete position assignments (via approval)" },
@@ -156,9 +156,11 @@ export async function runSeed() {
   // Roles are now defined ONCE platform-wide (tenantId = null). There are
   // exactly four:
   //   admin   (GLOBAL) — platform admin; manages tenants, settings, role defs
-  //   focal   (TENANT) — submits directory changes for the user's home tenant
+  //   focal   (TENANT) — submits changes to people and their assignments
+  //                      for the user's home tenant
   //   manager (TENANT) — approves focal submissions for the user's home tenant
   //                      + handles user CRUD inside the tenant
+  // Organizational units and positions are changed by `admin` only.
   //   user    (GLOBAL) — authenticated cross-tenant directory reader
   //
   // RoleScope.TENANT no longer means "owned by tenant X via Role.tenantId" —
@@ -206,12 +208,12 @@ export async function runSeed() {
   const focalRole = await upsertGlobalRole(
     "focal",
     "TENANT",
-    "Submits directory changes for the user's home tenant",
+    "Submits changes to people and their assignments for the user's home tenant",
   );
   const managerRole = await upsertGlobalRole(
     "manager",
     "TENANT",
-    "Approves focal submissions and manages users within the user's home tenant",
+    "Approves focal submissions, edits people and their assignments, and manages users within the user's home tenant",
   );
 
   // Data move (#18): roles created before roles became platform-wide were
@@ -261,12 +263,10 @@ export async function runSeed() {
   ];
   const managerPerms = [
     ...focalPerms,
-    { resource: "organization", action: "write" },
-    { resource: "organization", action: "delete" },
+    // No write or delete on organizations and positions: the structure of
+    // the directory is kept by the global admin alone.
     { resource: "person", action: "write" },
     { resource: "person", action: "delete" },
-    { resource: "position", action: "write" },
-    { resource: "position", action: "delete" },
     { resource: "position-assignment", action: "write" },
     { resource: "position-assignment", action: "delete" },
     { resource: "directory-change", action: "read-all" },

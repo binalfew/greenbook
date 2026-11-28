@@ -25,7 +25,6 @@ export class OrganizationError extends Error {
 
 const orgSelect = {
   id: true,
-  tenantId: true,
   name: true,
   acronym: true,
   typeId: true,
@@ -69,7 +68,7 @@ const orgRootInclude = {
 
 // ─── Reads ──────────────────────────────────────────────────────────────
 
-export async function listOrganizations(tenantId: string, options: PaginatedQueryOptions) {
+export async function listOrganizations(options: PaginatedQueryOptions) {
   const { page, pageSize, where = {}, orderBy } = options;
   const skip = (page - 1) * pageSize;
 
@@ -87,7 +86,6 @@ export async function listOrganizations(tenantId: string, options: PaginatedQuer
   const typeFilter = where.typeId ? { typeId: where.typeId as string } : {};
 
   const filter: Prisma.OrganizationWhereInput = {
-    tenantId,
     deletedAt: null,
     ...searchFilter,
     ...typeFilter,
@@ -107,17 +105,17 @@ export async function listOrganizations(tenantId: string, options: PaginatedQuer
   return { data, total };
 }
 
-export async function listRootOrganizations(tenantId: string) {
+export async function listRootOrganizations() {
   return prisma.organization.findMany({
-    where: { tenantId, deletedAt: null, parentId: null },
+    where: { deletedAt: null, parentId: null },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: orgRootInclude,
   });
 }
 
-export async function listOrganizationChildren(parentId: string, tenantId: string) {
+export async function listOrganizationChildren(parentId: string) {
   return prisma.organization.findMany({
-    where: { tenantId, deletedAt: null, parentId },
+    where: { deletedAt: null, parentId },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: orgListInclude,
   });
@@ -130,9 +128,9 @@ export async function listOrganizationChildren(parentId: string, tenantId: strin
 const ORG_DETAIL_CHILDREN_TAKE = 50;
 const ORG_DETAIL_POSITIONS_TAKE = 20;
 
-export async function getOrganization(id: string, tenantId: string) {
+export async function getOrganization(id: string) {
   const org = await prisma.organization.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     include: {
       type: { select: { id: true, name: true, code: true, level: true } },
       parent: { select: { id: true, name: true, acronym: true } },
@@ -163,9 +161,9 @@ export async function getOrganization(id: string, tenantId: string) {
 // Narrow lookup for destructive-confirm dialogs: just name + child count.
 // Avoids pulling positions, children rows, and type/parent joins for a
 // two-sentence confirmation body.
-export async function getOrganizationForDelete(id: string, tenantId: string) {
+export async function getOrganizationForDelete(id: string) {
   const org = await prisma.organization.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -178,7 +176,6 @@ export async function getOrganizationForDelete(id: string, tenantId: string) {
 
 export async function getOrganizationAncestry(
   id: string,
-  tenantId: string,
 ): Promise<{ id: string; name: string; acronym: string | null }[]> {
   const chain: { id: string; name: string; acronym: string | null }[] = [];
   let cursor: string | null = id;
@@ -189,7 +186,7 @@ export async function getOrganizationAncestry(
       acronym: string | null;
       parentId: string | null;
     } | null = await prisma.organization.findFirst({
-      where: { id: cursor, tenantId, deletedAt: null },
+      where: { id: cursor, deletedAt: null },
       select: { id: true, name: true, acronym: true, parentId: true },
     });
     if (!row) break;
@@ -206,7 +203,6 @@ type Db = Prisma.TransactionClient | typeof prisma;
 export async function assertNoCycle(
   orgId: string,
   candidateParentId: string,
-  tenantId: string,
   tx?: Prisma.TransactionClient,
 ): Promise<void> {
   if (candidateParentId === orgId) {
@@ -223,7 +219,7 @@ export async function assertNoCycle(
       );
     }
     const row: { parentId: string | null } | null = await db.organization.findFirst({
-      where: { id: cursor, tenantId, deletedAt: null },
+      where: { id: cursor, deletedAt: null },
       select: { parentId: true },
     });
     cursor = row?.parentId ?? null;
@@ -244,9 +240,9 @@ async function assertReferencedOrganizationType(typeId: string, db: Db) {
   }
 }
 
-async function assertReferencedParent(parentId: string, tenantId: string, db: Db) {
+async function assertReferencedParent(parentId: string, db: Db) {
   const row = await db.organization.findFirst({
-    where: { id: parentId, tenantId, deletedAt: null },
+    where: { id: parentId, deletedAt: null },
     select: { id: true },
   });
   if (!row) {
@@ -293,12 +289,12 @@ export async function _applyCreateOrg(
 ) {
   const db: Db = tx ?? prisma;
   await assertReferencedOrganizationType(payload.typeId, db);
-  if (payload.parentId) await assertReferencedParent(payload.parentId, tenantId, db);
+  if (payload.parentId) await assertReferencedParent(payload.parentId, db);
 
   logger.info({ tenantId, userId: ctx.userId, name: payload.name }, "applying CREATE organization");
 
   return db.organization.create({
-    data: { tenantId, ...orgDataFromPayload(payload) },
+    data: orgDataFromPayload(payload),
     select: orgSelect,
   });
 }
@@ -312,15 +308,15 @@ export async function _applyUpdateOrg(
 ) {
   const db: Db = tx ?? prisma;
   const existing = await db.organization.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     select: { id: true, version: true },
   });
   if (!existing) throw new OrganizationError("Organization not found", 404, "NOT_FOUND");
 
   await assertReferencedOrganizationType(payload.typeId, db);
   if (payload.parentId) {
-    await assertReferencedParent(payload.parentId, tenantId, db);
-    await assertNoCycle(id, payload.parentId, tenantId, tx);
+    await assertReferencedParent(payload.parentId, db);
+    await assertNoCycle(id, payload.parentId, tx);
   }
 
   logger.info({ tenantId, userId: ctx.userId, orgId: id }, "applying UPDATE organization");
@@ -341,14 +337,14 @@ export async function _applyMoveOrg(
 ) {
   const db: Db = tx ?? prisma;
   const existing = await db.organization.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     select: { id: true },
   });
   if (!existing) throw new OrganizationError("Organization not found", 404, "NOT_FOUND");
 
   if (payload.parentId) {
-    await assertReferencedParent(payload.parentId, tenantId, db);
-    await assertNoCycle(id, payload.parentId, tenantId, tx);
+    await assertReferencedParent(payload.parentId, db);
+    await assertNoCycle(id, payload.parentId, tx);
   }
 
   logger.info(
@@ -371,7 +367,7 @@ export async function _applySoftDeleteOrg(
 ) {
   const db: Db = tx ?? prisma;
   const existing = await db.organization.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where: { id, deletedAt: null },
     select: {
       id: true,
       _count: {
@@ -412,8 +408,9 @@ export async function _applySoftDeleteOrg(
 
 // ─── Public read helpers (cross-tenant, opt-in gated) ───────────────────
 //
-// These take NO tenantId. Callers pass the opted-in tenant set from
-// `getPublicTenantIds()`. Service-boundary projection strips `tenantId`.
+// Organizational units belong to no tenant. Callers still pass the opted-in
+// tenant set from `getPublicTenantIds()`: with no tenant opted in there is no
+// directory to show.
 
 type PublicOrgNode = {
   id: string;
@@ -447,7 +444,7 @@ function toPublicOrgNode(row: {
 export async function publicListOrganizationTreeRoots(publicTenantIds: string[]) {
   if (publicTenantIds.length === 0) return [];
   const rows = await prisma.organization.findMany({
-    where: { tenantId: { in: publicTenantIds }, deletedAt: null, parentId: null },
+    where: { deletedAt: null, parentId: null },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -464,7 +461,7 @@ export async function publicListOrganizationTreeRoots(publicTenantIds: string[])
 export async function publicListOrganizationChildren(parentId: string, publicTenantIds: string[]) {
   if (publicTenantIds.length === 0) return [];
   const rows = await prisma.organization.findMany({
-    where: { tenantId: { in: publicTenantIds }, deletedAt: null, parentId },
+    where: { deletedAt: null, parentId },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -481,7 +478,7 @@ export async function publicListOrganizationChildren(parentId: string, publicTen
 export async function publicGetOrganization(id: string, publicTenantIds: string[]) {
   if (publicTenantIds.length === 0) return null;
   const row = await prisma.organization.findFirst({
-    where: { id, tenantId: { in: publicTenantIds }, deletedAt: null },
+    where: { id, deletedAt: null },
     select: {
       id: true,
       name: true,

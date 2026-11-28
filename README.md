@@ -4,8 +4,8 @@ The African Union Commission's staff directory (the "Blue Book"): organizations,
 
 ## What is in the app
 
-- **Directory** — organizations (a hierarchy), people, positions, and position assignments, each scoped to a tenant. People can carry a photo.
-- **Editorial workflow** — a focal person's edit becomes a change request (draft, then pending) that a manager approves or rejects; a rejected request can be reopened and resubmitted, and a pending one withdrawn. A manager's own edits apply at once and leave an approved change request behind.
+- **Directory** — one organogram (a hierarchy of organizational units) and one set of positions, shared by every tenant and kept by the global admin; people and their position assignments, scoped to a tenant. People can carry a photo.
+- **Editorial workflow** — a focal person's edit becomes a change request (draft, then pending) that a manager approves or rejects; a rejected request can be reopened and resubmitted, and a pending one withdrawn. A manager's own edits apply at once and leave an approved change request behind. This covers people and their position assignments; organizational units and positions are created, edited, moved and deleted by the global admin alone, and everyone else reads them.
 - **Directory search** — a login-gated people search at `/` that spans every tenant opted in through `FF_PUBLIC_DIRECTORY`, with a profile page per person.
 - **Multi-tenancy** — every workspace route lives under `$tenant/`. The `system` tenant is the global admin's home and holds no directory records.
 - **Auth + RBAC** — cookie sessions backed by the database, email verification codes, password history and expiry, impersonation, and the `requirePermission` / `requireRole` / `requireAnyRole` / `requireFeature` helpers.

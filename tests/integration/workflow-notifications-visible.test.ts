@@ -8,14 +8,14 @@ import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/su
 import { action as approveAction } from "~/routes/$tenant/_directory/approvals/$changeId.approve";
 import { action as rejectAction } from "~/routes/$tenant/_directory/approvals/$changeId.reject";
 import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
 import { loader as openNotificationLoader } from "~/routes/$tenant/notifications/$notificationId.open";
 import { loader as inboxLoader } from "~/routes/$tenant/notifications/index";
 import { action as markAllReadAction } from "~/routes/$tenant/notifications/mark-all-read";
 import { action as newTenantAction } from "~/routes/$tenant/tenants/new";
 import { clearPublicTenantIdsCache } from "~/services/public-directory.server";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
-import { grantPermissions } from "./helpers/directory-actors";
+import { grantPermissions, personForm } from "./helpers/directory-actors";
 import { get, post, run, statusOf } from "./helpers/requests";
 import { createSessionCookie } from "./helpers/session";
 
@@ -43,13 +43,13 @@ async function arrange() {
   const focalRole = await prisma.role.create({ data: { name: "focal", scope: "TENANT" } });
   await prisma.role.create({ data: { name: "user", scope: "GLOBAL" } });
   await grantPermissions(prisma, focalRole.id, [
-    ["organization", "read"],
+    ["person", "read"],
     ["directory-change", "submit"],
     ["directory-change", "read-own"],
   ]);
   await grantPermissions(prisma, managerRole.id, [
-    ["organization", "read"],
-    ["organization", "write"],
+    ["person", "read"],
+    ["person", "write"],
     ["directory-change", "read-all"],
     ["directory-change", "approve"],
     ["directory-change", "reject"],
@@ -162,16 +162,11 @@ async function changePage(cookie: string, path: string) {
 }
 
 /** The focal person saves one draft per name, then sends them all for review together. */
-async function submitAsFocal(a: Arranged, names = ["Proposed Org"]): Promise<string[]> {
+async function submitAsFocal(a: Arranged, names = ["Proposed Person"]): Promise<string[]> {
   for (const name of names) {
     await run(async () =>
-      organizationEditorAction({
-        request: await post(`/${SLUG}/organogram/new`, a.focal.cookie, {
-          name,
-          typeId: a.orgTypeId,
-          isActive: "true",
-          sortOrder: "0",
-        }),
+      personEditorAction({
+        request: await post(`/${SLUG}/people/new`, a.focal.cookie, personForm(name)),
         params: { tenant: SLUG },
         context: {},
       } as never),

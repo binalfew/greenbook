@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
-import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
+import { action as deletePersonAction } from "~/routes/$tenant/_directory/people/$personId.delete";
 import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submissions/submit-drafts";
 import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions/index";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
+import { personForm } from "./helpers/directory-actors";
 import { createSessionCookie } from "./helpers/session";
 
 // Domain events leave the process (outbound integrations); keep them inside the test.
@@ -50,14 +51,14 @@ async function arrange(): Promise<Seeded> {
     });
   }
 
-  await grant(focalRole.id, "organization", "read");
+  await grant(focalRole.id, "person", "read");
   await grant(focalRole.id, "directory-change", "submit");
   await grant(focalRole.id, "directory-change", "read-own");
   await grant(focalRole.id, "directory-change", "withdraw-own");
 
-  await grant(managerRole.id, "organization", "read");
-  await grant(managerRole.id, "organization", "write");
-  await grant(managerRole.id, "organization", "delete");
+  await grant(managerRole.id, "person", "read");
+  await grant(managerRole.id, "person", "write");
+  await grant(managerRole.id, "person", "delete");
   // As seeded: a manager holds everything a focal person does.
   await grant(managerRole.id, "directory-change", "submit");
   await grant(managerRole.id, "directory-change", "approve");
@@ -144,24 +145,20 @@ function payloadOf<T>(result: unknown): T {
   return (result as { data: T }).data;
 }
 
-function orgForm(a: Seeded, name: string, extra: Record<string, string> = {}) {
-  return { name, typeId: a.orgTypeId, isActive: "true", sortOrder: "0", ...extra };
-}
-
-/** Save a new organization through the editor as the given user. */
-function saveNewOrg(a: Seeded, cookie: string, name: string) {
+/** Save a new person through the editor as the given user. */
+function saveNewPerson(a: Seeded, cookie: string, name: string) {
   return run(() =>
-    organizationEditorAction({
-      request: post(a, cookie, "organogram/new", orgForm(a, name)),
+    personEditorAction({
+      request: post(a, cookie, "people/new", personForm(name)),
       params: { tenant: a.slug },
       context: {},
     }),
   );
 }
 
-async function publishedOrg(a: Seeded, name: string) {
-  await saveNewOrg(a, a.manager.cookie, name);
-  return prisma.organization.findFirstOrThrow({ where: { tenantId: a.tenantId, name } });
+async function publishedPerson(a: Seeded, name: string) {
+  await saveNewPerson(a, a.manager.cookie, name);
+  return prisma.person.findFirstOrThrow({ where: { tenantId: a.tenantId, lastName: name } });
 }
 
 type Confirmation = { count: number; submissionsHref: string } | null;
@@ -187,26 +184,26 @@ async function draftIds(a: Seeded) {
 describe("submitted-for-review confirmation", () => {
   it("confirms a focal person's submitted create, edit and delete, linking to their submissions", async () => {
     const a = await arrange();
-    const toRename = await publishedOrg(a, "Rename Me");
-    const toDelete = await publishedOrg(a, "Delete Me");
+    const toRename = await publishedPerson(a, "Rename Me");
+    const toDelete = await publishedPerson(a, "Delete Me");
 
-    await saveNewOrg(a, a.focal.cookie, "Brand New");
+    await saveNewPerson(a, a.focal.cookie, "Brand New");
     await run(() =>
-      organizationEditorAction({
+      personEditorAction({
         request: post(
           a,
           a.focal.cookie,
-          `organogram/${toRename.id}/edit`,
-          orgForm(a, "Renamed", { id: toRename.id, baseVersion: String(toRename.version) }),
+          `people/${toRename.id}/edit`,
+          personForm("Renamed", { id: toRename.id, baseVersion: String(toRename.version) }),
         ),
-        params: { tenant: a.slug, orgId: toRename.id },
+        params: { tenant: a.slug, personId: toRename.id },
         context: {},
       }),
     );
     await run(() =>
-      deleteOrganizationAction({
-        request: post(a, a.focal.cookie, `organogram/${toDelete.id}/delete`),
-        params: { tenant: a.slug, orgId: toDelete.id },
+      deletePersonAction({
+        request: post(a, a.focal.cookie, `people/${toDelete.id}/delete`),
+        params: { tenant: a.slug, personId: toDelete.id },
         context: {},
       } as never),
     );
@@ -238,7 +235,7 @@ describe("submitted-for-review confirmation", () => {
 
   it("gives no confirmation when nothing was submitted", async () => {
     const a = await arrange();
-    await saveNewOrg(a, a.focal.cookie, "Only Once");
+    await saveNewPerson(a, a.focal.cookie, "Only Once");
     const ids = await draftIds(a);
     await submitDrafts(a, a.focal.cookie, ids);
 
@@ -250,15 +247,15 @@ describe("submitted-for-review confirmation", () => {
   it("a manager's save applies directly and gets no confirmation", async () => {
     const a = await arrange();
 
-    const response = await saveNewOrg(a, a.manager.cookie, "Direct Org");
+    const response = await saveNewPerson(a, a.manager.cookie, "Direct Person");
 
     expect(statusOf(response)).toBe(302);
-    const org = await prisma.organization.findFirstOrThrow({ where: { name: "Direct Org" } });
-    expect((response as Response).headers.get("location")).toBe(`/${a.slug}/organogram/${org.id}`);
+    const person = await prisma.person.findFirstOrThrow({ where: { lastName: "Direct Person" } });
+    expect((response as Response).headers.get("location")).toBe(`/${a.slug}/people/${person.id}`);
     expect(await draftIds(a)).toEqual([]);
 
     // Another person's draft is not the manager's to submit.
-    await saveNewOrg(a, a.focal.cookie, "Focal Draft");
+    await saveNewPerson(a, a.focal.cookie, "Focal Draft");
     const { confirmation } = await submitDrafts(a, a.manager.cookie, await draftIds(a));
     expect(confirmation).toBeNull();
   });

@@ -485,7 +485,6 @@ async function buildReportsChain(
   const start = await prisma.position.findFirst({
     where: {
       id: startingPositionId,
-      tenantId: { in: publicTenantIds },
       deletedAt: null,
       isActive: true,
     },
@@ -504,14 +503,14 @@ async function buildReportsChain(
     seen.add(nextId);
 
     const pos = await prisma.position.findFirst({
-      where: { id: nextId, tenantId: { in: publicTenantIds }, deletedAt: null, isActive: true },
+      where: { id: nextId, deletedAt: null, isActive: true },
       select: {
         id: true,
         title: true,
         reportsToId: true,
         organization: { select: { id: true, name: true, acronym: true } },
         assignments: {
-          where: { deletedAt: null, isCurrent: true },
+          where: { tenantId: { in: publicTenantIds }, deletedAt: null, isCurrent: true },
           orderBy: { startDate: "desc" },
           take: 1,
           select: {

@@ -19,7 +19,7 @@ import type { Route } from "./+types/index";
 export const handle = { breadcrumb: "Organogram" };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { user, tenantId, canDirect, canSubmit } = await requireDirectoryAccess(request, {
+  const { user, tenantId, canDirect, canPropose } = await requireDirectoryAccess(request, {
     write: "organization",
   });
 
@@ -30,7 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const typeId = url.searchParams.get("typeId") || "";
 
   const [result, types] = await Promise.all([
-    listOrganizations(tenantId, {
+    listOrganizations({
       where: {
         ...(q ? { search: q } : {}),
         ...(typeId ? { typeId } : {}),
@@ -52,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     types,
     canWrite: canDirect,
     canDelete: hasPermission(user, "organization", "delete"),
-    canSubmit,
+    canSubmit: canPropose,
     pagination: { page, pageSize, totalCount: result.total, totalPages } satisfies PaginationMeta,
   });
 }

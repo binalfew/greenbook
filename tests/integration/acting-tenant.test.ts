@@ -163,7 +163,7 @@ describe("global admin acts on the tenant in the URL", () => {
     expect(result.data.directory?.counts.personCount).toBe(2);
   });
 
-  it("creates an organization in the URL tenant", async () => {
+  it("creates an organization, shared by every tenant, from the URL tenant", async () => {
     const a = await arrange();
     const slug = a.other.slug;
 
@@ -177,7 +177,11 @@ describe("global admin acts on the tenant in the URL", () => {
 
     expect(status).toBe(302);
     const orgs = await prisma.organization.findMany({ where: { name: "Admin Made" } });
-    expect(orgs.map((o) => o.tenantId)).toEqual([a.other.id]);
+    expect(orgs).toHaveLength(1);
+    // The unit belongs to no tenant; the change that made it is on record in
+    // the tenant the admin was working in.
+    const changes = await prisma.changeRequest.findMany({ where: { entityId: orgs[0].id } });
+    expect(changes.map((c) => c.tenantId)).toEqual([a.other.id]);
   });
 
   it("shows the URL tenant's audit log entries", async () => {

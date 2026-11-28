@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTenant, seedActiveUserStatus } from "../factories";
 import { prisma } from "../setup/integration-setup";
 
-import { action as organizationEditorAction } from "~/routes/$tenant/_directory/organogram/+shared/organization-editor.server";
-import { loader as editOrganizationLoader } from "~/routes/$tenant/_directory/organogram/$orgId_/edit";
-import { loader as newOrganizationLoader } from "~/routes/$tenant/_directory/organogram/new";
-import { action as deleteOrganizationAction } from "~/routes/$tenant/_directory/organogram/$orgId.delete";
+import { action as personEditorAction } from "~/routes/$tenant/_directory/people/+shared/person-editor.server";
+import { loader as editPersonLoader } from "~/routes/$tenant/_directory/people/$personId_/edit";
+import { loader as newPersonLoader } from "~/routes/$tenant/_directory/people/new";
+import { action as deletePersonAction } from "~/routes/$tenant/_directory/people/$personId.delete";
 import { loader as changeDetailLoader } from "~/routes/$tenant/_directory/approvals/$changeId._layout";
 import { loader as submissionDetailLoader } from "~/routes/$tenant/_directory/submissions/$changeId._layout";
 import { action as discardAction } from "~/routes/$tenant/_directory/submissions/$changeId.discard";
@@ -16,6 +16,7 @@ import { action as submitDraftsAction } from "~/routes/$tenant/_directory/submis
 import { loader as submissionsLoader } from "~/routes/$tenant/_directory/submissions/index";
 import { clearFlagCache } from "~/utils/config/feature-flags.server";
 import { emitDomainEvent } from "~/utils/events/emit-domain-event.server";
+import { personForm } from "./helpers/directory-actors";
 import { createSessionCookie } from "./helpers/session";
 
 // Domain events leave the process (outbound integrations); spy on that
@@ -60,14 +61,14 @@ async function arrange(): Promise<Seeded> {
     });
   }
 
-  await grant(focalRole.id, "organization", "read");
+  await grant(focalRole.id, "person", "read");
   await grant(focalRole.id, "directory-change", "submit");
   await grant(focalRole.id, "directory-change", "read-own");
   await grant(focalRole.id, "directory-change", "withdraw-own");
 
-  await grant(managerRole.id, "organization", "read");
-  await grant(managerRole.id, "organization", "write");
-  await grant(managerRole.id, "organization", "delete");
+  await grant(managerRole.id, "person", "read");
+  await grant(managerRole.id, "person", "write");
+  await grant(managerRole.id, "person", "delete");
   await grant(managerRole.id, "directory-change", "approve");
   await grant(managerRole.id, "directory-change", "reject");
   await grant(managerRole.id, "directory-change", "read-all");
@@ -154,15 +155,11 @@ function payloadOf<T>(result: unknown): T {
   return (result as { data: T }).data;
 }
 
-function orgForm(a: Seeded, name: string, extra: Record<string, string> = {}) {
-  return { name, typeId: a.orgTypeId, isActive: "true", sortOrder: "0", ...extra };
-}
-
-/** Save a CREATE-organization draft as the given user; returns the draft row. */
+/** Save a CREATE-person draft as the given user; returns the draft row. */
 async function saveOrgDraft(a: Seeded, cookie: string, name: string) {
   const response = await run(() =>
-    organizationEditorAction({
-      request: post(a, cookie, "organogram/new", orgForm(a, name)),
+    personEditorAction({
+      request: post(a, cookie, "people/new", personForm(name)),
       params: { tenant: a.slug },
       context: {},
     }),
@@ -171,27 +168,27 @@ async function saveOrgDraft(a: Seeded, cookie: string, name: string) {
   const drafts = await prisma.changeRequest.findMany({
     where: { tenantId: a.tenantId, status: "DRAFT" },
   });
-  const draft = drafts.find((d) => (d.payload as { name?: string }).name === name);
+  const draft = drafts.find((d) => (d.payload as { lastName?: string }).lastName === name);
   expect(draft).toBeTruthy();
   return draft!;
 }
 
-/** Save an UPDATE draft (a rename) of a published organization. */
+/** Save an UPDATE draft (a rename) of a published person. */
 async function saveRename(
   a: Seeded,
   cookie: string,
-  org: { id: string; version: number },
+  person: { id: string; version: number },
   name: string,
 ) {
   return run(() =>
-    organizationEditorAction({
+    personEditorAction({
       request: post(
         a,
         cookie,
-        `organogram/${org.id}/edit`,
-        orgForm(a, name, { id: org.id, baseVersion: String(org.version) }),
+        `people/${person.id}/edit`,
+        personForm(name, { id: person.id, baseVersion: String(person.version) }),
       ),
-      params: { tenant: a.slug, orgId: org.id },
+      params: { tenant: a.slug, personId: person.id },
       context: {},
     }),
   );
@@ -225,25 +222,25 @@ async function queueIds(a: Seeded, cookie: string) {
   return payloadOf<{ changes: { id: string }[] }>(result).changes.map((c) => c.id);
 }
 
-async function publishedOrg(a: Seeded, cookie: string, name: string) {
+async function publishedPerson(a: Seeded, cookie: string, name: string) {
   await run(() =>
-    organizationEditorAction({
-      request: post(a, cookie, "organogram/new", orgForm(a, name)),
+    personEditorAction({
+      request: post(a, cookie, "people/new", personForm(name)),
       params: { tenant: a.slug },
       context: {},
     }),
   );
-  return prisma.organization.findFirstOrThrow({ where: { tenantId: a.tenantId, name } });
+  return prisma.person.findFirstOrThrow({ where: { tenantId: a.tenantId, lastName: name } });
 }
 
 describe("drafts: saving", () => {
   it("a focal person's save creates a draft that the manager's queue does not show", async () => {
     const a = await arrange();
-    const draft = await saveOrgDraft(a, a.focal.cookie, "Draft Org");
+    const draft = await saveOrgDraft(a, a.focal.cookie, "Draft Person");
 
     expect(draft.status).toBe("DRAFT");
     expect(draft.submittedById).toBe(a.focal.id);
-    expect(await prisma.organization.count({ where: { tenantId: a.tenantId } })).toBe(0);
+    expect(await prisma.person.count({ where: { tenantId: a.tenantId } })).toBe(0);
     expect(await queueIds(a, a.manager.cookie)).toEqual([]);
     expect(await prisma.notification.count({ where: { tenantId: a.tenantId } })).toBe(0);
     expect(emitDomainEvent).not.toHaveBeenCalled();
@@ -251,9 +248,9 @@ describe("drafts: saving", () => {
 
   it("a manager's direct edit still applies immediately", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Direct Org");
+    const person = await publishedPerson(a, a.manager.cookie, "Direct Person");
 
-    expect(org.deletedAt).toBeNull();
+    expect(person.deletedAt).toBeNull();
     expect(await prisma.changeRequest.count({ where: { status: "DRAFT" } })).toBe(0);
   });
 
@@ -313,23 +310,18 @@ describe("drafts: editing and discarding", () => {
     const a = await arrange();
     const draft = await saveOrgDraft(a, a.focal.cookie, "First Name");
 
-    const loaded = await newOrganizationLoader({
-      request: get(a, a.focal.cookie, `organogram/new?draft=${draft.id}`),
+    const loaded = await newPersonLoader({
+      request: get(a, a.focal.cookie, `people/new?draft=${draft.id}`),
       params: { tenant: a.slug },
       context: {},
     } as never);
     expect(
-      payloadOf<{ draft: { id: string; values: { name: string } } }>(loaded).draft,
-    ).toMatchObject({ id: draft.id, values: { name: "First Name" } });
+      payloadOf<{ draft: { id: string; values: { lastName: string } } }>(loaded).draft,
+    ).toMatchObject({ id: draft.id, values: { lastName: "First Name" } });
 
     const response = await run(() =>
-      organizationEditorAction({
-        request: post(
-          a,
-          a.focal.cookie,
-          `organogram/new?draft=${draft.id}`,
-          orgForm(a, "Second Name"),
-        ),
+      personEditorAction({
+        request: post(a, a.focal.cookie, `people/new?draft=${draft.id}`, personForm("Second Name")),
         params: { tenant: a.slug },
         context: {},
       }),
@@ -340,7 +332,7 @@ describe("drafts: editing and discarding", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe(draft.id);
     expect(rows[0].status).toBe("DRAFT");
-    expect((rows[0].payload as { name: string }).name).toBe("Second Name");
+    expect((rows[0].payload as { lastName: string }).lastName).toBe("Second Name");
   });
 
   it("another user cannot overwrite the author's draft", async () => {
@@ -348,12 +340,12 @@ describe("drafts: editing and discarding", () => {
     const draft = await saveOrgDraft(a, a.focal.cookie, "Original");
 
     const response = await run(() =>
-      organizationEditorAction({
+      personEditorAction({
         request: post(
           a,
           a.otherFocal.cookie,
-          `organogram/new?draft=${draft.id}`,
-          orgForm(a, "Hijacked"),
+          `people/new?draft=${draft.id}`,
+          personForm("Hijacked"),
         ),
         params: { tenant: a.slug },
         context: {},
@@ -362,43 +354,44 @@ describe("drafts: editing and discarding", () => {
 
     expect(response).toMatchObject({ code: "NOT_FOUND", status: 404 });
     const rows = await prisma.changeRequest.findMany({ where: { tenantId: a.tenantId } });
-    expect(rows.map((r) => (r.payload as { name: string }).name)).toEqual(["Original"]);
+    expect(rows.map((r) => (r.payload as { lastName: string }).lastName)).toEqual(["Original"]);
     expect(rows[0].id).toBe(draft.id);
   });
 
   it("opening the edit page of a record with an own draft resumes that draft", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Published");
+    const person = await publishedPerson(a, a.manager.cookie, "Published");
 
-    await saveRename(a, a.focal.cookie, org, "Renamed In Draft");
+    await saveRename(a, a.focal.cookie, person, "Renamed In Draft");
     const draft = await prisma.changeRequest.findFirstOrThrow({
-      where: { tenantId: a.tenantId, status: "DRAFT", entityId: org.id },
+      where: { tenantId: a.tenantId, status: "DRAFT", entityId: person.id },
     });
 
     const bare = await run(() =>
-      editOrganizationLoader({
-        request: get(a, a.focal.cookie, `organogram/${org.id}/edit`),
-        params: { tenant: a.slug, orgId: org.id },
+      editPersonLoader({
+        request: get(a, a.focal.cookie, `people/${person.id}/edit`),
+        params: { tenant: a.slug, personId: person.id },
         context: {},
       } as never),
     );
     expect(statusOf(bare)).toBe(302);
     expect((bare as Response).headers.get("location")).toBe(
-      `/${a.slug}/organogram/${org.id}/edit?draft=${draft.id}`,
+      `/${a.slug}/people/${person.id}/edit?draft=${draft.id}`,
     );
 
-    const resumed = await editOrganizationLoader({
-      request: get(a, a.focal.cookie, `organogram/${org.id}/edit?draft=${draft.id}`),
-      params: { tenant: a.slug, orgId: org.id },
+    const resumed = await editPersonLoader({
+      request: get(a, a.focal.cookie, `people/${person.id}/edit?draft=${draft.id}`),
+      params: { tenant: a.slug, personId: person.id },
       context: {},
     } as never);
     expect(
-      payloadOf<{ draft: { values: { name: string; baseVersion: number } } }>(resumed).draft.values,
-    ).toMatchObject({ name: "Renamed In Draft", baseVersion: org.version });
+      payloadOf<{ draft: { values: { lastName: string; baseVersion: number } } }>(resumed).draft
+        .values,
+    ).toMatchObject({ lastName: "Renamed In Draft", baseVersion: person.version });
 
     // The published record is untouched until a manager approves.
-    const live = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
-    expect(live.name).toBe("Published");
+    const live = await prisma.person.findUniqueOrThrow({ where: { id: person.id } });
+    expect(live.lastName).toBe("Published");
   });
 
   it("the author can discard a draft; nobody else can", async () => {
@@ -446,9 +439,9 @@ describe("drafts: editing and discarding", () => {
 describe("drafts: submitting", () => {
   it("submits several drafts together with one notification per approver", async () => {
     const a = await arrange();
-    const one = await saveOrgDraft(a, a.focal.cookie, "Org One");
-    const two = await saveOrgDraft(a, a.focal.cookie, "Org Two");
-    const three = await saveOrgDraft(a, a.focal.cookie, "Org Three");
+    const one = await saveOrgDraft(a, a.focal.cookie, "Person One");
+    const two = await saveOrgDraft(a, a.focal.cookie, "Person Two");
+    const three = await saveOrgDraft(a, a.focal.cookie, "Person Three");
 
     const { result } = await submitDrafts(a, a.focal.cookie, [one.id, two.id, three.id]);
 
@@ -544,18 +537,18 @@ describe("drafts: submitting", () => {
 
   it("reports a stale edit at submit and leaves the draft a draft", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Version One");
+    const person = await publishedPerson(a, a.manager.cookie, "Version One");
 
-    await saveRename(a, a.focal.cookie, org, "Focal Rename");
+    await saveRename(a, a.focal.cookie, person, "Focal Rename");
     const draft = await prisma.changeRequest.findFirstOrThrow({
       where: { tenantId: a.tenantId, status: "DRAFT" },
     });
 
     // A manager changes the record after the draft was started — the draft
     // does not block them.
-    await saveRename(a, a.manager.cookie, org, "Manager Rename");
-    const live = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
-    expect(live.name).toBe("Manager Rename");
+    await saveRename(a, a.manager.cookie, person, "Manager Rename");
+    const live = await prisma.person.findUniqueOrThrow({ where: { id: person.id } });
+    expect(live.lastName).toBe("Manager Rename");
 
     const { result } = await submitDrafts(a, a.focal.cookie, [draft.id]);
 
@@ -568,11 +561,11 @@ describe("drafts: submitting", () => {
 
   it("allows one open change per record: the second submit fails, the first stands", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Contested");
+    const person = await publishedPerson(a, a.manager.cookie, "Contested");
 
     // Two focal persons may each hold a draft on the same record…
-    await saveRename(a, a.focal.cookie, org, "First Proposal");
-    await saveRename(a, a.otherFocal.cookie, org, "Second Proposal");
+    await saveRename(a, a.focal.cookie, person, "First Proposal");
+    await saveRename(a, a.otherFocal.cookie, person, "Second Proposal");
     const [first, second] = await Promise.all(
       [a.focal.id, a.otherFocal.id].map((submittedById) =>
         prisma.changeRequest.findFirstOrThrow({
@@ -593,13 +586,13 @@ describe("drafts: submitting", () => {
 
   it("refuses the author's own second draft on the same record", async () => {
     const a = await arrange();
-    const org = await publishedOrg(a, a.manager.cookie, "Twice");
-    await saveRename(a, a.focal.cookie, org, "Edit Draft");
+    const person = await publishedPerson(a, a.manager.cookie, "Twice");
+    await saveRename(a, a.focal.cookie, person, "Edit Draft");
 
     const second = await run(() =>
-      deleteOrganizationAction({
-        request: post(a, a.focal.cookie, `organogram/${org.id}/delete`, { reason: "dup" }),
-        params: { tenant: a.slug, orgId: org.id },
+      deletePersonAction({
+        request: post(a, a.focal.cookie, `people/${person.id}/delete`, { reason: "dup" }),
+        params: { tenant: a.slug, personId: person.id },
         context: {},
       } as never),
     );
@@ -629,7 +622,7 @@ describe("drafts: through to approval", () => {
 
     await submitDrafts(a, a.focal.cookie, [one.id, two.id]);
     expect(eventNames()).toEqual(["change.submitted", "change.submitted"]);
-    expect(await prisma.organization.count({ where: { tenantId: a.tenantId } })).toBe(0);
+    expect(await prisma.person.count({ where: { tenantId: a.tenantId } })).toBe(0);
 
     const approved = await batchApproveAction({
       request: post(a, a.manager.cookie, "approvals/batch-approve", { "ids[]": [one.id, two.id] }),
@@ -640,12 +633,12 @@ describe("drafts: through to approval", () => {
       2,
     );
 
-    const orgs = await prisma.organization.findMany({
+    const people = await prisma.person.findMany({
       where: { tenantId: a.tenantId, deletedAt: null },
-      orderBy: { name: "asc" },
+      orderBy: { lastName: "asc" },
     });
-    expect(orgs.map((o) => o.name)).toEqual(["Alpha", "Beta"]);
-    expect(eventNames().filter((name) => name === "organization.created")).toHaveLength(2);
+    expect(people.map((o) => o.lastName)).toEqual(["Alpha", "Beta"]);
+    expect(eventNames().filter((name) => name === "person.created")).toHaveLength(2);
   });
 
   it("a manager cannot approve a draft that was never submitted", async () => {
@@ -661,6 +654,6 @@ describe("drafts: through to approval", () => {
     expect(payloadOf<{ result: { skipped: unknown[] } }>(approved).result.skipped).toEqual([
       { id: draft.id, reason: "NOT_FOUND" },
     ]);
-    expect(await prisma.organization.count({ where: { tenantId: a.tenantId } })).toBe(0);
+    expect(await prisma.person.count({ where: { tenantId: a.tenantId } })).toBe(0);
   });
 });
